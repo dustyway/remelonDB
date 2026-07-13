@@ -8,6 +8,20 @@ export type {
 
 export * as Q from './query/Q'
 
+export { appSchema, tableSchema } from './schema/index'
+export type { AppSchema, TableSchema, ColumnSchema, ColumnType } from './schema/index'
+
+export {
+  schemaMigrations,
+  createTable,
+  addColumns,
+  unsafeExecuteSql,
+  stepsForMigration,
+} from './schema/migrations'
+export type { SchemaMigrations, Migration, MigrationStep } from './schema/migrations'
+
+export { encodeSchema, encodeTable, encodeMigrationSteps } from './schema/encodeSchema'
+
 export { encodeQuery } from './query/encodeQuery'
 export type {
   AssociationInfo,

@@ -30,17 +30,7 @@ import {
   type WhereDescription,
 } from './ast'
 import { deepFreeze } from '../utils/deepFreeze'
-
-const IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_]*$/
-
-function ensureName(name: string, kind: 'column' | 'table'): string {
-  if (typeof name !== 'string' || !IDENTIFIER.test(name)) {
-    throw new Error(
-      `Invalid ${kind} name '${String(name)}' — must match ${IDENTIFIER}`,
-    )
-  }
-  return name
-}
+import { ensureName } from '../utils/checkName'
 
 function isColumn(value: unknown): value is ColumnDescription {
   return (

@@ -14,7 +14,7 @@
 /** The entire value vocabulary that crosses the seam, in either direction. */
 export type SqlValue = string | number | boolean | null
 
-export type SqlArgs = SqlValue[]
+export type SqlArgs = readonly SqlValue[]
 
 /**
  * One result row, keyed by column name. SQLite has no boolean storage class,
