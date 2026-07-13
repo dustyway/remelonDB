@@ -83,8 +83,9 @@ decides what to do — the driver has no schema knowledge:
 - `0 < userVersion < schema.version` → migrate (below).
 - `userVersion > schema.version` → the app was downgraded; surface an error.
 
-The upcoming Database layer will own this decision; the primitives are
-usable directly today (see the conformance tests for worked examples).
+**`Database.open` owns this decision** ([database.md](database.md)) — you
+normally never run it by hand. The primitives below remain public for
+tooling and tests.
 
 ## Migrations
 

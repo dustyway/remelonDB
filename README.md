@@ -49,49 +49,65 @@ written once in TypeScript and identical on every platform. See
 | Schema, migrations, DDL compiler | ✅ done |
 | RawRecord sanitization (`sanitizedRaw`) | ✅ done |
 | In-memory matcher + SQL/matcher conformance corpus | ✅ done |
-| Database core (writer queue, RecordCache, batch, observation) | 🔜 next |
-| Model / Collection public API | ⏳ planned |
-| Sync engine ([protocol designed](docs/sync-design.md)) | ⏳ planned |
-| React Native driver (C++ TurboModule, bundled sqlite3) | ⏳ planned |
+| Database core (writer queue, RecordCache, batch, observation) | ✅ done |
+| Model layer (typed records, no decorators) | ✅ done |
+| Sync engine ([protocol](docs/sync-design.md): no lost writes, no push echo) | ✅ done |
+| React Native driver (C++ TurboModule, bundled sqlite3) | 🔜 next |
 | Web driver (SQLite-WASM + OPFS Worker) | ⏳ planned |
 
-Until the Database core lands, the built layers compose manually (and are
-fully usable that way — the whole test suite works like this):
+The full TypeScript side works today, on Node:
 
 ```ts
 import {
-  appSchema, tableSchema, encodeSchema,
-  Q, encodeQuery, encodeMatcher, sanitizedRaw,
+  appSchema, tableSchema, Database, Model, Q, synchronize,
+  type AssociationsMap,
 } from '@watermelon-rewrite/core'
 import { NodeSqliteDriver } from '@watermelon-rewrite/driver-node'
 
-const tasks = tableSchema({
-  name: 'tasks',
-  columns: [
-    { name: 'name', type: 'string' },
-    { name: 'position', type: 'number', isIndexed: true },
-    { name: 'is_done', type: 'boolean' },
-    { name: 'project_id', type: 'string', isOptional: true },
+const schema = appSchema({
+  version: 1,
+  tables: [
+    tableSchema({
+      name: 'tasks',
+      columns: [
+        { name: 'name', type: 'string' },
+        { name: 'position', type: 'number', isIndexed: true },
+        { name: 'is_done', type: 'boolean' },
+        { name: 'project_id', type: 'string', isOptional: true },
+      ],
+    }),
   ],
 })
-const schema = appSchema({ version: 1, tables: [tasks] })
 
-const driver = new NodeSqliteDriver()
-const { userVersion } = await driver.open('app.db')
-if (userVersion === 0) {
-  await driver.executeBatch(encodeSchema(schema).map((sql) => [sql, [[]]]))
-  await driver.setUserVersion(schema.version)
+class Task extends Model {
+  static override readonly table = 'tasks'
+  static override readonly associations = {
+    projects: { type: 'belongs_to', key: 'project_id' },
+  } satisfies AssociationsMap
+
+  declare name: string        // type-only; accessors are schema-generated
+  declare position: number
+  declare is_done: boolean
 }
 
-// query: description → parameterized SQL → sanitized records
-const description = Q.buildQueryDescription([
-  Q.where('is_done', false),
-  Q.sortBy('position'),
-])
-const [sql, args] = encodeQuery({ table: 'tasks', description })
-const records = (await driver.query(sql, args)).map((row) =>
-  sanitizedRaw(row, tasks),
+const db = await Database.open({
+  driver: new NodeSqliteDriver(),
+  schema,
+  modelClasses: [Task],
+  name: 'app.db',
+})
+
+const task = await db.write(() =>
+  db.get<Task>('tasks').create({ name: 'try it', position: 1 }),
 )
+await db.write(() => task.update(() => { task.is_done = true }))
+
+const unsubscribe = db
+  .get<Task>('tasks')
+  .query(Q.where('is_done', false), Q.sortBy('position'))
+  .observe((open) => console.log('open tasks:', open.length))
+
+await synchronize({ database: db, pullChanges, pushChanges }) // your backend
 ```
 
 ## Repository layout
@@ -102,10 +118,13 @@ packages/
     src/driver/       the SqliteDriver seam (types only)
     src/query/        query AST, Q builders, Q → SQL compiler
     src/schema/       appSchema/tableSchema, migrations, DDL compiler
-    src/rawRecord/    sanitizedRaw and friends
+    src/rawRecord/    sanitizedRaw, dirty tracking
     src/observation/  the in-memory matcher
+    src/database/     Database, Collection, Query, WorkQueue, RecordCache
+    src/model/        the Model layer (schema-generated accessors)
+    src/sync/         the sync engine (pull/push, conflict resolution)
   driver-node/   @watermelon-rewrite/driver-node — better-sqlite3 driver
-                 + the conformance suites (run compiled SQL on real SQLite)
+                 + conformance & integration suites on real SQLite
 docs/            design decisions and reference guides — see docs/README.md
 watermelondb-upstream/   reference checkout of upstream (gitignored)
 ```
@@ -117,7 +136,10 @@ watermelondb-upstream/   reference checkout of upstream (gitignored)
   [architecture layers](docs/architecture-layers.md) ·
   [sync protocol](docs/sync-design.md) ·
   [upstream study](docs/upstream-study.md)
-- Reference: [queries](docs/reference/queries.md) ·
+- Reference: [database & observation](docs/reference/database.md) ·
+  [models](docs/reference/models.md) ·
+  [queries](docs/reference/queries.md) ·
+  [sync](docs/reference/sync.md) ·
   [schema & migrations](docs/reference/schema.md) ·
   [records](docs/reference/records.md) ·
   [the driver contract](docs/reference/driver.md)

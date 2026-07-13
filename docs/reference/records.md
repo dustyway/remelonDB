@@ -83,8 +83,10 @@ The dirty-tracking design (inherited from upstream, kept in the
 - `_status`/`_changed` never cross the sync wire in either direction — they
   are local bookkeeping (a protocol rule; see sync-design.md).
 
-The Model layer that maintains these transitions doesn't exist yet;
-`sanitizedRaw`/`setRawSanitized` are its foundations and enforce the shape.
+These transitions are maintained by `Collection.prepareUpdate`
+(`markAsChanged`) and the tombstone/destroy operations
+([database.md](database.md)); the sync engine consumes and resets them
+([sync.md](sync.md)).
 
 ## Ids
 

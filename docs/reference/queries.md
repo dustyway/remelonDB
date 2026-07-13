@@ -5,14 +5,26 @@ parameterized SQL by `encodeQuery`, and — when simple enough — compiled to a
 in-memory predicate by `encodeMatcher`. This document is the reference for
 all three, and for the semantics they share.
 
+In an app you build queries through a collection and fetch/observe them
+([database.md](database.md)); the compiler runs under the hood:
+
+```ts
+db.get('tasks').query(
+  Q.where('is_done', false),
+  Q.where('position', Q.gt(2)),
+  Q.sortBy('position', Q.desc),
+  Q.take(20),
+)
+```
+
+The standalone pipeline the rest of this doc describes:
+
 ```ts
 import { Q, encodeQuery } from '@watermelon-rewrite/core'
 
 const description = Q.buildQueryDescription([
   Q.where('is_done', false),
-  Q.where('position', Q.gt(2)),
   Q.sortBy('position', Q.desc),
-  Q.take(20),
 ])
 const [sql, args] = encodeQuery({ table: 'tasks', description })
 ```
