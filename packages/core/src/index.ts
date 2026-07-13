@@ -8,6 +8,15 @@ export type {
 
 export * as Q from './query/Q'
 
+export { encodeQuery } from './query/encodeQuery'
+export type {
+  AssociationInfo,
+  QueryAssociation,
+  CompilableQuery,
+  EncodeQueryOptions,
+  CompiledQuery,
+} from './query/encodeQuery'
+
 export type {
   Value,
   NonNullValue,
