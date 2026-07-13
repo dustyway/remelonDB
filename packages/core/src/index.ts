@@ -22,6 +22,11 @@ export type { SchemaMigrations, Migration, MigrationStep } from './schema/migrat
 
 export { encodeSchema, encodeTable, encodeMigrationSteps } from './schema/encodeSchema'
 
+export { sanitizedRaw, setRawSanitized, nullValue } from './rawRecord/index'
+export type { RawRecord, DirtyRaw, SyncStatus } from './rawRecord/index'
+
+export { randomId } from './utils/randomId'
+
 export { encodeQuery } from './query/encodeQuery'
 export type {
   AssociationInfo,
