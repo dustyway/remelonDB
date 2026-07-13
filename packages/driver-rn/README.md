@@ -7,14 +7,17 @@ construction — codegen'd spec, no classic bridge module, no manual
 (never compiled from source — the exact mistake that broke upstream
 WatermelonDB on modern RN).
 
-> ## ⚠️ Status: not yet verified on device
+> ## ⚠️ Status: verified up to syntax, not yet on device
 >
-> This package was authored on a machine without an Android NDK or Xcode.
-> The TypeScript side typechecks against the seam; the native side is
-> written to current RN documentation (pure C++ TurboModules, cxx-module
-> autolinking, `ios.modulesProvider`) but **has not been compiled or run
-> on a device yet**. Expect a shakedown pass on real toolchains before
-> first use. Known verification points are listed at the bottom.
+> Verified without a device (see "Local verification" below): React
+> Native's **codegen accepts the spec** and generates
+> `WatermelonDriverSpecJSI.h`; **all C++ passes `clang++ -fsyntax-only`**
+> against the real RN 0.86 headers, the real generated spec (including
+> the bridging static_asserts — `UnsafeMixed` params arrive as
+> `jsi::Object`), and real fbjni; the SQLite amalgamation compiles with
+> our flags; `fetch-sqlite` downloads the pinned release. Still pending:
+> an actual device/simulator build — linking, autolinking glue, iOS
+> compilation, and runtime behavior. Checklist at the bottom.
 
 ## Requirements
 
@@ -72,13 +75,41 @@ page-size requirement is satisfied by the app's own toolchain (AGP 8.5+ /
 NDK r28 align by default). This is deliberate: shipping prebuilts is how
 upstream aged out of compliance.
 
+## Local verification (no device required)
+
+Repeatable on any Linux/macOS machine with clang — catches spec/signature
+drift against the installed RN version:
+
+```sh
+pnpm --filter @watermelon-rewrite/driver-rn fetch-sqlite
+RN=$(dirname $(node -e "console.log(require.resolve('react-native/package.json'))"))
+
+# 1. codegen must accept the spec (generates WatermelonDriverSpecJSI.h)
+node $RN/scripts/generate-codegen-artifacts.js -p packages/driver-rn -o /tmp/wmcg -t ios
+CG=/tmp/wmcg/build/generated/ios/ReactCodegen
+
+# 2. C++ must satisfy the generated bridging asserts
+#    (stub folly/dynamic.h with an empty class — see git history)
+cd packages/driver-rn/cpp
+clang++ -fsyntax-only -std=c++20 -I. -Ivendor -I$CG -I<folly-stub> \
+  -I$RN/ReactCommon/jsi -I$RN/ReactCommon/react/nativemodule/core \
+  -I$RN/ReactCommon/callinvoker -I$RN/ReactCommon WatermelonDriver.cpp
+clang++ -fsyntax-only -std=c++20 -I. -Ivendor -I$RN/ReactCommon/jsi SqliteConnection.cpp
+```
+
 ## Device-verification checklist
 
+- [x] Codegen accepts the `UnsafeMixed` spec (verified: RN 0.86 codegen
+      runs clean; `UnsafeMixed` params = `jsi::Object` at the boundary)
+- [x] C++ satisfies the generated spec's bridging static_asserts
+      (clang++ syntax pass against real headers + generated spec)
+- [x] `fetch-sqlite` pin is a real release; amalgamation compiles with
+      our flag set
 - [ ] Android: cxx-module autolinking generates the provider for
       `facebook::react::WatermelonDriver` and links `watermelon-driver`
 - [ ] Android: `ThreadScope`/fbjni context lookup works on the JS thread
+      (syntax-checked against real fbjni; runtime unproven)
 - [ ] iOS: `modulesProvider` registration + pod compiles the amalgamation
-- [ ] Codegen accepts the `UnsafeMixed` spec on both platforms
 - [ ] Conformance suites pass against the device build (port
       `packages/driver-node/src/*Conformance.test.ts` into an e2e app)
 - [ ] Headless JS / reload teardown (connection mutex is in place; needs

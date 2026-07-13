@@ -2,7 +2,6 @@
   "name": "@watermelon-rewrite/driver-rn",
   "version": "0.0.0",
   "private": true,
-  "type": "module",
   "exports": {
     ".": "./src/index.ts"
   },

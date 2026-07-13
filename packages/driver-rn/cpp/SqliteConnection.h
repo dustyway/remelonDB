@@ -31,7 +31,7 @@ class SqliteConnection {
   int userVersion(jsi::Runtime& rt);
   void setUserVersion(jsi::Runtime& rt, int version);
 
-  jsi::Value query(jsi::Runtime& rt, const std::string& sql, const jsi::Array& args);
+  jsi::Array query(jsi::Runtime& rt, const std::string& sql, const jsi::Array& args);
   void execute(jsi::Runtime& rt, const std::string& sql, const jsi::Array& args);
   /** All statements in one transaction: commit all or roll back all. */
   void executeBatch(jsi::Runtime& rt, const jsi::Array& statements);

@@ -25,11 +25,13 @@ class WatermelonDriver : public NativeWatermelonDriverCxxSpec<WatermelonDriver> 
   explicit WatermelonDriver(std::shared_ptr<CallInvoker> jsInvoker)
       : NativeWatermelonDriverCxxSpec(std::move(jsInvoker)) {}
 
+  // UnsafeMixed spec params arrive as jsi::Object; UnsafeMixed returns
+  // must be jsi::Object (verified against generated WatermelonDriverSpecJSI.h)
   double openDatabase(jsi::Runtime& rt, std::string name);
   void close(jsi::Runtime& rt, std::string name);
-  jsi::Value query(jsi::Runtime& rt, std::string name, std::string sql, jsi::Value args);
-  void execute(jsi::Runtime& rt, std::string name, std::string sql, jsi::Value args);
-  void executeBatch(jsi::Runtime& rt, std::string name, jsi::Value statements);
+  jsi::Object query(jsi::Runtime& rt, std::string name, std::string sql, jsi::Object args);
+  void execute(jsi::Runtime& rt, std::string name, std::string sql, jsi::Object args);
+  void executeBatch(jsi::Runtime& rt, std::string name, jsi::Object statements);
   void setUserVersion(jsi::Runtime& rt, std::string name, double version);
   void destroy(jsi::Runtime& rt, std::string name);
 

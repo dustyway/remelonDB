@@ -92,7 +92,7 @@ void SqliteConnection::executeStatement(jsi::Runtime& rt, sqlite3_stmt* stmt) {
   sqlite3_reset(stmt);
 }
 
-jsi::Value SqliteConnection::query(
+jsi::Array SqliteConnection::query(
     jsi::Runtime& rt,
     const std::string& sql,
     const jsi::Array& args) {

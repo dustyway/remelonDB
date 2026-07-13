@@ -6,15 +6,11 @@ namespace facebook::react {
 
 using watermelon::SqliteConnection;
 
-static jsi::Array asArray(jsi::Runtime& rt, jsi::Value& value, const char* what) {
-  if (!value.isObject()) {
+static jsi::Array asArray(jsi::Runtime& rt, jsi::Object& value, const char* what) {
+  if (!value.isArray(rt)) {
     throw jsi::JSError(rt, std::string("expected an array for ") + what);
   }
-  jsi::Object object = value.getObject(rt);
-  if (!object.isArray(rt)) {
-    throw jsi::JSError(rt, std::string("expected an array for ") + what);
-  }
-  return object.getArray(rt);
+  return value.getArray(rt);
 }
 
 SqliteConnection& WatermelonDriver::connection(
@@ -47,11 +43,11 @@ void WatermelonDriver::close(jsi::Runtime& rt, std::string name) {
   connections_.erase(name);
 }
 
-jsi::Value WatermelonDriver::query(
+jsi::Object WatermelonDriver::query(
     jsi::Runtime& rt,
     std::string name,
     std::string sql,
-    jsi::Value args) {
+    jsi::Object args) {
   jsi::Array argsArray = asArray(rt, args, "query args");
   return connection(rt, name).query(rt, sql, argsArray);
 }
@@ -60,7 +56,7 @@ void WatermelonDriver::execute(
     jsi::Runtime& rt,
     std::string name,
     std::string sql,
-    jsi::Value args) {
+    jsi::Object args) {
   jsi::Array argsArray = asArray(rt, args, "execute args");
   connection(rt, name).execute(rt, sql, argsArray);
 }
@@ -68,7 +64,7 @@ void WatermelonDriver::execute(
 void WatermelonDriver::executeBatch(
     jsi::Runtime& rt,
     std::string name,
-    jsi::Value statements) {
+    jsi::Object statements) {
   jsi::Array statementsArray = asArray(rt, statements, "batch statements");
   connection(rt, name).executeBatch(rt, statementsArray);
 }
