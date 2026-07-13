@@ -4,3 +4,6 @@
 node_modules/
 dist/
 *.tsbuildinfo
+
+# fetched by packages/driver-rn/scripts/fetch-sqlite.mjs
+packages/driver-rn/cpp/vendor/

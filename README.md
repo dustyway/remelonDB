@@ -52,7 +52,7 @@ written once in TypeScript and identical on every platform. See
 | Database core (writer queue, RecordCache, batch, observation) | ✅ done |
 | Model layer (typed records, no decorators) | ✅ done |
 | Sync engine ([protocol](docs/sync-design.md): no lost writes, no push echo) | ✅ done |
-| React Native driver (C++ TurboModule, bundled sqlite3) | 🔜 next |
+| React Native driver (C++ TurboModule, bundled sqlite3) | 🧪 authored — [needs device verification](packages/driver-rn/README.md) |
 | Web driver (SQLite-WASM + OPFS Worker) | ⏳ planned |
 
 The full TypeScript side works today, on Node:
@@ -125,6 +125,8 @@ packages/
     src/sync/         the sync engine (pull/push, conflict resolution)
   driver-node/   @watermelon-rewrite/driver-node — better-sqlite3 driver
                  + conformance & integration suites on real SQLite
+  driver-rn/     @watermelon-rewrite/driver-rn — React Native driver:
+                 pure C++ TurboModule + bundled SQLite (see its README)
 docs/            design decisions and reference guides — see docs/README.md
 watermelondb-upstream/   reference checkout of upstream (gitignored)
 ```

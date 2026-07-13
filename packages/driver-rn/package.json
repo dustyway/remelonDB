@@ -1,0 +1,45 @@
+{
+  "name": "@watermelon-rewrite/driver-rn",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src",
+    "cpp",
+    "ios",
+    "android",
+    "scripts",
+    "*.podspec",
+    "react-native.config.js"
+  ],
+  "scripts": {
+    "fetch-sqlite": "node scripts/fetch-sqlite.mjs"
+  },
+  "dependencies": {
+    "@watermelon-rewrite/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "react-native": ">=0.76"
+  },
+  "devDependencies": {
+    "react": "^19.1.0",
+    "react-native": "^0.86.0",
+    "@types/react": "^19.0.0"
+  },
+  "codegenConfig": {
+    "name": "WatermelonDriverSpec",
+    "type": "modules",
+    "jsSrcsDir": "src/specs",
+    "android": {
+      "javaPackageName": "dev.watermelonrewrite.driver"
+    },
+    "ios": {
+      "modulesProvider": {
+        "NativeWatermelonDriver": "WatermelonDriverProvider"
+      }
+    }
+  }
+}
