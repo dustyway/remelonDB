@@ -61,3 +61,23 @@ export async function tombstoneIds(
   ])
   return rows.map((row) => row['id'] as string)
 }
+
+// well under SQLite's bound-parameter limits (999 in old builds)
+const ID_CHUNK = 900
+
+/** Rows for the given ids, chunked so large pulls never overflow SQLite's parameter limit. */
+export async function queryRowsByIds(
+  database: Database,
+  table: string,
+  ids: readonly string[],
+): Promise<Row[]> {
+  const rows: Row[] = []
+  for (let i = 0; i < ids.length; i += ID_CHUNK) {
+    rows.push(
+      ...(await queryRows(database, table, [
+        Q.where('id', Q.oneOf(ids.slice(i, i + ID_CHUNK))),
+      ])),
+    )
+  }
+  return rows
+}

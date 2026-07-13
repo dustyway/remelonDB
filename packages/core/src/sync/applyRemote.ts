@@ -15,7 +15,6 @@
  *
  * Must be called inside a database.write block.
  */
-import * as Q from '../query/Q'
 import type { Database } from '../database/Database'
 import type { BatchOperation } from '../database/encodeBatch'
 import type { TableSchema } from '../schema/index'
@@ -24,7 +23,12 @@ import {
   type DirtyRaw,
   type RawRecord,
 } from '../rawRecord/index'
-import { areRecordsEqual, changedColumns, queryRows } from './helpers'
+import {
+  areRecordsEqual,
+  changedColumns,
+  queryRows,
+  queryRowsByIds,
+} from './helpers'
 import type { SyncChanges } from './types'
 
 export type ConflictResolver = (
@@ -93,9 +97,7 @@ export async function applyRemoteChanges(
     if (referencedIds.length > 0 || options.replacement) {
       const rows = options.replacement
         ? await queryRows(database, table, [])
-        : await queryRows(database, table, [
-            Q.where('id', Q.oneOf(referencedIds)),
-          ])
+        : await queryRowsByIds(database, table, referencedIds)
       for (const row of rows) {
         const id = row['id'] as string
         if (row['_status'] === 'deleted') {
@@ -103,6 +105,20 @@ export async function applyRemoteChanges(
         } else {
           localState.set(id, 'live')
           liveRecords.set(id, collection.cache.recordFromRow(row, schema))
+        }
+      }
+    }
+
+    // The v1 protocol mandates full records on the wire (docs/sync-design.md);
+    // a sparse record would silently clobber local values with schema
+    // defaults, so a nonconforming server is rejected loudly instead.
+    const requireFullRecord = (dirty: DirtyRaw): void => {
+      for (const column of schema.columnArray) {
+        if (!(column.name in dirty)) {
+          throw new Error(
+            `sync: sparse record from server for '${table}/${String(dirty['id'])}' — ` +
+              `missing column '${column.name}'. The protocol requires full records.`,
+          )
         }
       }
     }
@@ -130,25 +146,36 @@ export async function applyRemoteChanges(
     }
 
     for (const dirty of tableChanges.created) {
+      requireFullRecord(dirty)
       const id = remoteId(dirty)
       const state = localState.get(id)
       if (state === 'live') {
-        log(`sync: server created '${table}/${id}' but it exists — treating as update`)
+        if (!options.replacement) {
+          // in replacement mode every record arrives as created — expected
+          log(`sync: server created '${table}/${id}' but it exists — treating as update`)
+        }
         updateResolved(liveRecords.get(id)!, dirty)
       } else if (state === 'tombstone') {
-        log(`sync: server created '${table}/${id}' over local tombstone — replacing`)
-        operations.push({
-          type: 'destroyPermanently',
-          table,
-          raw: { id, _status: 'deleted', _changed: '' },
-        })
-        operations.push(createAsSynced(dirty))
+        if (options.replacement) {
+          // resync: the offline delete wins locally and is pushed after
+          // the rebuild — destroying the tombstone here would silently
+          // resurrect the record and lose the user's delete
+        } else {
+          log(`sync: server created '${table}/${id}' over local tombstone — replacing`)
+          operations.push({
+            type: 'destroyPermanently',
+            table,
+            raw: { id, _status: 'deleted', _changed: '' },
+          })
+          operations.push(createAsSynced(dirty))
+        }
       } else {
         operations.push(createAsSynced(dirty))
       }
     }
 
     for (const dirty of tableChanges.updated) {
+      requireFullRecord(dirty)
       const id = remoteId(dirty)
       const state = localState.get(id)
       if (state === 'live') {

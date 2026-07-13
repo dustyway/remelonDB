@@ -96,7 +96,27 @@ async function migrationInfo(
   }
 }
 
-export async function synchronize(options: SynchronizeOptions): Promise<void> {
+const inFlight = new WeakMap<Database, Promise<void>>()
+
+/**
+ * Concurrent calls for the same database coalesce: a call arriving while
+ * a sync is running joins it (the runner's options apply). The in-write
+ * cursor re-check below stays as the guard against out-of-band writers
+ * (another tab or process sharing the database).
+ */
+export function synchronize(options: SynchronizeOptions): Promise<void> {
+  const running = inFlight.get(options.database)
+  if (running) {
+    return running
+  }
+  const run = runSynchronize(options).finally(() =>
+    inFlight.delete(options.database),
+  )
+  inFlight.set(options.database, run)
+  return run
+}
+
+async function runSynchronize(options: SynchronizeOptions): Promise<void> {
   const { database, log = () => {} } = options
   const retries = options.conflictRetries ?? 5
 

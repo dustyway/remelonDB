@@ -60,9 +60,15 @@ back on the next pull (and are absorbed).
 ## What a sync run does
 
 1. **Pull**: `pullChanges(cursor)` → apply inside one write block →
-   store the new cursor. Before applying, the stored cursor is re-checked;
-   if another `synchronize()` committed meanwhile, this one aborts with an
-   error (call it again).
+   store the new cursor. Concurrent `synchronize()` calls for the same
+   database **coalesce** — a call arriving mid-sync joins the running one
+   (the runner's options apply). Before applying, the stored cursor is
+   also re-checked as a guard against out-of-band writers (another tab
+   or process); that case aborts with an error.
+   Incoming records are validated as **full records** — a nonconforming
+   server omitting columns is rejected loudly instead of silently
+   clobbering local values with defaults — and local-state lookups are
+   chunked, so arbitrarily large pulls don't hit SQLite parameter limits.
 2. **Push** (if configured and there are local changes): snapshot dirty
    records → `pushChanges` → mark records synced, destroy pushed
    tombstones, adopt the push cursor and apply interleaved changes.
@@ -91,7 +97,9 @@ When the server answers `resyncRequired` (pruned history, expired
 cursor), the engine re-pulls from `cursor: null` and applies in
 *replacement* mode: matching records reconciled, missing ones created,
 **local synced records absent from the snapshot destroyed** — while dirty
-records survive and push afterwards.
+records survive and push afterwards. That includes tombstones: an
+offline delete survives the rebuild and is pushed after it (records in
+the snapshot never resurrect over a pending local delete).
 
 ## Migration pulls
 

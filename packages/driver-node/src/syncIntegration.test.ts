@@ -339,14 +339,13 @@ describe('sync engine', () => {
   })
 
   /**
-   * Failing repros for known flaws (found by adversarial review; see the
-   * commit message). `it.fails` inverts the assertion: these stay green
-   * while the bugs exist and go red the moment a fix lands, forcing the
-   * marker to be flipped into a real regression test.
+   * Regression tests for flaws found by the external adversarial review
+   * (docs/external-sync-review.md) — originally pinned as it.fails
+   * repros, flipped when the fixes landed.
    */
-  describe('known flaws (failing repros)', () => {
-    it.fails(
-      'CONFIRMED FLAW: replacement resync must not resurrect offline deletes',
+  describe('fixed flaws (regression tests)', () => {
+    it(
+      'replacement resync preserves offline deletes (review: confirmed flaw)',
       async () => {
         server.seed('a', { name: 'a', position: 1 })
         await sync()
@@ -371,8 +370,8 @@ describe('sync engine', () => {
       },
     )
 
-    it.fails(
-      'FLAW: large pulls must not overflow SQLite bound-parameter limits',
+    it(
+      'large pulls are chunked past SQLite bound-parameter limits',
       async () => {
         const many = Array.from({ length: 40_000 }, (_, i) => ({
           id: `r${i}`,
@@ -392,8 +391,8 @@ describe('sync engine', () => {
       },
     )
 
-    it.fails(
-      'FLAW: sparse updated records from a nonconforming server must be rejected, not defaulted',
+    it(
+      'sparse records from a nonconforming server are rejected, not defaulted',
       async () => {
         server.seed('t1', { name: 'local truth', position: 7 })
         await sync()
@@ -419,12 +418,14 @@ describe('sync engine', () => {
       },
     )
 
-    it.fails(
-      'FLAW: concurrent synchronize() calls should coalesce, not throw at the app',
+    it(
+      'concurrent synchronize() calls coalesce into one run',
       async () => {
         server.seed('t1', { name: 'x', position: 1 })
         const results = await Promise.allSettled([sync(), sync()])
         expect(results.map((r) => r.status)).toEqual(['fulfilled', 'fulfilled'])
+        expect(server.pullCalls).toBe(1) // joined, not re-run
+        expect((await db.get('tasks').find('t1'))['name']).toBe('x')
       },
     )
   })
