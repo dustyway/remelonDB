@@ -22,13 +22,28 @@ export type { SchemaMigrations, Migration, MigrationStep } from './schema/migrat
 
 export { encodeSchema, encodeTable, encodeMigrationSteps } from './schema/encodeSchema'
 
-export { sanitizedRaw, setRawSanitized, nullValue } from './rawRecord/index'
+export { sanitizedRaw, setRawSanitized, nullValue, markAsChanged } from './rawRecord/index'
 export type { RawRecord, DirtyRaw, SyncStatus } from './rawRecord/index'
 
 export { randomId } from './utils/randomId'
 
 export { canEncodeMatcher, encodeMatcher } from './observation/encodeMatcher'
 export type { Matcher, EncodeMatcherOptions } from './observation/encodeMatcher'
+
+export { Database } from './database/Database'
+export type { DatabaseOptions, DatabaseChangeSet } from './database/Database'
+export { Collection } from './database/Collection'
+export type {
+  ChangeType,
+  CollectionChange,
+  CollectionChangeSet,
+  Unsubscribe,
+} from './database/Collection'
+export { Query } from './database/Query'
+export { LocalStorage } from './database/LocalStorage'
+export { WorkQueue } from './database/WorkQueue'
+export { encodeBatch } from './database/encodeBatch'
+export type { BatchOperation } from './database/encodeBatch'
 
 export { encodeQuery } from './query/encodeQuery'
 export type {

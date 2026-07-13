@@ -99,3 +99,21 @@ export function setRawSanitized(
 ): void {
   raw[column.name] = sanitizeValue(value, column)
 }
+
+/**
+ * Dirty tracking for sync (docs/reference/records.md): mark a column as
+ * changed since last sync. Freshly created records stay 'created' with an
+ * empty _changed (the whole record is new); synced/updated records become
+ * 'updated' and accumulate the changed-column set.
+ */
+export function markAsChanged(raw: RawRecord, columnName: string): void {
+  if (raw._status === 'created' || raw._status === 'deleted') {
+    return
+  }
+  raw._status = 'updated'
+  const changed = raw._changed === '' ? [] : raw._changed.split(',')
+  if (!changed.includes(columnName)) {
+    changed.push(columnName)
+    raw._changed = changed.join(',')
+  }
+}
