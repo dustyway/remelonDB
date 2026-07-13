@@ -27,6 +27,9 @@ export type { RawRecord, DirtyRaw, SyncStatus } from './rawRecord/index'
 
 export { randomId } from './utils/randomId'
 
+export { canEncodeMatcher, encodeMatcher } from './observation/encodeMatcher'
+export type { Matcher, EncodeMatcherOptions } from './observation/encodeMatcher'
+
 export { encodeQuery } from './query/encodeQuery'
 export type {
   AssociationInfo,
