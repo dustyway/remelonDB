@@ -22,9 +22,9 @@ import type {
 const identicalArrays = (a: readonly unknown[], b: readonly unknown[]): boolean =>
   a.length === b.length && a.every((value, index) => value === b[index])
 
-export class Query {
+export class Query<M = RawRecord> {
   constructor(
-    readonly collection: Collection,
+    readonly collection: Collection<M>,
     readonly description: QueryDescription,
   ) {}
 
@@ -37,7 +37,8 @@ export class Query {
     ]
   }
 
-  async fetch(): Promise<RawRecord[]> {
+  /** Raw-level fetch — the engine path (observation internals, sync). */
+  async fetchRaws(): Promise<RawRecord[]> {
     const { database, schema } = this.collection
     const [sql, args] = encodeQuery({
       table: this.collection.table,
@@ -46,6 +47,10 @@ export class Query {
     })
     const rows = await database.driver.query(sql, args)
     return rows.map((row) => this.collection.cache.recordFromRow(row, schema))
+  }
+
+  async fetch(): Promise<M[]> {
+    return (await this.fetchRaws()).map((raw) => this.collection._recordFor(raw))
   }
 
   async fetchCount(): Promise<number> {
@@ -67,10 +72,12 @@ export class Query {
    * every relevant change. The emitted array is a fresh copy; the records
    * inside are the canonical cached instances.
    */
-  observe(subscriber: (records: RawRecord[]) => void): Unsubscribe {
+  observe(subscriber: (records: M[]) => void): Unsubscribe {
+    const emit = (raws: readonly RawRecord[]) =>
+      subscriber(raws.map((raw) => this.collection._recordFor(raw)))
     return canEncodeMatcher(this.description)
-      ? this.observeSimple(subscriber)
-      : this.observeReloading(subscriber)
+      ? this.observeSimple(emit)
+      : this.observeReloading(emit)
   }
 
   /** Observe the result count. Emits initially and whenever it changes. */
@@ -98,7 +105,9 @@ export class Query {
     }
   }
 
-  private observeSimple(subscriber: (records: RawRecord[]) => void): Unsubscribe {
+  private observeSimple(
+    subscriber: (records: readonly RawRecord[]) => void,
+  ): Unsubscribe {
     const matcher = encodeMatcher(this.description)
     let unsubscribed = false
     let records: RawRecord[] | null = null // null until the initial fetch
@@ -135,7 +144,7 @@ export class Query {
       }
     })
 
-    void this.fetch().then((initial) => {
+    void this.fetchRaws().then((initial) => {
       if (unsubscribed) {
         return
       }
@@ -154,7 +163,7 @@ export class Query {
   }
 
   private observeReloading(
-    subscriber: (records: RawRecord[]) => void,
+    subscriber: (records: readonly RawRecord[]) => void,
   ): Unsubscribe {
     let unsubscribed = false
     let previous: RawRecord[] | null = null
@@ -162,7 +171,7 @@ export class Query {
 
     const refetch = () => {
       const current = ++generation
-      void this.fetch().then((records) => {
+      void this.fetchRaws().then((records) => {
         if (unsubscribed || current !== generation) {
           return
         }

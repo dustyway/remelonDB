@@ -28,12 +28,20 @@ import {
 import { encodeBatch, type BatchOperation } from './encodeBatch'
 import { LocalStorage } from './LocalStorage'
 import { WorkQueue } from './WorkQueue'
+import type { ModelClass } from '../model/Model'
+import type { RawRecord } from '../rawRecord/index'
 
 export interface DatabaseOptions {
   readonly driver: SqliteDriver
   readonly schema: AppSchema
   readonly migrations?: SchemaMigrations
-  /** Join metadata for Q.on queries (until the Model layer owns this). */
+  /**
+   * Model classes to bind to their tables (static `table`). Their static
+   * `associations` feed Q.on join compilation; field accessors are
+   * generated from the schema.
+   */
+  readonly modelClasses?: readonly ModelClass[]
+  /** Extra join metadata for Q.on queries on model-less tables. */
   readonly associations?: readonly QueryAssociation[]
   /** Database name/path passed to driver.open. */
   readonly name: string
@@ -94,15 +102,25 @@ export class Database {
       )
     }
 
-    return new Database(driver, schema, options.associations ?? [], migrations)
+    const associations: QueryAssociation[] = [...(options.associations ?? [])]
+    for (const modelClass of options.modelClasses ?? []) {
+      for (const [to, info] of Object.entries(modelClass.associations ?? {})) {
+        associations.push({ from: modelClass.table, to, info })
+      }
+    }
+    const database = new Database(driver, schema, associations, migrations)
+    for (const modelClass of options.modelClasses ?? []) {
+      database.get(modelClass.table)._bindModelClass(modelClass)
+    }
+    return database
   }
 
-  get(table: string): Collection {
+  get<M = RawRecord>(table: string): Collection<M> {
     const collection = this.collections.get(table)
     if (!collection) {
       throw new Error(`No collection for table '${table}' — is it in the schema?`)
     }
-    return collection
+    return collection as Collection<M>
   }
 
   /** Run exclusive write work. Mutations are only allowed inside. */

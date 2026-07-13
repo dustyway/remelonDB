@@ -34,10 +34,10 @@ export async function fetchLocalChanges(database: Database): Promise<LocalChange
       const collection = database.get(table)
       const created = await collection
         .query(Q.where('_status', 'created'))
-        .fetch()
+        .fetchRaws()
       const updated = await collection
         .query(Q.where('_status', 'updated'))
-        .fetch()
+        .fetchRaws()
       const deleted = await tombstoneIds(database, table)
 
       changes[table] = {

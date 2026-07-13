@@ -45,6 +45,9 @@ export { WorkQueue } from './database/WorkQueue'
 export { encodeBatch } from './database/encodeBatch'
 export type { BatchOperation } from './database/encodeBatch'
 
+export { Model, defineModelAccessors } from './model/Model'
+export type { ModelClass, AssociationsMap } from './model/Model'
+
 export { synchronize, CURSOR_KEY, LAST_SCHEMA_VERSION_KEY } from './sync/synchronize'
 export type { SynchronizeOptions } from './sync/synchronize'
 export { fetchLocalChanges, hasUnsyncedChanges } from './sync/fetchLocal'
