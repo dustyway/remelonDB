@@ -1,0 +1,6 @@
+# reference checkout, not part of this repo
+/watermelondb-upstream/
+
+node_modules/
+dist/
+*.tsbuildinfo
