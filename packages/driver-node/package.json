@@ -12,6 +12,7 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^24.0.0"
+    "@types/node": "^24.0.0",
+    "@watermelon-rewrite/driver-conformance": "workspace:*"
   }
 }

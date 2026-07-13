@@ -20,6 +20,16 @@ importers:
 
   packages/core: {}
 
+  packages/driver-conformance:
+    dependencies:
+      '@watermelon-rewrite/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@24.13.3)(terser@5.49.0)(yaml@2.9.0)
+
   packages/driver-node:
     dependencies:
       '@watermelon-rewrite/core':
@@ -35,6 +45,9 @@ importers:
       '@types/node':
         specifier: ^24.0.0
         version: 24.13.3
+      '@watermelon-rewrite/driver-conformance':
+        specifier: workspace:*
+        version: link:../driver-conformance
 
   packages/driver-rn:
     dependencies:
@@ -60,6 +73,10 @@ importers:
       '@watermelon-rewrite/core':
         specifier: workspace:*
         version: link:../core
+    devDependencies:
+      '@watermelon-rewrite/driver-conformance':
+        specifier: workspace:*
+        version: link:../driver-conformance
 
 packages:
 

@@ -87,18 +87,22 @@ state on the next `open`.
    (the Node driver does this; skip for `:memory:`).
 3. Prepared-statement caching is a driver-internal concern (keyed by SQL
    text) — invisible at the seam.
-4. Run the conformance suites against it. They currently live in
-   `packages/driver-node/src/*Conformance.test.ts` and are written against
-   the seam interface — extracting them into a shared reusable package is
-   planned alongside the second driver. Until then: copy the suite files
-   and swap the driver import; everything else is seam-only.
+4. Run the shared conformance suite against it —
+   `@watermelon-rewrite/driver-conformance`:
 
-The suites are the real contract: query semantics
-(`queryConformance`), matcher agreement (`matcherConformance`), DDL and
-migrations (`schemaConformance`), sanitization round-trip
-(`rawRecordConformance`), plus the driver basics in
-`NodeSqliteDriver.test.ts` (batch atomicity and rollback, user_version
-persistence, destroy removing sidecars, boolean binding).
+   ```ts
+   registerDriverConformance({
+     name: 'my driver',
+     createDriver: () => new MyDriver(),
+     persistence: { databaseName: () => uniqueName() }, // or false
+   })
+   ```
+
+The suite is the real contract: driver method obligations (lifecycle,
+round-trip, batch atomicity and rollback, user_version, error surfaces,
+persistence when supported), the full query-semantics corpus, the
+matcher/SQL agreement corpus, schema DDL + migrations, and the
+sanitization round-trip. Both existing drivers run it verbatim.
 
 ## Existing drivers
 

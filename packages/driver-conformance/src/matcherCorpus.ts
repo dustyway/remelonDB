@@ -1,8 +1,7 @@
 /**
- * The "one authoritative engine" rule made executable
- * (docs/q-dsl-and-one-engine.md): every query the in-memory matcher accepts
- * must return exactly the same records as the compiled SQL run by SQLite.
- * One corpus, two engines, asserted identical.
+ * The "one authoritative engine" rule, executable: every query the
+ * in-memory matcher accepts must return exactly the same records as the
+ * compiled SQL run by this driver's engine. One corpus, two engines.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
@@ -16,8 +15,9 @@ import {
   tableSchema,
   type Clause,
   type RawRecord,
+  type SqliteDriver,
 } from '@watermelon-rewrite/core'
-import { NodeSqliteDriver } from './NodeSqliteDriver'
+import type { ResolvedOptions } from './index'
 
 const itemsTable = tableSchema({
   name: 'items',
@@ -81,42 +81,44 @@ const CORPUS: { label: string; clauses: Clause[] }[] = [
   },
 ]
 
-describe('matcher/SQL conformance: one corpus, two engines', () => {
-  const driver = new NodeSqliteDriver()
-  let allRaws: RawRecord[] = []
+export function matcherCorpusSuite(options: ResolvedOptions): void {
+  describe('matcher/SQL agreement: one corpus, two engines', () => {
+    let driver: SqliteDriver
+    let allRaws: RawRecord[] = []
 
-  beforeAll(async () => {
-    await driver.open(':memory:')
-    await driver.executeBatch(encodeSchema(schema).map((sql) => [sql, [[]]]))
-    await driver.executeBatch([
-      [
-        'insert into items ("id", "name", "position", "is_done", "project_id", "score", "_status", "_changed") values (?, ?, ?, ?, ?, ?, ?, ?)',
-        FIXTURES.map((f) => [...f, ''] as const),
-      ],
-    ])
-    // what the JS side holds: sanitized raws of every row, deleted included
-    const rows = await driver.query('select * from items', [])
-    allRaws = rows.map((row) => sanitizedRaw(row, itemsTable))
-    expect(allRaws).toHaveLength(FIXTURES.length)
+    beforeAll(async () => {
+      driver = await options.createDriver()
+      await driver.open(options.ephemeralName())
+      await driver.executeBatch(encodeSchema(schema).map((sql) => [sql, [[]]]))
+      await driver.executeBatch([
+        [
+          'insert into items ("id", "name", "position", "is_done", "project_id", "score", "_status", "_changed") values (?, ?, ?, ?, ?, ?, ?, ?)',
+          FIXTURES.map((f) => [...f, ''] as const),
+        ],
+      ])
+      const rows = await driver.query('select * from items', [])
+      allRaws = rows.map((row) => sanitizedRaw(row, itemsTable))
+      expect(allRaws).toHaveLength(FIXTURES.length)
+    })
+
+    afterAll(async () => {
+      await driver.destroy().catch(() => {})
+    })
+
+    it.each(CORPUS)('$label', async ({ clauses }) => {
+      const description = Q.buildQueryDescription(clauses)
+      expect(canEncodeMatcher(description)).toBe(true)
+
+      const [sql, args] = encodeQuery({ table: 'items', description })
+      const sqlIds = (await driver.query(sql, args)).map((row) => row['id']).sort()
+
+      const matcher = encodeMatcher(description)
+      const matcherIds = allRaws
+        .filter(matcher)
+        .map((raw) => raw.id)
+        .sort()
+
+      expect(matcherIds).toEqual(sqlIds)
+    })
   })
-
-  afterAll(async () => {
-    await driver.destroy().catch(() => {})
-  })
-
-  it.each(CORPUS)('$label', async ({ clauses }) => {
-    const description = Q.buildQueryDescription(clauses)
-    expect(canEncodeMatcher(description)).toBe(true)
-
-    const [sql, args] = encodeQuery({ table: 'items', description })
-    const sqlIds = (await driver.query(sql, args)).map((row) => row.id).sort()
-
-    const matcher = encodeMatcher(description)
-    const matcherIds = allRaws
-      .filter(matcher)
-      .map((raw) => raw.id)
-      .sort()
-
-    expect(matcherIds).toEqual(sqlIds)
-  })
-})
+}
