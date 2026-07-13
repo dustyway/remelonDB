@@ -22,6 +22,24 @@ jobs:
       - run: pnpm test
       - run: pnpm typecheck
 
+  # The web driver's full conformance suite in real Chromium: real Worker,
+  # real OPFS SAH-pool storage, durability across worker termination.
+  web-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @watermelon-rewrite/driver-web exec playwright install --with-deps chromium
+      - run: pnpm --filter @watermelon-rewrite/driver-web test:browser
+
   # Compiles the RN driver's C++ TurboModule with a real NDK inside a real
   # RN app — the device-verification items reachable without hardware:
   # codegen, cxx-module autolinking glue, prefab JSI linkage, the compile.

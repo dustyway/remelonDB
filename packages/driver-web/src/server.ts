@@ -86,7 +86,9 @@ export class SqliteWorkerServer {
     if (storage === 'opfs') {
       if (!this.poolUtil) {
         try {
-          this.poolUtil = await this.sqlite3.installOpfsSAHPoolVfs({})
+          this.poolUtil = await this.sqlite3.installOpfsSAHPoolVfs({
+            initialCapacity: 32, // db + journal per open database
+          })
         } catch (error) {
           throw new Error(
             `OPFS storage is unavailable here (${String(error)}) — ` +
@@ -174,7 +176,12 @@ export class SqliteWorkerServer {
           this.connections.delete(request.name)
         }
         if (storage === 'opfs' && this.poolUtil) {
-          this.poolUtil.unlink(request.name)
+          // pool filenames are absolute ('/name'), plus journal sidecars
+          for (const file of this.poolUtil.getFileNames()) {
+            if (file === `/${request.name}` || file.startsWith(`/${request.name}-`)) {
+              this.poolUtil.unlink(file)
+            }
+          }
         }
         return null
       }

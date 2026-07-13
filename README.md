@@ -52,8 +52,8 @@ written once in TypeScript and identical on every platform. See
 | Database core (writer queue, RecordCache, batch, observation) | ✅ done |
 | Model layer (typed records, no decorators) | ✅ done |
 | Sync engine ([protocol](docs/sync-design.md): no lost writes, no push echo) | ✅ done |
-| React Native driver (C++ TurboModule, bundled sqlite3) | 🧪 authored — [needs device verification](packages/driver-rn/README.md) |
-| Web driver (SQLite-WASM + OPFS Worker) | 🧪 authored — core [verified on real sqlite-wasm](packages/driver-web/README.md); OPFS needs a browser run |
+| React Native driver (C++ TurboModule, bundled sqlite3) | 🧪 [compiles in CI](packages/driver-rn/README.md) (real RN 0.86 app + NDK); device runtime pending |
+| Web driver (SQLite-WASM + OPFS Worker) | ✅ [verified in real Chromium](packages/driver-web/README.md): full conformance suite on OPFS |
 
 The full TypeScript side works today, on Node:
 

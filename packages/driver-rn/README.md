@@ -105,10 +105,11 @@ clang++ -fsyntax-only -std=c++20 -I. -Ivendor -I$RN/ReactCommon/jsi SqliteConnec
       (clang++ syntax pass against real headers + generated spec)
 - [x] `fetch-sqlite` pin is a real release; amalgamation compiles with
       our flag set
-- [ ] Android: cxx-module autolinking generates the provider for
-      `facebook::react::WatermelonDriver` and links `watermelon-driver`
-- [ ] Android: `ThreadScope`/fbjni context lookup works on the JS thread
-      (syntax-checked against real fbjni; runtime unproven)
+- [x] Android: cxx-module autolinking + full compile and link — verified
+      by CI (`android-driver` job: real RN 0.86 app, real NDK,
+      assembleDebug green)
+- [ ] Android: `ThreadScope`/fbjni context lookup works at **runtime**
+      (compiles and links; needs an emulator/device run)
 - [ ] iOS: `modulesProvider` registration + pod compiles the amalgamation
 - [ ] Conformance suites pass against the device build (port
       `packages/driver-node/src/*Conformance.test.ts` into an e2e app)

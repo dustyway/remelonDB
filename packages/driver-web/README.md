@@ -58,8 +58,12 @@ const db = await Database.open({
       user_version, error surfaces
 - [x] Full stack on the driver: Database + models + observation + sync
 - [x] Loud failure when OPFS is unavailable (no silent downgrade)
-- [ ] `storage: 'opfs'` in a real browser: persistence across reloads,
-      SAH pool capacity, `destroy()` unlinking pool files
-- [ ] Worker bundling in a real Vite app (worker URL pattern + wasm asset)
+- [x] `storage: 'opfs'` in real Chromium (vitest browser mode +
+      Playwright): the FULL conformance suite on OPFS, persistence,
+      `destroy()` unlinking pool + journal files, and durability across
+      worker termination (page-reload equivalent). Run:
+      `pnpm --filter @watermelon-rewrite/driver-web test:browser`
+- [x] Worker + wasm loading through the Vite pipeline (vitest browser
+      mode) — a production Vite app build remains a one-time smoke test
 - [ ] Multi-tab behavior (SAH pool is single-connection by design —
       document the recommended SharedWorker/leader-election pattern)

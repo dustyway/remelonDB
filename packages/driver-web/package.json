@@ -12,6 +12,11 @@
     "@watermelon-rewrite/core": "workspace:*"
   },
   "devDependencies": {
-    "@watermelon-rewrite/driver-conformance": "workspace:*"
+    "@vitest/browser": "^3.2.7",
+    "@watermelon-rewrite/driver-conformance": "workspace:*",
+    "playwright": "^1.61.1"
+  },
+  "scripts": {
+    "test:browser": "vitest run --config vitest.browser.config.ts"
   }
 }
