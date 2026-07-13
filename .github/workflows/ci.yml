@@ -21,3 +21,50 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
       - run: pnpm typecheck
+
+  # Compiles the RN driver's C++ TurboModule with a real NDK inside a real
+  # RN app — the device-verification items reachable without hardware:
+  # codegen, cxx-module autolinking glue, prefab JSI linkage, the compile.
+  android-driver:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: pnpm install --frozen-lockfile
+      - name: Fetch SQLite amalgamation
+        run: node packages/driver-rn/scripts/fetch-sqlite.mjs
+      - name: Pack workspace packages (rewriting workspace deps to tarballs)
+        run: |
+          mkdir -p /tmp/packed
+          pnpm --filter @watermelon-rewrite/core pack --pack-destination /tmp/packed
+          CORE_TGZ=$(ls /tmp/packed/*core*.tgz)
+          node -e "
+            const fs = require('fs')
+            const path = 'packages/driver-rn/package.json'
+            const pkg = JSON.parse(fs.readFileSync(path, 'utf8'))
+            pkg.dependencies['@watermelon-rewrite/core'] = 'file:' + process.argv[1]
+            fs.writeFileSync(path, JSON.stringify(pkg, null, 2))
+          " "$CORE_TGZ"
+          pnpm --filter @watermelon-rewrite/driver-rn pack --pack-destination /tmp/packed
+      - name: Create RN 0.86 test app
+        run: |
+          cd /tmp
+          npx @react-native-community/cli@latest init WmHarness --version 0.86.0 --pm npm --skip-install --install-pods false
+          cd WmHarness
+          npm install
+          npm install /tmp/packed/*core*.tgz /tmp/packed/*driver-rn*.tgz
+      - name: Build Android (debug)
+        run: |
+          cd /tmp/WmHarness/android
+          ./gradlew assembleDebug --no-daemon --stacktrace
