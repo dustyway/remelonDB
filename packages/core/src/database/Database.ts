@@ -57,6 +57,7 @@ export class Database {
     readonly driver: SqliteDriver,
     readonly schema: AppSchema,
     associations: readonly QueryAssociation[],
+    readonly migrations?: SchemaMigrations,
   ) {
     this.associations = associations
     this.localStorage = new LocalStorage(driver)
@@ -93,7 +94,7 @@ export class Database {
       )
     }
 
-    return new Database(driver, schema, options.associations ?? [])
+    return new Database(driver, schema, options.associations ?? [], migrations)
   }
 
   get(table: string): Collection {

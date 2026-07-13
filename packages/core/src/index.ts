@@ -45,6 +45,24 @@ export { WorkQueue } from './database/WorkQueue'
 export { encodeBatch } from './database/encodeBatch'
 export type { BatchOperation } from './database/encodeBatch'
 
+export { synchronize, CURSOR_KEY, LAST_SCHEMA_VERSION_KEY } from './sync/synchronize'
+export type { SynchronizeOptions } from './sync/synchronize'
+export { fetchLocalChanges, hasUnsyncedChanges } from './sync/fetchLocal'
+export type { LocalChanges } from './sync/fetchLocal'
+export { applyRemoteChanges } from './sync/applyRemote'
+export type { ApplyRemoteOptions, ConflictResolver } from './sync/applyRemote'
+export { markLocalChangesAsSynced } from './sync/markAsSynced'
+export type {
+  Cursor,
+  SyncChanges,
+  SyncTableChanges,
+  MigrationSyncChanges,
+  SyncPullArgs,
+  SyncPullResult,
+  SyncPushArgs,
+  SyncPushResult,
+} from './sync/types'
+
 export { encodeQuery } from './query/encodeQuery'
 export type {
   AssociationInfo,
