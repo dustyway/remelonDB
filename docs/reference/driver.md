@@ -105,5 +105,5 @@ persistence, destroy removing sidecars, boolean binding).
 | Driver | Package | Notes |
 | --- | --- | --- |
 | Node | `@watermelon-rewrite/driver-node` | better-sqlite3; synchronous underneath; WAL for file DBs; `:memory:` supported. Powers all tests. |
-| React Native | planned | C++ TurboModule (bridgeless-compatible), bundled sqlite3 amalgamation, prefab JSI linkage, 16 KB-aligned `.so`. See architecture doc §4. |
-| Web | planned | SQLite-WASM + OPFS in a dedicated Worker; same SQL, plumbing only. |
+| React Native | `@watermelon-rewrite/driver-rn` | Pure C++ TurboModule, bundled sqlite3 amalgamation, prefab JSI linkage. Codegen + syntax verified locally; device build pending (see its README). |
+| Web | `@watermelon-rewrite/driver-web` | SQLite-WASM + OPFS SAH pool in a dedicated Worker. Full contract verified against real sqlite-wasm in-process; OPFS persistence needs a browser run (see its README). |

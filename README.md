@@ -53,7 +53,7 @@ written once in TypeScript and identical on every platform. See
 | Model layer (typed records, no decorators) | ✅ done |
 | Sync engine ([protocol](docs/sync-design.md): no lost writes, no push echo) | ✅ done |
 | React Native driver (C++ TurboModule, bundled sqlite3) | 🧪 authored — [needs device verification](packages/driver-rn/README.md) |
-| Web driver (SQLite-WASM + OPFS Worker) | ⏳ planned |
+| Web driver (SQLite-WASM + OPFS Worker) | 🧪 authored — core [verified on real sqlite-wasm](packages/driver-web/README.md); OPFS needs a browser run |
 
 The full TypeScript side works today, on Node:
 
@@ -127,6 +127,8 @@ packages/
                  + conformance & integration suites on real SQLite
   driver-rn/     @watermelon-rewrite/driver-rn — React Native driver:
                  pure C++ TurboModule + bundled SQLite (see its README)
+  driver-web/    @watermelon-rewrite/driver-web — browser driver:
+                 SQLite-WASM + OPFS in a Worker (see its README)
 docs/            design decisions and reference guides — see docs/README.md
 watermelondb-upstream/   reference checkout of upstream (gitignored)
 ```
