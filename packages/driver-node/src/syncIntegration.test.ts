@@ -337,4 +337,95 @@ describe('sync engine', () => {
     expect(record._status).toBe('synced')
     expect(record['name']).toBe('x')
   })
+
+  /**
+   * Failing repros for known flaws (found by adversarial review; see the
+   * commit message). `it.fails` inverts the assertion: these stay green
+   * while the bugs exist and go red the moment a fix lands, forcing the
+   * marker to be flipped into a real regression test.
+   */
+  describe('known flaws (failing repros)', () => {
+    it.fails(
+      'CONFIRMED FLAW: replacement resync must not resurrect offline deletes',
+      async () => {
+        server.seed('a', { name: 'a', position: 1 })
+        await sync()
+        // offline delete — tombstone awaiting push
+        await db.write(() => db.get('tasks').markAsDeleted('a'))
+
+        // server demands a resync; its snapshot still contains 'a'
+        let first = true
+        await sync({
+          pullChanges: async (args) => {
+            if (first && args.cursor !== null) {
+              first = false
+              return { resyncRequired: true }
+            }
+            return server.pull(args)
+          },
+        })
+
+        // the tombstone must survive the rebuild and the delete must push
+        await expect(db.get('tasks').find('a')).rejects.toThrow('not found')
+        expect(server.docs.get('a')?.deleted).toBe(true)
+      },
+    )
+
+    it.fails(
+      'FLAW: large pulls must not overflow SQLite bound-parameter limits',
+      async () => {
+        const many = Array.from({ length: 40_000 }, (_, i) => ({
+          id: `r${i}`,
+          name: `record ${i}`,
+          position: i,
+        }))
+        await expect(
+          synchronize({
+            database: db,
+            pullChanges: async () => ({
+              changes: { tasks: { created: many, updated: [], deleted: [] } },
+              cursor: '1',
+            }),
+          }),
+        ).resolves.toBeUndefined()
+        expect(await db.get('tasks').query().fetchCount()).toBe(40_000)
+      },
+    )
+
+    it.fails(
+      'FLAW: sparse updated records from a nonconforming server must be rejected, not defaulted',
+      async () => {
+        server.seed('t1', { name: 'local truth', position: 7 })
+        await sync()
+        // nonconforming server omits 'position' from the updated record;
+        // today apply silently fills it with the schema default (0),
+        // clobbering the local value — it must reject instead
+        await expect(
+          synchronize({
+            database: db,
+            pullChanges: async () => ({
+              changes: {
+                tasks: {
+                  created: [],
+                  updated: [{ id: 't1', name: 'server' }],
+                  deleted: [],
+                },
+              },
+              cursor: '99',
+            }),
+          }),
+        ).rejects.toThrow(/missing|sparse|full record/i)
+        expect((await db.get('tasks').find('t1'))['position']).toBe(7)
+      },
+    )
+
+    it.fails(
+      'FLAW: concurrent synchronize() calls should coalesce, not throw at the app',
+      async () => {
+        server.seed('t1', { name: 'x', position: 1 })
+        const results = await Promise.allSettled([sync(), sync()])
+        expect(results.map((r) => r.status)).toEqual(['fulfilled', 'fulfilled'])
+      },
+    )
+  })
 })
