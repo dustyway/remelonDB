@@ -11,5 +11,6 @@
     "typescript": "^5.8.3",
     "vitest": "^3.2.4"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "version": "0.0.1"
 }
