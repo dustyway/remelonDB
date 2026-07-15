@@ -192,6 +192,28 @@ void SqliteConnection::executeBatch(jsi::Runtime& rt, const jsi::Array& statemen
   }
 }
 
+int SqliteConnection::userVersion(jsi::Runtime& rt) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  sqlite3_stmt* stmt = prepare(rt, "pragma user_version");
+  if (sqlite3_step(stmt) != SQLITE_ROW) {
+    sqlite3_reset(stmt);
+    throwError(rt, "user_version failed");
+  }
+  int version = sqlite3_column_int(stmt, 0);
+  sqlite3_reset(stmt);
+  return version;
+}
+
+void SqliteConnection::setUserVersion(jsi::Runtime& rt, int version) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  // pragma values can't be bound as parameters; the SQL differs per
+  // version, so bypass the statement cache
+  std::string sql = "pragma user_version = " + std::to_string(version);
+  if (sqlite3_exec(db_, sql.c_str(), nullptr, nullptr, nullptr) != SQLITE_OK) {
+    throwError(rt, "set user_version failed");
+  }
+}
+
 void SqliteConnection::destroyFiles() {
   std::lock_guard<std::mutex> lock(mutex_);
   close();

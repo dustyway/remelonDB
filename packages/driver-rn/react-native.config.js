@@ -11,6 +11,11 @@ module.exports = {
         cxxModuleCMakeListsModuleName: 'watermelon-driver',
         cxxModuleCMakeListsPath: '../cpp/CMakeLists.txt',
         cxxModuleHeaderName: 'WatermelonDriver',
+        // pure-cxx deps have no gradle project to run codegen, so the
+        // package ships pre-generated artifacts (android/generated/jni);
+        // they compile inside the app build, so RN-version drift still
+        // fails loudly at compile time
+        cmakeListsPath: 'generated/jni/CMakeLists.txt',
       },
     },
   },

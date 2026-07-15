@@ -7,17 +7,16 @@ construction — codegen'd spec, no classic bridge module, no manual
 (never compiled from source — the exact mistake that broke upstream
 WatermelonDB on modern RN).
 
-> ## ⚠️ Status: verified up to syntax, not yet on device
+> ## Status: Android runtime-verified on emulator; iOS pending
 >
-> Verified without a device (see "Local verification" below): React
-> Native's **codegen accepts the spec** and generates
-> `WatermelonDriverSpecJSI.h`; **all C++ passes `clang++ -fsyntax-only`**
-> against the real RN 0.86 headers, the real generated spec (including
-> the bridging static_asserts — `UnsafeMixed` params arrive as
-> `jsi::Object`), and real fbjni; the SQLite amalgamation compiles with
-> our flags; `fetch-sqlite` downloads the pinned release. Still pending:
-> an actual device/simulator build — linking, autolinking glue, iOS
-> compilation, and runtime behavior. Checklist at the bottom.
+> The driver builds via cxx-module autolinking inside a real RN 0.86
+> app and **passes a runtime smoke suite on an Android emulator**
+> (API 36): file-backed open through the JNI database-path lookup, WAL,
+> typed roundtrip, atomic batch rollback, JS-catchable native errors,
+> `user_version` across reopen, `destroy` incl. sidecars, and a full
+> `Database` end-to-end over core. Still pending: iOS compilation +
+> registration, the ported conformance suite, and reload teardown.
+> Checklist at the bottom.
 
 ## Requirements
 
@@ -108,8 +107,10 @@ clang++ -fsyntax-only -std=c++20 -I. -Ivendor -I$RN/ReactCommon/jsi SqliteConnec
 - [x] Android: cxx-module autolinking + full compile and link — verified
       by CI (`android-driver` job: real RN 0.86 app, real NDK,
       assembleDebug green)
-- [ ] Android: `ThreadScope`/fbjni context lookup works at **runtime**
-      (compiles and links; needs an emulator/device run)
+- [x] Android: `ThreadScope`/fbjni context lookup works at **runtime**
+      (verified: smoke suite green on an API 36 emulator — file-backed
+      db resolves into the app's database directory, all seam methods
+      exercised)
 - [ ] iOS: `modulesProvider` registration + pod compiles the amalgamation
 - [ ] Conformance suites pass against the device build (port
       `packages/driver-node/src/*Conformance.test.ts` into an e2e app)

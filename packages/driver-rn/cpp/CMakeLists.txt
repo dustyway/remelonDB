@@ -22,10 +22,14 @@ add_library(watermelon-driver STATIC
 target_include_directories(watermelon-driver PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/vendor
+  # pre-generated codegen spec shipped with the package (see android/README.md)
+  ${CMAKE_CURRENT_SOURCE_DIR}/../android/generated/jni
+  ${CMAKE_CURRENT_SOURCE_DIR}/../android/generated/jni/react/renderer/components/WatermelonDriverSpec
 )
 
+# -std applies to C++ only; sqlite3.c compiles as plain C
 target_compile_options(watermelon-driver PRIVATE
-  -fexceptions -frtti -std=c++20
+  -fexceptions -frtti $<$<COMPILE_LANGUAGE:CXX>:-std=c++20>
 )
 
 # Predictable, modern SQLite configuration
