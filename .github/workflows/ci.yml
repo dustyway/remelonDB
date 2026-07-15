@@ -86,3 +86,10 @@ jobs:
         run: |
           cd /tmp/WmHarness/android
           ./gradlew assembleDebug --no-daemon --stacktrace
+      - name: Assert the TurboModule is registered (not just linked)
+        run: |
+          # a green assembleDebug proves nothing about registration: if the
+          # CLI rejects the dependency config it generates no glue and the
+          # module is silently absent at runtime
+          grep -q "WatermelonDriver" \
+            /tmp/WmHarness/android/app/build/generated/autolinking/src/main/jni/autolinking.cpp
