@@ -13,10 +13,11 @@ WatermelonDB on modern RN).
 > app and **passes a runtime smoke suite on an Android emulator**
 > (API 36): file-backed open through the JNI database-path lookup, WAL,
 > typed roundtrip, atomic batch rollback, JS-catchable native errors,
-> `user_version` across reopen, `destroy` incl. sidecars, and a full
-> `Database` end-to-end over core. Still pending: iOS compilation +
-> registration, the ported conformance suite, and reload teardown.
-> Checklist at the bottom.
+> `user_version` across reopen, `destroy` incl. sidecars, a full
+> `Database` end-to-end over core — **and the complete
+> driver-conformance suite (50/50, the same tests the Node driver
+> passes)**. Still pending: iOS compilation + registration, and reload
+> teardown. Checklist at the bottom.
 
 ## Requirements
 
@@ -112,7 +113,8 @@ clang++ -fsyntax-only -std=c++20 -I. -Ivendor -I$RN/ReactCommon/jsi SqliteConnec
       db resolves into the app's database directory, all seam methods
       exercised)
 - [ ] iOS: `modulesProvider` registration + pod compiles the amalgamation
-- [ ] Conformance suites pass against the device build (port
-      `packages/driver-node/src/*Conformance.test.ts` into an e2e app)
+- [x] Conformance suites pass against the device build (verified: the
+      full driver-conformance suite — 50/50, same count as the Node
+      driver — green on an API 36 emulator; see `e2e/`)
 - [ ] Headless JS / reload teardown (connection mutex is in place; needs
       a real reload cycle)

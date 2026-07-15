@@ -52,7 +52,7 @@ written once in TypeScript and identical on every platform. See
 | Database core (writer queue, RecordCache, batch, observation) | ✅ done |
 | Model layer (typed records, no decorators) | ✅ done |
 | Sync engine ([protocol](docs/sync-design.md): no lost writes, no push echo) | ✅ done |
-| React Native driver (C++ TurboModule, bundled sqlite3) | 🧪 [compiles in CI](packages/driver-rn/README.md) (real RN 0.86 app + NDK); device runtime pending |
+| React Native driver (C++ TurboModule, bundled sqlite3) | ✅ [runtime-verified on Android emulator](packages/driver-rn/README.md): smoke + full conformance suite (50/50, same as Node); iOS pending |
 | Web driver (SQLite-WASM + OPFS Worker) | ✅ [verified in real Chromium](packages/driver-web/README.md): full conformance suite on OPFS |
 
 The full TypeScript side works today, on Node:
