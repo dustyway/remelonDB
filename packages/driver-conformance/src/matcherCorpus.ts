@@ -16,7 +16,7 @@ import {
   type Clause,
   type RawRecord,
   type SqliteDriver,
-} from '@watermelon-rewrite/core'
+} from '@remelon/core'
 import type { ResolvedOptions } from './index'
 
 const itemsTable = tableSchema({

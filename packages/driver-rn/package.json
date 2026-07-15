@@ -1,5 +1,5 @@
 {
-  "name": "@watermelon-rewrite/driver-rn",
+  "name": "@remelon/driver-rn",
   "version": "0.0.0",
   "private": true,
   "exports": {
@@ -18,7 +18,7 @@
     "fetch-sqlite": "node scripts/fetch-sqlite.mjs"
   },
   "dependencies": {
-    "@watermelon-rewrite/core": "workspace:*"
+    "@remelon/core": "workspace:*"
   },
   "peerDependencies": {
     "react-native": ">=0.76"
@@ -40,5 +40,6 @@
         "NativeWatermelonDriver": "WatermelonDriverProvider"
       }
     }
-  }
+  },
+  "license": "MIT"
 }

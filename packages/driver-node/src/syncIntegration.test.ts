@@ -18,7 +18,7 @@ import {
   type SyncPullResult,
   type SyncPushArgs,
   type SyncPushResult,
-} from '@watermelon-rewrite/core'
+} from '@remelon/core'
 import { NodeSqliteDriver } from './NodeSqliteDriver'
 
 const schema = appSchema({

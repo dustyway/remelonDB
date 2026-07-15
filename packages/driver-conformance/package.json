@@ -1,5 +1,5 @@
 {
-  "name": "@watermelon-rewrite/driver-conformance",
+  "name": "@remelon/driver-conformance",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -7,12 +7,13 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@watermelon-rewrite/core": "workspace:*"
+    "@remelon/core": "workspace:*"
   },
   "peerDependencies": {
     "vitest": ">=3"
   },
   "devDependencies": {
     "vitest": "^3.2.4"
-  }
+  },
+  "license": "MIT"
 }

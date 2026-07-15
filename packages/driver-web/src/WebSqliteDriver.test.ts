@@ -1,7 +1,7 @@
 /**
  * Web-driver-specific behavior. The full driver contract, query corpus,
  * matcher agreement, schema and record suites run via conformance.test.ts
- * (@watermelon-rewrite/driver-conformance) against the same in-process
+ * (@remelon/driver-conformance) against the same in-process
  * real-sqlite-wasm setup.
  */
 import { describe, expect, it } from 'vitest'
@@ -12,7 +12,7 @@ import {
   Q,
   synchronize,
   tableSchema,
-} from '@watermelon-rewrite/core'
+} from '@remelon/core'
 import { serveSqliteWorker } from './server'
 import { createChannel, createInProcessDriver } from './testing'
 import { WebSqliteDriver } from './WebSqliteDriver'

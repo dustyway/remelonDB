@@ -1,7 +1,7 @@
 # On-device e2e: smoke + conformance
 
 Drop-in files for a scratch RN app that runs the driver's runtime smoke
-suite plus the full `@watermelon-rewrite/driver-conformance` suite
+suite plus the full `@remelon/driver-conformance` suite
 (the same 50 tests the Node driver passes) on a device or emulator,
 reporting to the screen and to logcat.
 

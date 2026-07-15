@@ -1,5 +1,5 @@
 {
-  "name": "@watermelon-rewrite/driver-node",
+  "name": "@remelon/driver-node",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -7,12 +7,13 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@watermelon-rewrite/core": "workspace:*",
+    "@remelon/core": "workspace:*",
     "better-sqlite3": "^12.2.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.0.0",
-    "@watermelon-rewrite/driver-conformance": "workspace:*"
-  }
+    "@remelon/driver-conformance": "workspace:*"
+  },
+  "license": "MIT"
 }

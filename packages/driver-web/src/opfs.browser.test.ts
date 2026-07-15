@@ -9,7 +9,7 @@
  * so one pool owner per origin — the documented single-connection model).
  */
 import { describe, expect, it } from 'vitest'
-import { registerDriverConformance } from '@watermelon-rewrite/driver-conformance'
+import { registerDriverConformance } from '@remelon/driver-conformance'
 import type { Endpoint } from './protocol'
 import { WebSqliteDriver } from './WebSqliteDriver'
 

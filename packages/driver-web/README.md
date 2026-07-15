@@ -1,4 +1,4 @@
-# @watermelon-rewrite/driver-web
+# @remelon/driver-web
 
 The browser `SqliteDriver`: **SQLite-WASM running in a dedicated Worker**,
 persistent via the OPFS SyncAccessHandle pool VFS, reached over a
@@ -19,8 +19,8 @@ a real browser run (checklist below).
 ## Usage
 
 ```ts
-import { Database } from '@watermelon-rewrite/core'
-import { WebSqliteDriver } from '@watermelon-rewrite/driver-web'
+import { Database } from '@remelon/core'
+import { WebSqliteDriver } from '@remelon/driver-web'
 
 const db = await Database.open({
   driver: new WebSqliteDriver(), // storage: 'opfs' by default
@@ -62,7 +62,7 @@ const db = await Database.open({
       Playwright): the FULL conformance suite on OPFS, persistence,
       `destroy()` unlinking pool + journal files, and durability across
       worker termination (page-reload equivalent). Run:
-      `pnpm --filter @watermelon-rewrite/driver-web test:browser`
+      `pnpm --filter @remelon/driver-web test:browser`
 - [x] Worker + wasm loading through the Vite pipeline (vitest browser
       mode) — a production Vite app build remains a one-time smoke test
 - [ ] Multi-tab behavior (SAH pool is single-connection by design —

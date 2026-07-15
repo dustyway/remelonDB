@@ -3,7 +3,7 @@ import type {
   Row,
   SqlArgs,
   SqliteDriver,
-} from '@watermelon-rewrite/core'
+} from '@remelon/core'
 import type {
   Endpoint,
   StorageKind,

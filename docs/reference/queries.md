@@ -20,7 +20,7 @@ db.get('tasks').query(
 The standalone pipeline the rest of this doc describes:
 
 ```ts
-import { Q, encodeQuery } from '@watermelon-rewrite/core'
+import { Q, encodeQuery } from '@remelon/core'
 
 const description = Q.buildQueryDescription([
   Q.where('is_done', false),
@@ -145,7 +145,7 @@ encodeQuery(
 ## The in-memory matcher
 
 ```ts
-import { canEncodeMatcher, encodeMatcher } from '@watermelon-rewrite/core'
+import { canEncodeMatcher, encodeMatcher } from '@remelon/core'
 
 if (canEncodeMatcher(description)) {
   const matcher = encodeMatcher(description) // (raw: RawRecord) => boolean

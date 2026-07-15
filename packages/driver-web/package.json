@@ -1,5 +1,5 @@
 {
-  "name": "@watermelon-rewrite/driver-web",
+  "name": "@remelon/driver-web",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -9,14 +9,15 @@
   },
   "dependencies": {
     "@sqlite.org/sqlite-wasm": "3.53.0-build1",
-    "@watermelon-rewrite/core": "workspace:*"
+    "@remelon/core": "workspace:*"
   },
   "devDependencies": {
     "@vitest/browser": "^3.2.7",
-    "@watermelon-rewrite/driver-conformance": "workspace:*",
+    "@remelon/driver-conformance": "workspace:*",
     "playwright": "^1.61.1"
   },
   "scripts": {
     "test:browser": "vitest run --config vitest.browser.config.ts"
-  }
+  },
+  "license": "MIT"
 }

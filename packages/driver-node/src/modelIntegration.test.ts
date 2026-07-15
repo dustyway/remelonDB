@@ -13,7 +13,7 @@ import {
   type AssociationsMap,
   type SyncPullArgs,
   type SyncPullResult,
-} from '@watermelon-rewrite/core'
+} from '@remelon/core'
 import { NodeSqliteDriver } from './NodeSqliteDriver'
 
 const schema = appSchema({

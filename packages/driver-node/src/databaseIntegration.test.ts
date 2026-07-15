@@ -14,7 +14,7 @@ import {
   tableSchema,
   type QueryAssociation,
   type RawRecord,
-} from '@watermelon-rewrite/core'
+} from '@remelon/core'
 import { NodeSqliteDriver } from './NodeSqliteDriver'
 
 const schema = appSchema({

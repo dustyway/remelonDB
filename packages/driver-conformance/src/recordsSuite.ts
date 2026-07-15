@@ -8,7 +8,7 @@ import {
   sanitizedRaw,
   tableSchema,
   type SqliteDriver,
-} from '@watermelon-rewrite/core'
+} from '@remelon/core'
 import type { ResolvedOptions } from './index'
 
 const table = tableSchema({

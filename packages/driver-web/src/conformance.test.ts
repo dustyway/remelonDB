@@ -1,4 +1,4 @@
-import { registerDriverConformance } from '@watermelon-rewrite/driver-conformance'
+import { registerDriverConformance } from '@remelon/driver-conformance'
 import { createInProcessDriver } from './testing'
 
 registerDriverConformance({

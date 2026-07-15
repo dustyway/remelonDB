@@ -12,7 +12,7 @@ import {
   stepsForMigration,
   tableSchema,
   type SqliteDriver,
-} from '@watermelon-rewrite/core'
+} from '@remelon/core'
 import type { ResolvedOptions } from './index'
 
 const schemaV1 = appSchema({

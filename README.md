@@ -1,12 +1,9 @@
-# watermelon-rewrite
+# remelon
 
 A from-scratch rewrite of [WatermelonDB](https://github.com/Nozbe/WatermelonDB):
 a reactive, offline-first, syncable database layer for React Native, web, and
 Node — built on **one engine (SQLite) everywhere** and designed for the React
 Native New Architecture from day one.
-
-> Package names (`@watermelon-rewrite/*`) are placeholders until the project
-> has a real name.
 
 ## Why a rewrite
 
@@ -55,8 +52,8 @@ The full TypeScript side works today, on Node:
 import {
   appSchema, tableSchema, Database, Model, Q, synchronize,
   type AssociationsMap,
-} from '@watermelon-rewrite/core'
-import { NodeSqliteDriver } from '@watermelon-rewrite/driver-node'
+} from '@remelon/core'
+import { NodeSqliteDriver } from '@remelon/driver-node'
 
 const schema = appSchema({
   version: 1,
@@ -108,7 +105,7 @@ await synchronize({ database: db, pullChanges, pushChanges }) // your backend
 
 ```
 packages/
-  core/          @watermelon-rewrite/core — everything platform-independent
+  core/          @remelon/core — everything platform-independent
     src/driver/       the SqliteDriver seam (types only)
     src/query/        query AST, Q builders, Q → SQL compiler
     src/schema/       appSchema/tableSchema, migrations, DDL compiler
@@ -117,11 +114,11 @@ packages/
     src/database/     Database, Collection, Query, WorkQueue, RecordCache
     src/model/        the Model layer (schema-generated accessors)
     src/sync/         the sync engine (pull/push, conflict resolution)
-  driver-node/   @watermelon-rewrite/driver-node — better-sqlite3 driver
+  driver-node/   @remelon/driver-node — better-sqlite3 driver
                  + conformance & integration suites on real SQLite
-  driver-rn/     @watermelon-rewrite/driver-rn — React Native driver:
+  driver-rn/     @remelon/driver-rn — React Native driver:
                  pure C++ TurboModule + bundled SQLite (see its README)
-  driver-web/    @watermelon-rewrite/driver-web — browser driver:
+  driver-web/    @remelon/driver-web — browser driver:
                  SQLite-WASM + OPFS in a Worker (see its README)
 docs/            design decisions and reference guides — see docs/README.md
 watermelondb-upstream/   reference checkout of upstream (gitignored)
@@ -156,3 +153,12 @@ runs against real SQLite. The matcher conformance suite runs one query corpus
 through both engines (compiled SQL and the in-memory matcher) and asserts
 identical results — that's the "one authoritative engine" rule as an
 executable invariant.
+
+## License and credits
+
+[MIT](LICENSE). The design owes its best ideas — queries as data,
+reactive observation, the offline-first sync protocol — to
+[WatermelonDB](https://github.com/Nozbe/WatermelonDB) by Nozbe and
+contributors (MIT); the code here is written from scratch. Generated
+codegen files under `packages/driver-rn/android/generated/` retain
+their Meta MIT headers.

@@ -1,5 +1,5 @@
 /**
- * Runtime smoke test for @watermelon-rewrite/driver-rn.
+ * Runtime smoke test for @remelon/driver-rn.
  * Each check logs `WMSMOKE: ...` so results are readable via
  * `adb logcat -s ReactNativeJS` without watching the screen.
  */
@@ -11,9 +11,9 @@ import {
   Database,
   Model,
   Q,
-} from '@watermelon-rewrite/core'
-import { RnSqliteDriver } from '@watermelon-rewrite/driver-rn'
-import { registerDriverConformance } from '@watermelon-rewrite/driver-conformance'
+} from '@remelon/core'
+import { RnSqliteDriver } from '@remelon/driver-rn'
+import { registerDriverConformance } from '@remelon/driver-conformance'
 import { runRegisteredSuites } from './vitest-shim'
 
 type Result = { name: string; ok: boolean; detail?: string }

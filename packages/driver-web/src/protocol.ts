@@ -5,7 +5,7 @@
  * Node: the same server code runs against a real browser Worker or an
  * in-process message channel.
  */
-import type { SqlValue } from '@watermelon-rewrite/core'
+import type { SqlValue } from '@remelon/core'
 
 export interface Endpoint {
   postMessage(message: unknown): void

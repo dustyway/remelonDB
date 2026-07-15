@@ -1,9 +1,10 @@
 {
-  "name": "@watermelon-rewrite/core",
+  "name": "@remelon/core",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
-  }
+  },
+  "license": "MIT"
 }

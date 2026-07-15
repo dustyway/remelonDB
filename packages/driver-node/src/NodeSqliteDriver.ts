@@ -5,7 +5,7 @@ import type {
   Row,
   SqlArgs,
   SqliteDriver,
-} from '@watermelon-rewrite/core'
+} from '@remelon/core'
 
 /**
  * SqliteDriver over better-sqlite3. Everything is synchronous underneath;

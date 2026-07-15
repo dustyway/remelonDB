@@ -8,7 +8,7 @@ you're implementing a backend.
 ## Calling synchronize
 
 ```ts
-import { synchronize } from '@watermelon-rewrite/core'
+import { synchronize } from '@remelon/core'
 
 await synchronize({
   database: db,

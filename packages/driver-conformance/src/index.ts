@@ -14,7 +14,7 @@
  *   })
  */
 import { describe } from 'vitest'
-import type { SqliteDriver } from '@watermelon-rewrite/core'
+import type { SqliteDriver } from '@remelon/core'
 import { contractSuite } from './contract'
 import { queryCorpusSuite } from './queryCorpus'
 import { matcherCorpusSuite } from './matcherCorpus'

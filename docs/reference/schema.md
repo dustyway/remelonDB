@@ -7,7 +7,7 @@ of single SQL statements for a driver to run atomically.
 ## Defining a schema
 
 ```ts
-import { appSchema, tableSchema } from '@watermelon-rewrite/core'
+import { appSchema, tableSchema } from '@remelon/core'
 
 const schema = appSchema({
   version: 1,
@@ -93,7 +93,7 @@ tooling and tests.
 import {
   schemaMigrations, createTable, addColumns, unsafeExecuteSql,
   stepsForMigration, encodeMigrationSteps,
-} from '@watermelon-rewrite/core'
+} from '@remelon/core'
 
 const migrations = schemaMigrations({
   migrations: [
