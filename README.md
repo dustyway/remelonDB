@@ -40,20 +40,14 @@ written once in TypeScript and identical on every platform. See
 
 ## Status
 
-| Layer | State |
-| --- | --- |
-| `SqliteDriver` seam (Promise-shaped, web-capable) | ✅ done |
-| Node driver (better-sqlite3) | ✅ done |
-| Q DSL: query AST + validated builders | ✅ done |
-| Q → SQL compiler (parameterized, LEFT JOIN, deleted-filter flag) | ✅ done |
-| Schema, migrations, DDL compiler | ✅ done |
-| RawRecord sanitization (`sanitizedRaw`) | ✅ done |
-| In-memory matcher + SQL/matcher conformance corpus | ✅ done |
-| Database core (writer queue, RecordCache, batch, observation) | ✅ done |
-| Model layer (typed records, no decorators) | ✅ done |
-| Sync engine ([protocol](docs/sync-design.md): no lost writes, no push echo) | ✅ done |
-| React Native driver (C++ TurboModule, bundled sqlite3) | ✅ [runtime-verified on Android emulator](packages/driver-rn/README.md): smoke + full conformance suite (50/50, same as Node); iOS pending |
-| Web driver (SQLite-WASM + OPFS Worker) | ✅ [verified in real Chromium](packages/driver-web/README.md): full conformance suite on OPFS |
+Every layer — driver seam, query DSL and compiler, schema and
+migrations, database core, model layer, and the
+[sync engine](docs/sync-design.md) — is built and passes one shared
+conformance suite on all three platforms: Node (better-sqlite3),
+[web](packages/driver-web/README.md) (real Chromium over OPFS), and
+[Android](packages/driver-rn/README.md) (on-device, same 50/50 suite
+as Node). Open: the iOS build of the RN driver (same C++ core), and a
+real reload-cycle test.
 
 The full TypeScript side works today, on Node:
 

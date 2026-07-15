@@ -17,7 +17,7 @@ WatermelonDB on modern RN).
 > `Database` end-to-end over core — **and the complete
 > driver-conformance suite (50/50, the same tests the Node driver
 > passes)**. Still pending: iOS compilation + registration, and reload
-> teardown. Checklist at the bottom.
+> teardown. Open items at the bottom.
 
 ## Requirements
 
@@ -97,24 +97,9 @@ clang++ -fsyntax-only -std=c++20 -I. -Ivendor -I$CG -I<folly-stub> \
 clang++ -fsyntax-only -std=c++20 -I. -Ivendor -I$RN/ReactCommon/jsi SqliteConnection.cpp
 ```
 
-## Device-verification checklist
+## Open items
 
-- [x] Codegen accepts the `UnsafeMixed` spec (verified: RN 0.86 codegen
-      runs clean; `UnsafeMixed` params = `jsi::Object` at the boundary)
-- [x] C++ satisfies the generated spec's bridging static_asserts
-      (clang++ syntax pass against real headers + generated spec)
-- [x] `fetch-sqlite` pin is a real release; amalgamation compiles with
-      our flag set
-- [x] Android: cxx-module autolinking + full compile and link — verified
-      by CI (`android-driver` job: real RN 0.86 app, real NDK,
-      assembleDebug green)
-- [x] Android: `ThreadScope`/fbjni context lookup works at **runtime**
-      (verified: smoke suite green on an API 36 emulator — file-backed
-      db resolves into the app's database directory, all seam methods
-      exercised)
 - [ ] iOS: `modulesProvider` registration + pod compiles the amalgamation
-- [x] Conformance suites pass against the device build (verified: the
-      full driver-conformance suite — 50/50, same count as the Node
-      driver — green on an API 36 emulator; see `e2e/`)
+      (same C++ core as Android; needs a Mac)
 - [ ] Headless JS / reload teardown (connection mutex is in place; needs
       a real reload cycle)
