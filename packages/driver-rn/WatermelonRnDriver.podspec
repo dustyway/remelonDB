@@ -5,12 +5,12 @@ package = JSON.parse(File.read(File.join(__dir__, "package.json")))
 Pod::Spec.new do |s|
   s.name         = "WatermelonRnDriver"
   s.version      = package["version"]
-  s.summary      = "SQLite driver for remelon (C++ TurboModule)"
-  s.homepage     = "https://github.com/dustyway/remelon"
+  s.summary      = "SQLite driver for remelonDB (C++ TurboModule)"
+  s.homepage     = "https://github.com/dustyway/remelonDB"
   s.license      = "MIT"
-  s.authors      = "remelon"
+  s.authors      = "remelonDB"
   s.platforms    = { :ios => "15.1" }
-  s.source       = { :git => "https://github.com/dustyway/remelon.git" }
+  s.source       = { :git => "https://github.com/dustyway/remelonDB.git" }
 
   s.source_files = [
     "cpp/*.{h,cpp}",
@@ -27,7 +27,7 @@ Pod::Spec.new do |s|
 
   s.script_phase = {
     :name => "Check SQLite amalgamation",
-    :script => 'test -f "${PODS_TARGET_SRCROOT}/cpp/vendor/sqlite3.c" || { echo "error: cpp/vendor/sqlite3.c missing — run pnpm fetch-sqlite in @remelon/driver-rn" >&2; exit 1; }',
+    :script => 'test -f "${PODS_TARGET_SRCROOT}/cpp/vendor/sqlite3.c" || { echo "error: cpp/vendor/sqlite3.c missing — run pnpm fetch-sqlite in @remelondb/driver-rn" >&2; exit 1; }',
     :execution_position => :before_compile,
   }
 

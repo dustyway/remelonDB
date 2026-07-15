@@ -1,5 +1,5 @@
 import { tmpdir } from 'node:os'
-import { registerDriverConformance } from '@remelon/driver-conformance'
+import { registerDriverConformance } from '@remelondb/driver-conformance'
 import { NodeSqliteDriver } from './NodeSqliteDriver'
 
 let counter = 0

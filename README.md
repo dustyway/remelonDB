@@ -1,4 +1,4 @@
-# remelon
+# remelonDB
 
 A from-scratch rewrite of [WatermelonDB](https://github.com/Nozbe/WatermelonDB):
 a reactive, offline-first, syncable database layer for React Native, web, and
@@ -52,8 +52,8 @@ The full TypeScript side works today, on Node:
 import {
   appSchema, tableSchema, Database, Model, Q, synchronize,
   type AssociationsMap,
-} from '@remelon/core'
-import { NodeSqliteDriver } from '@remelon/driver-node'
+} from '@remelondb/core'
+import { NodeSqliteDriver } from '@remelondb/driver-node'
 
 const schema = appSchema({
   version: 1,
@@ -105,7 +105,7 @@ await synchronize({ database: db, pullChanges, pushChanges }) // your backend
 
 ```
 packages/
-  core/          @remelon/core — everything platform-independent
+  core/          @remelondb/core — everything platform-independent
     src/driver/       the SqliteDriver seam (types only)
     src/query/        query AST, Q builders, Q → SQL compiler
     src/schema/       appSchema/tableSchema, migrations, DDL compiler
@@ -114,11 +114,11 @@ packages/
     src/database/     Database, Collection, Query, WorkQueue, RecordCache
     src/model/        the Model layer (schema-generated accessors)
     src/sync/         the sync engine (pull/push, conflict resolution)
-  driver-node/   @remelon/driver-node — better-sqlite3 driver
+  driver-node/   @remelondb/driver-node — better-sqlite3 driver
                  + conformance & integration suites on real SQLite
-  driver-rn/     @remelon/driver-rn — React Native driver:
+  driver-rn/     @remelondb/driver-rn — React Native driver:
                  pure C++ TurboModule + bundled SQLite (see its README)
-  driver-web/    @remelon/driver-web — browser driver:
+  driver-web/    @remelondb/driver-web — browser driver:
                  SQLite-WASM + OPFS in a Worker (see its README)
 docs/            design decisions and reference guides — see docs/README.md
 watermelondb-upstream/   reference checkout of upstream (gitignored)

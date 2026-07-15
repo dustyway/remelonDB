@@ -3,7 +3,7 @@ import type {
   Row,
   SqlArgs,
   SqliteDriver,
-} from '@remelon/core'
+} from '@remelondb/core'
 import NativeWatermelonDriver from './specs/NativeWatermelonDriver'
 
 /**

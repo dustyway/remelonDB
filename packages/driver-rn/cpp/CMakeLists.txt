@@ -8,7 +8,7 @@ project(watermelon-driver)
 if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/vendor/sqlite3.c)
   message(FATAL_ERROR
     "cpp/vendor/sqlite3.c not found — run `pnpm fetch-sqlite` in "
-    "@remelon/driver-rn before building")
+    "@remelondb/driver-rn before building")
 endif()
 
 add_library(watermelon-driver STATIC

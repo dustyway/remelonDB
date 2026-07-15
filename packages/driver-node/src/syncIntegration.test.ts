@@ -18,7 +18,7 @@ import {
   type SyncPullResult,
   type SyncPushArgs,
   type SyncPushResult,
-} from '@remelon/core'
+} from '@remelondb/core'
 import { NodeSqliteDriver } from './NodeSqliteDriver'
 
 const schema = appSchema({

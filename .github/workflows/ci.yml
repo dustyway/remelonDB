@@ -37,8 +37,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @remelon/driver-web exec playwright install --with-deps chromium
-      - run: pnpm --filter @remelon/driver-web test:browser
+      - run: pnpm --filter @remelondb/driver-web exec playwright install --with-deps chromium
+      - run: pnpm --filter @remelondb/driver-web test:browser
 
   # Compiles the RN driver's C++ TurboModule with a real NDK inside a real
   # RN app — the device-verification items reachable without hardware:
@@ -65,16 +65,16 @@ jobs:
       - name: Pack workspace packages (rewriting workspace deps to tarballs)
         run: |
           mkdir -p /tmp/packed
-          pnpm --filter @remelon/core pack --pack-destination /tmp/packed
+          pnpm --filter @remelondb/core pack --pack-destination /tmp/packed
           CORE_TGZ=$(ls /tmp/packed/*core*.tgz)
           node -e "
             const fs = require('fs')
             const path = 'packages/driver-rn/package.json'
             const pkg = JSON.parse(fs.readFileSync(path, 'utf8'))
-            pkg.dependencies['@remelon/core'] = 'file:' + process.argv[1]
+            pkg.dependencies['@remelondb/core'] = 'file:' + process.argv[1]
             fs.writeFileSync(path, JSON.stringify(pkg, null, 2))
           " "$CORE_TGZ"
-          pnpm --filter @remelon/driver-rn pack --pack-destination /tmp/packed
+          pnpm --filter @remelondb/driver-rn pack --pack-destination /tmp/packed
       - name: Create RN 0.86 test app
         run: |
           cd /tmp

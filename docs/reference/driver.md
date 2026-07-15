@@ -88,7 +88,7 @@ state on the next `open`.
 3. Prepared-statement caching is a driver-internal concern (keyed by SQL
    text) — invisible at the seam.
 4. Run the shared conformance suite against it —
-   `@remelon/driver-conformance`:
+   `@remelondb/driver-conformance`:
 
    ```ts
    registerDriverConformance({
@@ -108,6 +108,6 @@ sanitization round-trip. Both existing drivers run it verbatim.
 
 | Driver | Package | Notes |
 | --- | --- | --- |
-| Node | `@remelon/driver-node` | better-sqlite3; synchronous underneath; WAL for file DBs; `:memory:` supported. Powers all tests. |
-| React Native | `@remelon/driver-rn` | Pure C++ TurboModule, bundled sqlite3 amalgamation, prefab JSI linkage. Codegen + syntax verified locally; device build pending (see its README). |
-| Web | `@remelon/driver-web` | SQLite-WASM + OPFS SAH pool in a dedicated Worker. Full contract verified against real sqlite-wasm in-process; OPFS persistence needs a browser run (see its README). |
+| Node | `@remelondb/driver-node` | better-sqlite3; synchronous underneath; WAL for file DBs; `:memory:` supported. Powers all tests. |
+| React Native | `@remelondb/driver-rn` | Pure C++ TurboModule, bundled sqlite3 amalgamation, prefab JSI linkage. Codegen + syntax verified locally; device build pending (see its README). |
+| Web | `@remelondb/driver-web` | SQLite-WASM + OPFS SAH pool in a dedicated Worker. Full contract verified against real sqlite-wasm in-process; OPFS persistence needs a browser run (see its README). |

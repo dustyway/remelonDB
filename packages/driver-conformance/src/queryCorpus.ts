@@ -7,7 +7,7 @@ import {
   type EncodeQueryOptions,
   type QueryAssociation,
   type SqliteDriver,
-} from '@remelon/core'
+} from '@remelondb/core'
 import type { ResolvedOptions } from './index'
 
 const associations: QueryAssociation[] = [

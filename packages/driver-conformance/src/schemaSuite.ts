@@ -12,7 +12,7 @@ import {
   stepsForMigration,
   tableSchema,
   type SqliteDriver,
-} from '@remelon/core'
+} from '@remelondb/core'
 import type { ResolvedOptions } from './index'
 
 const schemaV1 = appSchema({

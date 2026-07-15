@@ -1,5 +1,5 @@
 {
-  "name": "@remelon/driver-rn",
+  "name": "@remelondb/driver-rn",
   "version": "0.0.1",
   "private": true,
   "exports": {
@@ -18,7 +18,7 @@
     "fetch-sqlite": "node scripts/fetch-sqlite.mjs"
   },
   "dependencies": {
-    "@remelon/core": "workspace:*"
+    "@remelondb/core": "workspace:*"
   },
   "peerDependencies": {
     "react-native": ">=0.76"

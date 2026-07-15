@@ -8,7 +8,7 @@ wrap the cached raws one-to-one.
 ## Defining a model
 
 ```ts
-import { Model, type AssociationsMap } from '@remelon/core'
+import { Model, type AssociationsMap } from '@remelondb/core'
 
 class Task extends Model {
   static override readonly table = 'tasks'

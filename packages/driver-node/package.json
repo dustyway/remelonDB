@@ -1,5 +1,5 @@
 {
-  "name": "@remelon/driver-node",
+  "name": "@remelondb/driver-node",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -7,13 +7,13 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@remelon/core": "workspace:*",
+    "@remelondb/core": "workspace:*",
     "better-sqlite3": "^12.2.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.0.0",
-    "@remelon/driver-conformance": "workspace:*"
+    "@remelondb/driver-conformance": "workspace:*"
   },
   "license": "MIT"
 }

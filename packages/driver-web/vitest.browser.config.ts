@@ -1,6 +1,6 @@
 /**
  * Browser-mode tests: real Chromium (Playwright), real Worker, real OPFS.
- * Run with: pnpm --filter @remelon/driver-web test:browser
+ * Run with: pnpm --filter @remelondb/driver-web test:browser
  */
 import { defineConfig } from 'vitest/config'
 

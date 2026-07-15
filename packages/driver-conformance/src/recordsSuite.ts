@@ -8,7 +8,7 @@ import {
   sanitizedRaw,
   tableSchema,
   type SqliteDriver,
-} from '@remelon/core'
+} from '@remelondb/core'
 import type { ResolvedOptions } from './index'
 
 const table = tableSchema({

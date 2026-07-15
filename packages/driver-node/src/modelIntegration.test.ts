@@ -13,7 +13,7 @@ import {
   type AssociationsMap,
   type SyncPullArgs,
   type SyncPullResult,
-} from '@remelon/core'
+} from '@remelondb/core'
 import { NodeSqliteDriver } from './NodeSqliteDriver'
 
 const schema = appSchema({

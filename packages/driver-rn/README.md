@@ -1,4 +1,4 @@
-# @remelon/driver-rn
+# @remelondb/driver-rn
 
 The React Native `SqliteDriver`: a **pure C++ TurboModule** wrapping a
 bundled SQLite amalgamation. Bridgeless/New-Architecture-native by
@@ -30,15 +30,15 @@ WatermelonDB on modern RN).
 ```sh
 # once, before the first native build (downloads the pinned SQLite
 # amalgamation into cpp/vendor — not committed to git):
-pnpm --filter @remelon/driver-rn fetch-sqlite
+pnpm --filter @remelondb/driver-rn fetch-sqlite
 
 # then the usual:
 cd ios && pod install
 ```
 
 ```ts
-import { Database } from '@remelon/core'
-import { RnSqliteDriver } from '@remelon/driver-rn'
+import { Database } from '@remelondb/core'
+import { RnSqliteDriver } from '@remelondb/driver-rn'
 
 const db = await Database.open({
   driver: new RnSqliteDriver(),
@@ -81,7 +81,7 @@ Repeatable on any Linux/macOS machine with clang — catches spec/signature
 drift against the installed RN version:
 
 ```sh
-pnpm --filter @remelon/driver-rn fetch-sqlite
+pnpm --filter @remelondb/driver-rn fetch-sqlite
 RN=$(dirname $(node -e "console.log(require.resolve('react-native/package.json'))"))
 
 # 1. codegen must accept the spec (generates WatermelonDriverSpecJSI.h)

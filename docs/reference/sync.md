@@ -8,7 +8,7 @@ you're implementing a backend.
 ## Calling synchronize
 
 ```ts
-import { synchronize } from '@remelon/core'
+import { synchronize } from '@remelondb/core'
 
 await synchronize({
   database: db,

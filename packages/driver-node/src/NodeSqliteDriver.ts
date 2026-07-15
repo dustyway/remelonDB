@@ -5,7 +5,7 @@ import type {
   Row,
   SqlArgs,
   SqliteDriver,
-} from '@remelon/core'
+} from '@remelondb/core'
 
 /**
  * SqliteDriver over better-sqlite3. Everything is synchronous underneath;

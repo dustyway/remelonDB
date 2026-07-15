@@ -14,7 +14,7 @@ import type {
   SqlValue as WasmSqlValue,
   Sqlite3Static,
 } from '@sqlite.org/sqlite-wasm'
-import type { SqlValue } from '@remelon/core'
+import type { SqlValue } from '@remelondb/core'
 import type { Endpoint, WorkerRequest, WorkerResponse } from './protocol'
 
 interface Connection {

@@ -16,7 +16,7 @@ import {
   type Clause,
   type RawRecord,
   type SqliteDriver,
-} from '@remelon/core'
+} from '@remelondb/core'
 import type { ResolvedOptions } from './index'
 
 const itemsTable = tableSchema({

@@ -1,5 +1,5 @@
 {
-  "name": "@remelon/driver-web",
+  "name": "@remelondb/driver-web",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -9,11 +9,11 @@
   },
   "dependencies": {
     "@sqlite.org/sqlite-wasm": "3.53.0-build1",
-    "@remelon/core": "workspace:*"
+    "@remelondb/core": "workspace:*"
   },
   "devDependencies": {
     "@vitest/browser": "^3.2.7",
-    "@remelon/driver-conformance": "workspace:*",
+    "@remelondb/driver-conformance": "workspace:*",
     "playwright": "^1.61.1"
   },
   "scripts": {
