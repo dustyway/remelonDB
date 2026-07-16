@@ -107,15 +107,31 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @remelondb/driver-web exec playwright install webkit
       - run: BROWSER=webkit pnpm --filter @remelondb/driver-web test:browser
-      - run: sudo safaridriver --enable
+      - run: |
+          sudo safaridriver --enable
+          safaridriver --version
+          /usr/bin/defaults read com.apple.Safari IncludeDevelopMenu 2>/dev/null || true
       # Safari's first automation session after enabling can refuse to
       # start (seen locally too); one retry distinguishes that cold-start
-      # flake from a real failure.
+      # flake from a real failure. On failure the output tail lands in
+      # the job summary so it's readable without log access.
       - run: |
-          BROWSER=safari pnpm --filter @remelondb/driver-web test:browser || {
+          run_safari() {
+            BROWSER=safari pnpm --filter @remelondb/driver-web test:browser 2>&1 | tee /tmp/safari.log
+            return ${PIPESTATUS[0]}
+          }
+          run_safari || {
             echo "--- first Safari attempt failed, retrying once"
             sleep 5
-            BROWSER=safari pnpm --filter @remelondb/driver-web test:browser
+            run_safari
+          } || {
+            {
+              echo "## Safari step failed — last 80 lines"
+              echo '```'
+              tail -80 /tmp/safari.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           }
 
   # Compiles the RN driver's C++ TurboModule with a real NDK inside a real
