@@ -107,30 +107,42 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @remelondb/driver-web exec playwright install webkit
       - run: BROWSER=webkit pnpm --filter @remelondb/driver-web test:browser
+      # Probe safaridriver directly first: enable it, create + delete a
+      # session over raw HTTP, and surface the result as an annotation.
+      # Separates "safaridriver is broken on this runner" from "the
+      # vitest/webdriverio layer is broken".
       - run: |
           sudo safaridriver --enable
           safaridriver --version
-          /usr/bin/defaults read com.apple.Safari IncludeDevelopMenu 2>/dev/null || true
-      # Safari's first automation session after enabling can refuse to
-      # start (seen locally too); one retry distinguishes that cold-start
-      # flake from a real failure. On failure the output tail lands in
-      # the job summary so it's readable without log access.
+          safaridriver -p 55701 &
+          sleep 2
+          PROBE=$(curl -s -X POST http://127.0.0.1:55701/session \
+            -H "Content-Type: application/json" \
+            -d '{"capabilities":{"alwaysMatch":{"browserName":"safari"}}}')
+          echo "::notice title=safaridriver probe::${PROBE:0:600}"
+          SID=$(echo "$PROBE" | /usr/bin/python3 -c "import json,sys; print(json.load(sys.stdin)['value'].get('sessionId',''))" || true)
+          [ -n "$SID" ] && curl -s -X DELETE "http://127.0.0.1:55701/session/$SID" > /dev/null
+          pkill -f safaridriver || true
+          pkill -x Safari || true
+      # One retry, with stray Safari/safaridriver processes from a failed
+      # first attempt killed in between (Safari allows only one automation
+      # session; orphans from attempt 1 block attempt 2). On double
+      # failure the output tail becomes an annotation — annotations are
+      # readable on the run page without log access.
       - run: |
           run_safari() {
             BROWSER=safari pnpm --filter @remelondb/driver-web test:browser 2>&1 | tee /tmp/safari.log
             return ${PIPESTATUS[0]}
           }
           run_safari || {
-            echo "--- first Safari attempt failed, retrying once"
+            echo "--- first Safari attempt failed, cleaning up and retrying once"
+            pkill -f safaridriver || true
+            pkill -x Safari || true
             sleep 5
             run_safari
           } || {
-            {
-              echo "## Safari step failed — last 80 lines"
-              echo '```'
-              tail -80 /tmp/safari.log
-              echo '```'
-            } >> "$GITHUB_STEP_SUMMARY"
+            MSG=$(tail -c 3000 /tmp/safari.log | tr -d '\r' | /usr/bin/python3 -c "import sys; print(sys.stdin.read().replace('%','%25').replace('\n','%0A'))")
+            echo "::error title=Safari step failed (tail)::${MSG}"
             exit 1
           }
 
