@@ -32,3 +32,17 @@ adb logcat -s ReactNativeJS:* | grep -E "WMSMOKE|WMCONF"
 
 Expected: every `WMSMOKE: ok` line, `WMCONF: 50 passed, 0 failed`,
 then `WMSMOKE: ALL PASS`.
+
+(iOS twin: [ios-verification.md](ios-verification.md). Note RN ≥ 0.79
+doesn't forward `console.log` to metro/logcat-equivalent on iOS — read
+the on-screen verdict.)
+
+## Reload teardown
+
+`AppReload.tsx` is a second drop-in App (copy it over the harness's
+`App.tsx`) covering the reload open item: run 1 writes and triggers
+`DevSettings.reload()` with the connection deliberately left open; the
+fresh instance after the reload proves teardown released everything —
+reopen succeeds, data intact, WAL preserved, writes work. Verdict
+renders on screen (`RELOAD PASS`); each pass ends with `destroy()` so
+the cycle restarts clean.

@@ -44,7 +44,9 @@ conformance suite on all four platforms: Node (better-sqlite3),
 [web](packages/driver-web/README.md) (Chromium, Firefox, WebKit, and
 real Safari over OPFS), and
 [Android and iOS](packages/driver-rn/README.md) (on-device, same 50/50
-suite as Node). Open: a real reload-cycle test.
+suite as Node, plus a real reload-teardown cycle on iOS). Remaining
+open items are minor and live in the package READMEs (multi-tab
+guidance for the web driver, a production Vite build smoke test).
 
 The full TypeScript side works today, on Node:
 

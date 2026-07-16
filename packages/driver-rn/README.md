@@ -17,7 +17,7 @@ WatermelonDB on modern RN).
 > JS-catchable native errors, `user_version` across reopen, `destroy`
 > incl. sidecars, a full `Database` end-to-end over core, **and the
 > complete driver-conformance suite (50/50 on both platforms, the same
-> tests the Node driver passes)**. Still pending: reload teardown.
+> tests the Node driver passes)**, plus a reload-teardown cycle (iOS).
 > Open items at the bottom.
 
 ## Requirements
@@ -106,5 +106,9 @@ clang++ -fsyntax-only -std=c++20 -I. -Ivendor -I$RN/ReactCommon/jsi SqliteConnec
       xcodebuild compile the amalgamation and provider, codegen emits
       `WatermelonDriverSpecJSI.h`, and the on-device run passes every
       smoke check and the 50/50 conformance suite
-- [ ] Headless JS / reload teardown (connection mutex is in place; needs
-      a real reload cycle)
+- [x] Reload teardown — verified with a real reload cycle on an iOS 26.5
+      simulator via [e2e/AppReload.tsx](e2e/AppReload.tsx): a dev reload
+      with the connection deliberately left open, then reopen, data
+      intact, WAL preserved, writes work in the fresh instance. The
+      teardown path is the shared C++ core (connections die with the
+      TurboModule instance); the Android twin runs the same file.
