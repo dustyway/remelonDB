@@ -24,7 +24,8 @@
   "bugs": "https://github.com/dustyway/remelonDB/issues",
   "sideEffects": false,
   "scripts": {
-    "build": "tsdown"
+    "build": "tsdown",
+    "prepack": "tsdown"
   },
   "publishConfig": {
     "exports": {

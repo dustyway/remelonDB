@@ -20,9 +20,8 @@ failed`, `WMSMOKE: ALL PASS`).
 ```sh
 git clone https://github.com/dustyway/remelonDB
 cd remelonDB && pnpm install
-pnpm -r build                                      # REQUIRED: no prepack scripts, so
-                                                   # pack ships no dist/ without this
 node packages/driver-rn/scripts/fetch-sqlite.mjs   # amalgamation into cpp/vendor
+# (packing below builds dist/ automatically via each package's prepack)
 
 # pack tarballs (workspace dep rewritten to the core tarball)
 mkdir -p /tmp/packed

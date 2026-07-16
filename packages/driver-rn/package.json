@@ -16,7 +16,8 @@
   ],
   "scripts": {
     "fetch-sqlite": "node scripts/fetch-sqlite.mjs",
-    "build": "tsdown"
+    "build": "tsdown",
+    "prepack": "tsdown"
   },
   "dependencies": {
     "@remelondb/core": "workspace:*"
