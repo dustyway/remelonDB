@@ -126,6 +126,8 @@ watermelondb-upstream/   reference checkout of upstream (gitignored)
 
 ## Documentation
 
+- **[docs/tutorial.md](docs/tutorial.md)** — start here: a flashcard
+  app's data layer, end to end
 - **[docs/README.md](docs/README.md)** — index of all documentation
 - Design decisions: [engine choice](docs/q-dsl-and-one-engine.md) ·
   [architecture layers](docs/architecture-layers.md) ·

@@ -1,5 +1,9 @@
 # Documentation index
 
+New here? Start with the **[tutorial](tutorial.md)**: it builds a
+flashcard app's data layer end to end (schema, models, queries, live
+observation, a migration, and sync).
+
 Two kinds of documents live here. **Design decisions** record *why* the
 project is shaped the way it is; they are written once and amended, not
 rewritten. **Reference guides** describe *what exists and how to use it*;
