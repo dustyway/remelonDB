@@ -66,7 +66,9 @@ const db = await Database.open({
       `pnpm --filter @remelondb/driver-web test:browser` (`BROWSER=firefox`
       / `BROWSER=webkit` for the others; WebKit needs the persistent
       context wired up in `vitest.webkit-provider.ts` — ephemeral WebKit
-      contexts have no OPFS backing store)
+      contexts have no OPFS backing store. WebKit OPFS is macOS-only:
+      the Linux GTK port doesn't ship the sync-access-handle APIs, so
+      CI runs WebKit on a macOS runner)
 - [x] Real Safari via `BROWSER=safari` (webdriverio + safaridriver,
       macOS only): the full conformance suite, 51/51. One-time setup:
       enable "Allow remote automation" in Safari's Developer settings

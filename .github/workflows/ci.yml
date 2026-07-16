@@ -85,15 +85,16 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @remelondb/driver-web exec playwright install --with-deps chromium firefox webkit
+      - run: pnpm --filter @remelondb/driver-web exec playwright install --with-deps chromium firefox
       - run: pnpm --filter @remelondb/driver-web test:browser
       - run: BROWSER=firefox pnpm --filter @remelondb/driver-web test:browser
-      - run: BROWSER=webkit pnpm --filter @remelondb/driver-web test:browser
 
-  # Real Safari, driven by Apple's safaridriver — only exists on macOS.
-  web-browser-safari:
+  # WebKit and real Safari. Both need macOS: Linux WebKit (GTK port)
+  # doesn't ship the OPFS sync-access-handle APIs at all ("Missing
+  # required OPFS APIs"), and safaridriver only exists here.
+  web-browser-webkit-safari:
     runs-on: macos-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -104,8 +105,18 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @remelondb/driver-web exec playwright install webkit
+      - run: BROWSER=webkit pnpm --filter @remelondb/driver-web test:browser
       - run: sudo safaridriver --enable
-      - run: BROWSER=safari pnpm --filter @remelondb/driver-web test:browser
+      # Safari's first automation session after enabling can refuse to
+      # start (seen locally too); one retry distinguishes that cold-start
+      # flake from a real failure.
+      - run: |
+          BROWSER=safari pnpm --filter @remelondb/driver-web test:browser || {
+            echo "--- first Safari attempt failed, retrying once"
+            sleep 5
+            BROWSER=safari pnpm --filter @remelondb/driver-web test:browser
+          }
 
   # Compiles the RN driver's C++ TurboModule with a real NDK inside a real
   # RN app — the device-verification items reachable without hardware:
