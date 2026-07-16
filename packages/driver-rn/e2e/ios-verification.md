@@ -20,6 +20,8 @@ failed`, `WMSMOKE: ALL PASS`).
 ```sh
 git clone https://github.com/dustyway/remelonDB
 cd remelonDB && pnpm install
+pnpm -r build                                      # REQUIRED: no prepack scripts, so
+                                                   # pack ships no dist/ without this
 node packages/driver-rn/scripts/fetch-sqlite.mjs   # amalgamation into cpp/vendor
 
 # pack tarballs (workspace dep rewritten to the core tarball)
@@ -58,9 +60,11 @@ cd ios
 bundle install
 bundle exec pod install         # must compile: RN pods + WatermelonRnDriver
 cd ..
-npx xcodebuild -workspace ios/WmHarness.xcworkspace -scheme WmHarness \
+xcodebuild -workspace ios/WmHarness.xcworkspace -scheme WmHarness \
   -configuration Debug -sdk iphonesimulator -derivedDataPath ios/build \
   CODE_SIGNING_ALLOWED=NO build
+# plain xcodebuild, NOT `npx xcodebuild` — npx resolves to an unrelated
+# npm package that swallows the build output
 ```
 
 Watch for: codegen generating `WatermelonDriverSpecJSI.h` from
@@ -70,16 +74,23 @@ and the amalgamation building with our flag set.
 ## Runtime (the second half)
 
 ```sh
-# boot a simulator
-xcrun simctl boot "iPhone 16" || xcrun simctl list devices | head
+# boot a simulator (pick any available device — newer runtimes ship
+# only current iPhones, e.g. iOS 26.5 has iPhone 17, not iPhone 16)
+xcrun simctl list devices available
+xcrun simctl boot "iPhone 17"
 npx react-native start &        # metro, port 8081
 xcrun simctl install booted ios/build/Build/Products/Debug-iphonesimulator/WmHarness.app
-xcrun simctl launch --console-pty booted org.reactjs.native.example.WmHarness | grep -E "WMSMOKE|WMCONF"
+xcrun simctl launch booted org.reactjs.native.example.WmHarness
+# RN ≥ 0.79 no longer forwards console.log to metro or the launch
+# console — read the verdict off the screen instead:
+xcrun simctl io booted screenshot screen.png
 ```
 
 (Simulators reach the host's metro on localhost directly — no port
 forwarding needed. The bundle id is in the Xcode project; the template
-default is `org.reactjs.native.example.<AppName>`.)
+default is `org.reactjs.native.example.<AppName>`. The app renders the
+same info the `WMSMOKE`/`WMCONF` logs carry: a PASS/FAIL verdict plus
+one line per check, with the conformance pass/fail counts.)
 
 ## On success
 

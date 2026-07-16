@@ -7,17 +7,18 @@ construction: codegen'd spec, no classic bridge module, no manual
 (never compiled from source, the mistake that broke upstream
 WatermelonDB on modern RN).
 
-> ## Status: Android runtime-verified on emulator; iOS pending
+> ## Status: runtime-verified on Android emulator and iOS simulator
 >
 > The driver builds via cxx-module autolinking inside a real RN 0.86
-> app and **passes a runtime smoke suite on an Android emulator**
-> (API 36): file-backed open through the JNI database-path lookup, WAL,
-> typed roundtrip, atomic batch rollback, JS-catchable native errors,
-> `user_version` across reopen, `destroy` incl. sidecars, a full
-> `Database` end-to-end over core, **and the complete
-> driver-conformance suite (50/50, the same tests the Node driver
-> passes)**. Still pending: iOS compilation + registration, and reload
-> teardown. Open items at the bottom.
+> app and **passes the same runtime smoke suite on an Android emulator
+> (API 36) and an iOS simulator (iOS 26.5)**: file-backed open through
+> the platform database-path lookup (JNI on Android, Application
+> Support on iOS), WAL, typed roundtrip, atomic batch rollback,
+> JS-catchable native errors, `user_version` across reopen, `destroy`
+> incl. sidecars, a full `Database` end-to-end over core, **and the
+> complete driver-conformance suite (50/50 on both platforms, the same
+> tests the Node driver passes)**. Still pending: reload teardown.
+> Open items at the bottom.
 
 ## Requirements
 
@@ -99,7 +100,11 @@ clang++ -fsyntax-only -std=c++20 -I. -Ivendor -I$RN/ReactCommon/jsi SqliteConnec
 
 ## Open items
 
-- [ ] iOS: `modulesProvider` registration + pod compiles the amalgamation
-      (same C++ core as Android; needs a Mac)
+- [x] iOS: `modulesProvider` registration + pod compiles the amalgamation
+      (same C++ core as Android) — verified on an iOS 26.5 simulator per
+      [e2e/ios-verification.md](e2e/ios-verification.md): pod install +
+      xcodebuild compile the amalgamation and provider, codegen emits
+      `WatermelonDriverSpecJSI.h`, and the on-device run passes every
+      smoke check and the 50/50 conformance suite
 - [ ] Headless JS / reload teardown (connection mutex is in place; needs
       a real reload cycle)
