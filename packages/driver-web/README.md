@@ -43,6 +43,42 @@ const db = await Database.open({
   — Vite and comparable bundlers resolve this pattern and bundle the
   worker (including the wasm asset from `@sqlite.org/sqlite-wasm`).
 
+## Multi-tab usage
+
+The OPFS SAH-pool VFS acquires **exclusive** sync access handles: one
+connection per database, full stop. A second tab that tries to open the
+same database fails loudly (consistent with the no-silent-downgrade
+rule) — it does not corrupt anything, and it does not silently fall
+back to memory.
+
+So a multi-tab app must route every tab through one connection. Two
+patterns, in order of preference:
+
+1. **Web Locks leader election** (works everywhere, including Chrome
+   for Android, which has no `SharedWorker`): every tab requests the
+   same exclusive lock; the winner opens the `Database` and serves the
+   others over a `BroadcastChannel`. The lock releases automatically
+   when the leader tab closes, and the next tab in line takes over and
+   reopens.
+
+   ```ts
+   navigator.locks.request('remelondb:app.db', async () => {
+     const db = await Database.open({ driver: new WebSqliteDriver(), ... })
+     serveOverBroadcastChannel(db)          // your RPC layer
+     await new Promise(() => {})            // hold the lock for tab lifetime
+   })
+   // tabs that don't hold the lock talk to the leader instead
+   ```
+
+2. **A `SharedWorker` owning the database**: move `Database.open` (or
+   just the driver) into a SharedWorker that every tab connects to.
+   Structurally simpler — one owner by construction, no election, no
+   handover — but unavailable on Chrome for Android.
+
+Neither is shipped as a helper yet; the driver deliberately stays a
+single-connection seam. If you only target desktop browsers, prefer the
+SharedWorker; if Android web matters, use the lock election.
+
 ## Layout
 
 | Piece | Role |
@@ -76,6 +112,11 @@ const db = await Database.open({
       one automation session may exist; kill stray `safaridriver`
       processes if the session refuses to start.
 - [x] Worker + wasm loading through the Vite pipeline (vitest browser
-      mode); a production Vite app build remains a one-time smoke test
-- [ ] Multi-tab behavior (SAH pool is single-connection by design;
-      document the recommended SharedWorker/leader-election pattern)
+      mode) **and a real production build**: `pnpm --filter
+      @remelondb/driver-web smoke:vite` packs the tarballs, scaffolds a
+      Vite app consuming them the way the root README documents,
+      `vite build` + `vite preview`, and drives headless Chromium at the
+      output — OPFS open from the production bundle, data persisted
+      across a page reload
+- [x] Multi-tab behavior: single-connection by design, documented below
+      (see "Multi-tab usage")

@@ -19,7 +19,8 @@
   "scripts": {
     "test:browser": "vitest run --config vitest.browser.config.ts",
     "build": "tsdown && node scripts/fix-worker-url.mjs",
-    "prepack": "tsdown && node scripts/fix-worker-url.mjs"
+    "prepack": "tsdown && node scripts/fix-worker-url.mjs",
+    "smoke:vite": "node scripts/vite-smoke.mjs"
   },
   "license": "MIT",
   "description": "remelonDB SqliteDriver for the browser (SQLite-WASM + OPFS in a Worker)",
