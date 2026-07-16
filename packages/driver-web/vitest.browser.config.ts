@@ -16,7 +16,8 @@ export default defineConfig({
       provider: 'playwright',
       headless: true,
       screenshotFailures: false,
-      instances: [{ browser: 'chromium' }],
+      // BROWSER=firefox (or webkit) to run the same suite elsewhere
+      instances: [{ browser: (process.env.BROWSER as 'chromium') ?? 'chromium' }],
     },
   },
 })

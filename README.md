@@ -41,7 +41,7 @@ Every layer — driver seam, query DSL and compiler, schema and
 migrations, database core, model layer, and the
 [sync engine](docs/sync-design.md) — is built and passes one shared
 conformance suite on all four platforms: Node (better-sqlite3),
-[web](packages/driver-web/README.md) (real Chromium over OPFS), and
+[web](packages/driver-web/README.md) (real Chromium and Firefox over OPFS), and
 [Android and iOS](packages/driver-rn/README.md) (on-device, same 50/50
 suite as Node). Open: a real reload-cycle test.
 

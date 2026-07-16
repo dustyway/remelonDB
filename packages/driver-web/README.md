@@ -58,7 +58,7 @@ const db = await Database.open({
       user_version, error surfaces
 - [x] Full stack on the driver: Database + models + observation + sync
 - [x] Loud failure when OPFS is unavailable (no silent downgrade)
-- [x] `storage: 'opfs'` in real Chromium (vitest browser mode +
+- [x] `storage: 'opfs'` in real Chromium and Firefox (vitest browser mode +
       Playwright): the FULL conformance suite on OPFS, persistence,
       `destroy()` unlinking pool + journal files, and durability across
       worker termination (page-reload equivalent). Run:
