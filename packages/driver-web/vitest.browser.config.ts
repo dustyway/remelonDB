@@ -31,7 +31,7 @@ export default defineConfig({
       enabled: true,
       provider:
         browser === 'safari'
-          ? 'webdriverio'
+          ? './vitest.safari-provider.ts'
           : browser === 'webkit'
             ? './vitest.webkit-provider.ts'
             : 'playwright',
