@@ -26,4 +26,4 @@ export interface Spec extends TurboModule {
   destroy(name: string): void
 }
 
-export default TurboModuleRegistry.getEnforcing<Spec>('NativeWatermelonDriver')
+export default TurboModuleRegistry.getEnforcing<Spec>('NativeRemelonDriver')

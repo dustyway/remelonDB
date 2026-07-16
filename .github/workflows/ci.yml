@@ -197,5 +197,5 @@ jobs:
           # a green assembleDebug proves nothing about registration: if the
           # CLI rejects the dependency config it generates no glue and the
           # module is silently absent at runtime
-          grep -q "WatermelonDriver" \
+          grep -q "RemelonDriver" \
             /tmp/WmHarness/android/app/build/generated/autolinking/src/main/jni/autolinking.cpp

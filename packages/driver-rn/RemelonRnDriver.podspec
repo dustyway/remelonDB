@@ -3,7 +3,7 @@ require "json"
 package = JSON.parse(File.read(File.join(__dir__, "package.json")))
 
 Pod::Spec.new do |s|
-  s.name         = "WatermelonRnDriver"
+  s.name         = "RemelonRnDriver"
   s.version      = package["version"]
   s.summary      = "SQLite driver for remelonDB (C++ TurboModule)"
   s.homepage     = "https://github.com/dustyway/remelonDB"

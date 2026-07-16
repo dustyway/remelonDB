@@ -16,12 +16,12 @@ namespace facebook::react {
 
 
 template <typename T>
-class JSI_EXPORT NativeWatermelonDriverCxxSpec : public TurboModule {
+class JSI_EXPORT NativeRemelonDriverCxxSpec : public TurboModule {
 public:
-  static constexpr std::string_view kModuleName = "NativeWatermelonDriver";
+  static constexpr std::string_view kModuleName = "NativeRemelonDriver";
 
 protected:
-  NativeWatermelonDriverCxxSpec(std::shared_ptr<CallInvoker> jsInvoker) : TurboModule(std::string{NativeWatermelonDriverCxxSpec::kModuleName}, jsInvoker) {
+  NativeRemelonDriverCxxSpec(std::shared_ptr<CallInvoker> jsInvoker) : TurboModule(std::string{NativeRemelonDriverCxxSpec::kModuleName}, jsInvoker) {
     methodMap_["openDatabase"] = MethodMetadata {.argCount = 1, .invoker = __openDatabase};
     methodMap_["close"] = MethodMetadata {.argCount = 1, .invoker = __close};
     methodMap_["query"] = MethodMetadata {.argCount = 3, .invoker = __query};
@@ -36,7 +36,7 @@ private:
     static_assert(
       bridging::getParameterCount(&T::openDatabase) == 2,
       "Expected openDatabase(...) to have 2 parameters");
-    return bridging::callFromJs<double>(rt, &T::openDatabase,  static_cast<NativeWatermelonDriverCxxSpec*>(&turboModule)->jsInvoker_, static_cast<T*>(&turboModule),
+    return bridging::callFromJs<double>(rt, &T::openDatabase,  static_cast<NativeRemelonDriverCxxSpec*>(&turboModule)->jsInvoker_, static_cast<T*>(&turboModule),
       count <= 0 ? throw jsi::JSError(rt, "Expected argument in position 0 to be passed") : args[0].asString(rt));
   }
 
@@ -44,7 +44,7 @@ private:
     static_assert(
       bridging::getParameterCount(&T::close) == 2,
       "Expected close(...) to have 2 parameters");
-    bridging::callFromJs<void>(rt, &T::close,  static_cast<NativeWatermelonDriverCxxSpec*>(&turboModule)->jsInvoker_, static_cast<T*>(&turboModule),
+    bridging::callFromJs<void>(rt, &T::close,  static_cast<NativeRemelonDriverCxxSpec*>(&turboModule)->jsInvoker_, static_cast<T*>(&turboModule),
       count <= 0 ? throw jsi::JSError(rt, "Expected argument in position 0 to be passed") : args[0].asString(rt));return jsi::Value::undefined();
   }
 
@@ -52,7 +52,7 @@ private:
     static_assert(
       bridging::getParameterCount(&T::query) == 4,
       "Expected query(...) to have 4 parameters");
-    return bridging::callFromJs<jsi::Object>(rt, &T::query,  static_cast<NativeWatermelonDriverCxxSpec*>(&turboModule)->jsInvoker_, static_cast<T*>(&turboModule),
+    return bridging::callFromJs<jsi::Object>(rt, &T::query,  static_cast<NativeRemelonDriverCxxSpec*>(&turboModule)->jsInvoker_, static_cast<T*>(&turboModule),
       count <= 0 ? throw jsi::JSError(rt, "Expected argument in position 0 to be passed") : args[0].asString(rt),
       count <= 1 ? throw jsi::JSError(rt, "Expected argument in position 1 to be passed") : args[1].asString(rt),
       count <= 2 ? throw jsi::JSError(rt, "Expected argument in position 2 to be passed") : args[2].asObject(rt));
@@ -62,7 +62,7 @@ private:
     static_assert(
       bridging::getParameterCount(&T::execute) == 4,
       "Expected execute(...) to have 4 parameters");
-    bridging::callFromJs<void>(rt, &T::execute,  static_cast<NativeWatermelonDriverCxxSpec*>(&turboModule)->jsInvoker_, static_cast<T*>(&turboModule),
+    bridging::callFromJs<void>(rt, &T::execute,  static_cast<NativeRemelonDriverCxxSpec*>(&turboModule)->jsInvoker_, static_cast<T*>(&turboModule),
       count <= 0 ? throw jsi::JSError(rt, "Expected argument in position 0 to be passed") : args[0].asString(rt),
       count <= 1 ? throw jsi::JSError(rt, "Expected argument in position 1 to be passed") : args[1].asString(rt),
       count <= 2 ? throw jsi::JSError(rt, "Expected argument in position 2 to be passed") : args[2].asObject(rt));return jsi::Value::undefined();
@@ -72,7 +72,7 @@ private:
     static_assert(
       bridging::getParameterCount(&T::executeBatch) == 3,
       "Expected executeBatch(...) to have 3 parameters");
-    bridging::callFromJs<void>(rt, &T::executeBatch,  static_cast<NativeWatermelonDriverCxxSpec*>(&turboModule)->jsInvoker_, static_cast<T*>(&turboModule),
+    bridging::callFromJs<void>(rt, &T::executeBatch,  static_cast<NativeRemelonDriverCxxSpec*>(&turboModule)->jsInvoker_, static_cast<T*>(&turboModule),
       count <= 0 ? throw jsi::JSError(rt, "Expected argument in position 0 to be passed") : args[0].asString(rt),
       count <= 1 ? throw jsi::JSError(rt, "Expected argument in position 1 to be passed") : args[1].asObject(rt));return jsi::Value::undefined();
   }
@@ -81,7 +81,7 @@ private:
     static_assert(
       bridging::getParameterCount(&T::setUserVersion) == 3,
       "Expected setUserVersion(...) to have 3 parameters");
-    bridging::callFromJs<void>(rt, &T::setUserVersion,  static_cast<NativeWatermelonDriverCxxSpec*>(&turboModule)->jsInvoker_, static_cast<T*>(&turboModule),
+    bridging::callFromJs<void>(rt, &T::setUserVersion,  static_cast<NativeRemelonDriverCxxSpec*>(&turboModule)->jsInvoker_, static_cast<T*>(&turboModule),
       count <= 0 ? throw jsi::JSError(rt, "Expected argument in position 0 to be passed") : args[0].asString(rt),
       count <= 1 ? throw jsi::JSError(rt, "Expected argument in position 1 to be passed") : args[1].asNumber());return jsi::Value::undefined();
   }
@@ -90,7 +90,7 @@ private:
     static_assert(
       bridging::getParameterCount(&T::destroy) == 2,
       "Expected destroy(...) to have 2 parameters");
-    bridging::callFromJs<void>(rt, &T::destroy,  static_cast<NativeWatermelonDriverCxxSpec*>(&turboModule)->jsInvoker_, static_cast<T*>(&turboModule),
+    bridging::callFromJs<void>(rt, &T::destroy,  static_cast<NativeRemelonDriverCxxSpec*>(&turboModule)->jsInvoker_, static_cast<T*>(&turboModule),
       count <= 0 ? throw jsi::JSError(rt, "Expected argument in position 0 to be passed") : args[0].asString(rt));return jsi::Value::undefined();
   }
 };

@@ -4,14 +4,14 @@
 
 #include "DatabasePlatform.h"
 
-namespace watermelon {
+namespace remelon {
 
 std::string databaseDirectory() {
   static std::string cached = [] {
     NSArray<NSString*>* paths = NSSearchPathForDirectoriesInDomains(
         NSApplicationSupportDirectory, NSUserDomainMask, YES);
     NSString* directory =
-        [paths.firstObject stringByAppendingPathComponent:@"WatermelonDB"];
+        [paths.firstObject stringByAppendingPathComponent:@"RemelonDB"];
     [[NSFileManager defaultManager] createDirectoryAtPath:directory
                               withIntermediateDirectories:YES
                                                attributes:nil
@@ -21,4 +21,4 @@ std::string databaseDirectory() {
   return cached;
 }
 
-} // namespace watermelon
+} // namespace remelon

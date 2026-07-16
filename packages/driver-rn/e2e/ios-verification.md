@@ -57,7 +57,7 @@ template's stock `babel.config.js` is correct.
 ```sh
 cd ios
 bundle install
-bundle exec pod install         # must compile: RN pods + WatermelonRnDriver
+bundle exec pod install         # must compile: RN pods + RemelonRnDriver
 cd ..
 xcodebuild -workspace ios/WmHarness.xcworkspace -scheme WmHarness \
   -configuration Debug -sdk iphonesimulator -derivedDataPath ios/build \
@@ -66,8 +66,8 @@ xcodebuild -workspace ios/WmHarness.xcworkspace -scheme WmHarness \
 # npm package that swallows the build output
 ```
 
-Watch for: codegen generating `WatermelonDriverSpecJSI.h` from
-`src/specs/`, the provider (`WatermelonDriverProvider.mm`) compiling,
+Watch for: codegen generating `RemelonDriverSpecJSI.h` from
+`src/specs/`, the provider (`RemelonDriverProvider.mm`) compiling,
 and the amalgamation building with our flag set.
 
 ## Runtime (the second half)

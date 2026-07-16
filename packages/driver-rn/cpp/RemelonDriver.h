@@ -1,9 +1,9 @@
 #pragma once
 
-#if __has_include(<WatermelonDriverSpecJSI.h>)
-#include <WatermelonDriverSpecJSI.h>
+#if __has_include(<RemelonDriverSpecJSI.h>)
+#include <RemelonDriverSpecJSI.h>
 #else
-#include <WatermelonDriverSpec/WatermelonDriverSpecJSI.h>
+#include <RemelonDriverSpec/RemelonDriverSpecJSI.h>
 #endif
 
 #include <memory>
@@ -20,13 +20,13 @@ namespace facebook::react {
  * Lives in facebook::react so Android cxx-module autolinking can
  * instantiate it by convention.
  */
-class WatermelonDriver : public NativeWatermelonDriverCxxSpec<WatermelonDriver> {
+class RemelonDriver : public NativeRemelonDriverCxxSpec<RemelonDriver> {
  public:
-  explicit WatermelonDriver(std::shared_ptr<CallInvoker> jsInvoker)
-      : NativeWatermelonDriverCxxSpec(std::move(jsInvoker)) {}
+  explicit RemelonDriver(std::shared_ptr<CallInvoker> jsInvoker)
+      : NativeRemelonDriverCxxSpec(std::move(jsInvoker)) {}
 
   // UnsafeMixed spec params arrive as jsi::Object; UnsafeMixed returns
-  // must be jsi::Object (verified against generated WatermelonDriverSpecJSI.h)
+  // must be jsi::Object (verified against generated RemelonDriverSpecJSI.h)
   double openDatabase(jsi::Runtime& rt, std::string name);
   void close(jsi::Runtime& rt, std::string name);
   jsi::Object query(jsi::Runtime& rt, std::string name, std::string sql, jsi::Object args);
@@ -36,9 +36,9 @@ class WatermelonDriver : public NativeWatermelonDriverCxxSpec<WatermelonDriver> 
   void destroy(jsi::Runtime& rt, std::string name);
 
  private:
-  watermelon::SqliteConnection& connection(jsi::Runtime& rt, const std::string& name);
+  remelon::SqliteConnection& connection(jsi::Runtime& rt, const std::string& name);
 
-  std::unordered_map<std::string, std::unique_ptr<watermelon::SqliteConnection>>
+  std::unordered_map<std::string, std::unique_ptr<remelon::SqliteConnection>>
       connections_;
 };
 

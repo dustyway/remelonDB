@@ -6,7 +6,7 @@
 
 #include <fbjni/fbjni.h>
 
-namespace watermelon {
+namespace remelon {
 
 std::string databaseDirectory() {
   using namespace facebook::jni;
@@ -22,7 +22,7 @@ std::string databaseDirectory() {
         local_ref<JString>)>("getDatabasePath", "(Ljava/lang/String;)Ljava/io/File;");
     // getDatabasePath ensures the parent exists conceptually; we ask for a
     // placeholder file and take its parent directory
-    auto file = getDatabasePath(application, make_jstring("watermelon.db"));
+    auto file = getDatabasePath(application, make_jstring("remelon.db"));
     auto fileClass = findClassLocal("java/io/File");
     auto getParentFile =
         fileClass->getMethod<local_ref<JObject>()>("getParentFile", "()Ljava/io/File;");
@@ -36,4 +36,4 @@ std::string databaseDirectory() {
   return cached;
 }
 
-} // namespace watermelon
+} // namespace remelon

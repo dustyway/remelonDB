@@ -6,18 +6,18 @@
 cmake_minimum_required(VERSION 3.13)
 set(CMAKE_VERBOSE_MAKEFILE on)
 
-file(GLOB react_codegen_SRCS CONFIGURE_DEPENDS *.cpp react/renderer/components/WatermelonDriverSpec/*.cpp)
+file(GLOB react_codegen_SRCS CONFIGURE_DEPENDS *.cpp react/renderer/components/RemelonDriverSpec/*.cpp)
 
 add_library(
-  react_codegen_WatermelonDriverSpec
+  react_codegen_RemelonDriverSpec
   OBJECT
   ${react_codegen_SRCS}
 )
 
-target_include_directories(react_codegen_WatermelonDriverSpec PUBLIC . react/renderer/components/WatermelonDriverSpec)
+target_include_directories(react_codegen_RemelonDriverSpec PUBLIC . react/renderer/components/RemelonDriverSpec)
 
 target_link_libraries(
-  react_codegen_WatermelonDriverSpec
+  react_codegen_RemelonDriverSpec
   fbjni
   jsi
   # We need to link different libraries based on whether we are building rncore or not, that's necessary
@@ -25,4 +25,4 @@ target_link_libraries(
   reactnative
 )
 
-target_compile_reactnative_options(react_codegen_WatermelonDriverSpec PRIVATE)
+target_compile_reactnative_options(react_codegen_RemelonDriverSpec PRIVATE)

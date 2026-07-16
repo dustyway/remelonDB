@@ -31,15 +31,15 @@
     "@types/react": "^19.0.0"
   },
   "codegenConfig": {
-    "name": "WatermelonDriverSpec",
+    "name": "RemelonDriverSpec",
     "type": "modules",
     "jsSrcsDir": "src/specs",
     "android": {
-      "javaPackageName": "dev.watermelonrewrite.driver"
+      "javaPackageName": "dev.remelondb.driver"
     },
     "ios": {
       "modulesProvider": {
-        "NativeWatermelonDriver": "WatermelonDriverProvider"
+        "NativeRemelonDriver": "RemelonDriverProvider"
       }
     }
   },

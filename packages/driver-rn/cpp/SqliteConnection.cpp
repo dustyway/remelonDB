@@ -3,7 +3,7 @@
 #include <sqlite3.h>
 #include <cstdio>
 
-namespace watermelon {
+namespace remelon {
 
 SqliteConnection::SqliteConnection(std::string path) : path_(std::move(path)) {
   if (sqlite3_open(path_.c_str(), &db_) != SQLITE_OK) {
@@ -224,4 +224,4 @@ void SqliteConnection::destroyFiles() {
   }
 }
 
-} // namespace watermelon
+} // namespace remelon

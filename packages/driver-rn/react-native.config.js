@@ -8,9 +8,9 @@ module.exports = {
   dependency: {
     platforms: {
       android: {
-        cxxModuleCMakeListsModuleName: 'watermelon-driver',
+        cxxModuleCMakeListsModuleName: 'remelon-driver',
         cxxModuleCMakeListsPath: '../cpp/CMakeLists.txt',
-        cxxModuleHeaderName: 'WatermelonDriver',
+        cxxModuleHeaderName: 'RemelonDriver',
         // pure-cxx deps have no gradle project to run codegen, so the
         // package ships pre-generated artifacts (android/generated/jni);
         // they compile inside the app build, so RN-version drift still

@@ -17,15 +17,15 @@
 namespace facebook::react {
 
 /**
- * JNI C++ class for module 'NativeWatermelonDriver'
+ * JNI C++ class for module 'NativeRemelonDriver'
  */
-class JSI_EXPORT NativeWatermelonDriverSpecJSI : public JavaTurboModule {
+class JSI_EXPORT NativeRemelonDriverSpecJSI : public JavaTurboModule {
 public:
-  NativeWatermelonDriverSpecJSI(const JavaTurboModule::InitParams &params);
+  NativeRemelonDriverSpecJSI(const JavaTurboModule::InitParams &params);
 };
 
 
 JSI_EXPORT
-std::shared_ptr<TurboModule> WatermelonDriverSpec_ModuleProvider(const std::string &moduleName, const JavaTurboModule::InitParams &params);
+std::shared_ptr<TurboModule> RemelonDriverSpec_ModuleProvider(const std::string &moduleName, const JavaTurboModule::InitParams &params);
 
 } // namespace facebook::react

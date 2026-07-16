@@ -54,13 +54,13 @@ const db = await Database.open({
 
 | Piece | Role |
 | --- | --- |
-| `src/specs/NativeWatermelonDriver.ts` | codegen spec — synchronous methods (SQLite runs in-process on the JS thread, like upstream's JSI mode; Promises are added in TS) |
+| `src/specs/NativeRemelonDriver.ts` | codegen spec — synchronous methods (SQLite runs in-process on the JS thread, like upstream's JSI mode; Promises are added in TS) |
 | `src/RnSqliteDriver.ts` | the seam implementation over the native module |
-| `cpp/WatermelonDriver.{h,cpp}` | the C++ TurboModule (in `facebook::react` for autolinking); connections keyed by name |
+| `cpp/RemelonDriver.{h,cpp}` | the C++ TurboModule (in `facebook::react` for autolinking); connections keyed by name |
 | `cpp/SqliteConnection.{h,cpp}` | sqlite3 wrapper: statement cache, JSI binding/reading, atomic batches with rollback, WAL, destroy incl. sidecars |
 | `cpp/DatabasePlatform.*`, `cpp/platform/`, `ios/DatabasePlatformIOS.mm` | the one platform seam: where database files live (Android `Context.getDatabasePath` parent via JNI; iOS Application Support) |
 | `react-native.config.js` | Android cxx-module autolinking (CLI generates the provider glue, adds `cpp/CMakeLists.txt` to the app build) |
-| `codegenConfig.ios.modulesProvider` + `ios/WatermelonDriverProvider.mm` | iOS module registration |
+| `codegenConfig.ios.modulesProvider` + `ios/RemelonDriverProvider.mm` | iOS module registration |
 | `scripts/fetch-sqlite.mjs` | pins one SQLite version for both platforms (FTS5 on, `SQLITE_DQS=0`, no load-extension) |
 
 Booleans bind as 0/1 (the seam-wide convention), rows come back
@@ -85,7 +85,7 @@ drift against the installed RN version:
 pnpm --filter @remelondb/driver-rn fetch-sqlite
 RN=$(dirname $(node -e "console.log(require.resolve('react-native/package.json'))"))
 
-# 1. codegen must accept the spec (generates WatermelonDriverSpecJSI.h)
+# 1. codegen must accept the spec (generates RemelonDriverSpecJSI.h)
 node $RN/scripts/generate-codegen-artifacts.js -p packages/driver-rn -o /tmp/wmcg -t ios
 CG=/tmp/wmcg/build/generated/ios/ReactCodegen
 
@@ -94,7 +94,7 @@ CG=/tmp/wmcg/build/generated/ios/ReactCodegen
 cd packages/driver-rn/cpp
 clang++ -fsyntax-only -std=c++20 -I. -Ivendor -I$CG -I<folly-stub> \
   -I$RN/ReactCommon/jsi -I$RN/ReactCommon/react/nativemodule/core \
-  -I$RN/ReactCommon/callinvoker -I$RN/ReactCommon WatermelonDriver.cpp
+  -I$RN/ReactCommon/callinvoker -I$RN/ReactCommon RemelonDriver.cpp
 clang++ -fsyntax-only -std=c++20 -I. -Ivendor -I$RN/ReactCommon/jsi SqliteConnection.cpp
 ```
 
@@ -104,7 +104,7 @@ clang++ -fsyntax-only -std=c++20 -I. -Ivendor -I$RN/ReactCommon/jsi SqliteConnec
       (same C++ core as Android) — verified on an iOS 26.5 simulator per
       [e2e/ios-verification.md](e2e/ios-verification.md): pod install +
       xcodebuild compile the amalgamation and provider, codegen emits
-      `WatermelonDriverSpecJSI.h`, and the on-device run passes every
+      `RemelonDriverSpecJSI.h`, and the on-device run passes every
       smoke check and the 50/50 conformance suite
 - [x] Reload teardown — verified with a real reload cycle on an iOS 26.5
       simulator via [e2e/AppReload.tsx](e2e/AppReload.tsx): a dev reload

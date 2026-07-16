@@ -3,7 +3,7 @@
 
 /**
  * Registered via codegenConfig.ios.modulesProvider — React Native asks
- * this class for the NativeWatermelonDriver TurboModule.
+ * this class for the NativeRemelonDriver TurboModule.
  */
-@interface WatermelonDriverProvider : NSObject <RCTModuleProvider>
+@interface RemelonDriverProvider : NSObject <RCTModuleProvider>
 @end

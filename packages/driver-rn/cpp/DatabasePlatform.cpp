@@ -1,6 +1,6 @@
 #include "DatabasePlatform.h"
 
-namespace watermelon {
+namespace remelon {
 
 std::string resolveDatabasePath(const std::string& name) {
   if (name == ":memory:" || (!name.empty() && name[0] == '/')) {
@@ -9,4 +9,4 @@ std::string resolveDatabasePath(const std::string& name) {
   return databaseDirectory() + "/" + name;
 }
 
-} // namespace watermelon
+} // namespace remelon

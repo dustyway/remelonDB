@@ -13,7 +13,7 @@ So: this directory must exist, and must stay free of gradle/manifest
 files.
 
 `generated/jni/` holds the codegen'd spec (CMakeLists + JSI headers +
-`WatermelonDriverSpec-generated.cpp`), pre-generated because a pure-cxx
+`RemelonDriverSpec-generated.cpp`), pre-generated because a pure-cxx
 dependency has no gradle project of its own to run codegen in — the
 app's CMake `add_subdirectory`s it via `cmakeListsPath` in
 `react-native.config.js`. Regenerate after changing the TS spec:

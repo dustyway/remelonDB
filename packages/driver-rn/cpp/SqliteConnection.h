@@ -8,7 +8,7 @@
 struct sqlite3;
 struct sqlite3_stmt;
 
-namespace watermelon {
+namespace remelon {
 
 namespace jsi = facebook::jsi;
 
@@ -54,4 +54,4 @@ class SqliteConnection {
   std::unordered_map<std::string, sqlite3_stmt*> statementCache_;
 };
 
-} // namespace watermelon
+} // namespace remelon
