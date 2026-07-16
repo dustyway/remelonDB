@@ -85,9 +85,27 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @remelondb/driver-web exec playwright install --with-deps chromium firefox
+      - run: pnpm --filter @remelondb/driver-web exec playwright install --with-deps chromium firefox webkit
       - run: pnpm --filter @remelondb/driver-web test:browser
       - run: BROWSER=firefox pnpm --filter @remelondb/driver-web test:browser
+      - run: BROWSER=webkit pnpm --filter @remelondb/driver-web test:browser
+
+  # Real Safari, driven by Apple's safaridriver — only exists on macOS.
+  web-browser-safari:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: sudo safaridriver --enable
+      - run: BROWSER=safari pnpm --filter @remelondb/driver-web test:browser
 
   # Compiles the RN driver's C++ TurboModule with a real NDK inside a real
   # RN app — the device-verification items reachable without hardware:
