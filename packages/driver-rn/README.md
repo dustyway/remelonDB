@@ -2,9 +2,9 @@
 
 The React Native `SqliteDriver`: a **pure C++ TurboModule** wrapping a
 bundled SQLite amalgamation. Bridgeless/New-Architecture-native by
-construction — codegen'd spec, no classic bridge module, no manual
+construction: codegen'd spec, no classic bridge module, no manual
 `global.*` JSI installs, and JSI linked from React Native's **prefab**
-(never compiled from source — the exact mistake that broke upstream
+(never compiled from source, the mistake that broke upstream
 WatermelonDB on modern RN).
 
 > ## Status: Android runtime-verified on emulator; iOS pending
@@ -14,7 +14,7 @@ WatermelonDB on modern RN).
 > (API 36): file-backed open through the JNI database-path lookup, WAL,
 > typed roundtrip, atomic batch rollback, JS-catchable native errors,
 > `user_version` across reopen, `destroy` incl. sidecars, a full
-> `Database` end-to-end over core — **and the complete
+> `Database` end-to-end over core, **and the complete
 > driver-conformance suite (50/50, the same tests the Node driver
 > passes)**. Still pending: iOS compilation + registration, and reload
 > teardown. Open items at the bottom.
@@ -69,15 +69,15 @@ Node driver passes conformance with.
 
 ## 16 KB page alignment
 
-SQLite compiles from source *inside the app build* (Android) — there are
+SQLite compiles from source *inside the app build* (Android); there are
 no prebuilt `.so` files in this package, so Google Play's 16 KB
 page-size requirement is satisfied by the app's own toolchain (AGP 8.5+ /
-NDK r28 align by default). This is deliberate: shipping prebuilts is how
-upstream aged out of compliance.
+NDK r28 align by default). Shipping prebuilts is how upstream aged out
+of compliance.
 
 ## Local verification (no device required)
 
-Repeatable on any Linux/macOS machine with clang — catches spec/signature
+Repeatable on any Linux/macOS machine with clang; catches spec/signature
 drift against the installed RN version:
 
 ```sh

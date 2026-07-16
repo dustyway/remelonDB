@@ -2,7 +2,7 @@
 
 A from-scratch rewrite of [WatermelonDB](https://github.com/Nozbe/WatermelonDB):
 a reactive, offline-first, syncable database layer for React Native, web, and
-Node — built on **one engine (SQLite) everywhere** and designed for the React
+Node, built on **one engine (SQLite) everywhere** and designed for the React
 Native New Architecture from day one.
 
 ## Why a rewrite
@@ -14,7 +14,7 @@ are classic-bridge with a manual JSI install that grabs `RCTCxxBridge`
 internals that don't exist in bridgeless mode, and its prebuilt `.so` files
 predate Google Play's 16 KB page-alignment requirement. Its web story is a
 separately-implemented LokiJS engine whose query semantics must be kept in
-lockstep with SQLite by hand — a permanent correctness tax.
+lockstep with SQLite by hand: a permanent correctness tax.
 
 Rather than patch that stack, this project keeps WatermelonDB's best ideas
 (queries as data, reactive observation, the offline-first sync protocol) and
@@ -25,13 +25,13 @@ rebuilds everything on two principles:
    SQL. See [docs/q-dsl-and-one-engine.md](docs/q-dsl-and-one-engine.md).
 2. **One engine: SQLite everywhere.** Native (bundled sqlite3 via a C++
    TurboModule), web (SQLite-WASM + OPFS in a Worker), Node (better-sqlite3).
-   Query semantics are inherited from SQLite, not re-implemented per platform.
-   The one bounded exception — a tiny in-memory matcher for observers — is
-   conformance-tested against real SQLite query-for-query.
+   Query semantics are inherited from SQLite rather than re-implemented per
+   platform. The one bounded exception (a tiny in-memory matcher for
+   observers) is conformance-tested against real SQLite query-for-query.
 
-The portability seam is a deliberately dumb, ~7-method **`SqliteDriver`**
-(execute SQL, atomically batch, report `user_version`). Everything above it —
-query compiler, schema DDL, record sanitization, observation, sync — is
+The portability seam is a dumb, ~7-method **`SqliteDriver`**
+(execute SQL, atomically batch, report `user_version`). Everything above it
+(query compiler, schema DDL, record sanitization, observation, sync) is
 written once in TypeScript and identical on every platform. See
 [docs/architecture-layers.md](docs/architecture-layers.md).
 
@@ -175,13 +175,13 @@ Testing philosophy: pure layers get exact-output unit tests in `core`;
 everything with semantics gets a **conformance test** in `driver-node` that
 runs against real SQLite. The matcher conformance suite runs one query corpus
 through both engines (compiled SQL and the in-memory matcher) and asserts
-identical results — that's the "one authoritative engine" rule as an
+identical results; that's the "one authoritative engine" rule as an
 executable invariant.
 
 ## License and credits
 
-[MIT](LICENSE). The design owes its best ideas — queries as data,
-reactive observation, the offline-first sync protocol — to
+[MIT](LICENSE). The design owes its best ideas (queries as data,
+reactive observation, the offline-first sync protocol) to
 [WatermelonDB](https://github.com/Nozbe/WatermelonDB) by Nozbe and
 contributors (MIT); the code here is written from scratch. Generated
 codegen files under `packages/driver-rn/android/generated/` retain

@@ -30,7 +30,7 @@ migration range silently falls back to destroy-and-recreate** (index.js:191).
 
 - **SQL compiled once, in JS.** The whole native surface is "execute this
   SQL / this batch". This is what makes the engine swappable.
-- **Batch opcode format** `[cacheBehavior, table, sql, [args...]]` — one generic
+- **Batch opcode format** `[cacheBehavior, table, sql, [args...]]`: one generic
   positional primitive transports creates/updates/deletes/local-storage/tombstone
   cleanup in a single transaction.
 - **Two-phase init** (version check first, schema/migration SQL only if needed).
@@ -54,10 +54,10 @@ migration range silently falls back to destroy-and-recreate** (index.js:191).
 
 **Native binding (the reason the rewrite exists)**
 - Not a TurboModule, no codegen. Classic bridge module + blocking-sync `install()`
-  that grabs `bridge.runtime` from `RCTCxxBridge` — none of which exists on
+  that grabs `bridge.runtime` from `RCTCxxBridge`, none of which exists on
   bridgeless New Architecture.
 - `native/android-jsi/.../CMakeLists.txt:84` manually compiles
-  `ReactCommon/jsi/jsi/jsi.cpp` with hardcoded include paths — the exact RN 0.86
+  `ReactCommon/jsi/jsi/jsi.cpp` with hardcoded include paths: the RN 0.86
   breakage. No prefab (`ReactAndroid::jsi`) anywhere. Toolchain ancient
   (compileSdk 28, NDK 20.1).
 - Elaborate teardown hackery (Catalyst destroy → reflection) to close the DB
@@ -74,7 +74,7 @@ migration range silently falls back to destroy-and-recreate** (index.js:191).
   LEFT JOIN, chosen by heuristic for backwards compat.
 - Loki-compat semantics contort the operator set: weak equality (`1==true`),
   `weakGt` (JS null ordering), null-in-`oneOf` forbidden, `IS`/`IS NOT` for eq.
-  Exists only so SQLite/Loki/JS-matcher agree — with Loki gone, most simplifies
+  Exists only so SQLite/Loki/JS-matcher agree; with Loki gone, most simplifies
   to native SQLite semantics (but the JS matcher must still match SQLite).
 - `Q.sanitizeLikeString` is lossy (replaces all non-alphanumerics with `_`)
   instead of using an `ESCAPE` clause.
@@ -95,10 +95,10 @@ migration range silently falls back to destroy-and-recreate** (index.js:191).
 
 **Core / reactivity**
 - `Database.batch` clears `_preparedState` *before* the adapter call succeeds
-  (`TODO: What if this fails?`) — no rollback contract.
+  (`TODO: What if this fails?`): no rollback contract.
 - Docs promise concurrent readers; `WorkQueue` runs everything strictly serial.
 - Two parallel notification systems everywhere (RxJS subjects AND hand-rolled
-  `_subscribers` arrays) with load-bearing call ordering. RxJS itself is shallow
+  `_subscribers` arrays) whose call ordering matters. RxJS itself is shallow
   and quarantined behind a shim — droppable.
 - `observeWithColumns` carries race machinery its own comments call outdated;
   count throttling is "has a bug, but we'll delete it anyway".
@@ -112,7 +112,7 @@ migration range silently falls back to destroy-and-recreate** (index.js:191).
   timestamp ≤ the returned cursor is never pulled again. Client merely logs a
   backwards timestamp. Entirely delegated to backend discipline
   (docs-website Backend.md:79–85, 133–137). → replaced by the rev cursor.
-- Push-echo: acknowledged limitation (Limitations.md:3) — pushed changes come
+- Push-echo: acknowledged limitation (Limitations.md:3); pushed changes come
   back on next pull; harmless (absorbed by `requiresUpdate`/`areRecordsEqual`)
   but wasteful. Proper fix: push responds with a new cursor.
 - Push sends full raws including `_status`/`_changed` instead of changed

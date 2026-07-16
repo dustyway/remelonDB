@@ -5,7 +5,7 @@ engine) and `upstream-study.md` (what upstream does and where it hurts).
 
 ## The core idea: move the seam down
 
-Upstream's portability seam is the `DatabaseAdapter` interface — 17 methods
+Upstream's portability seam is the `DatabaseAdapter` interface, 17 methods
 that speak ORM concepts: serialized queries, record caching, tombstones
 (`getDeletedRecords`), KV local storage (`getLocal`), sync JSON. Every adapter
 (SQLite native, SQLite Node, LokiJS) had to reimplement those concepts, which
@@ -40,12 +40,12 @@ on every platform.
 
 What upstream got right and we keep: **SQL is compiled in JS before crossing
 the boundary.** The driver never sees a query AST. What changes: the driver
-also never sees records, caches, tombstones, or sync — those become core code
+also never sees records, caches, tombstones, or sync; those become core code
 running plain SQL.
 
 ## The SqliteDriver interface (sketch)
 
-Deliberately dumb. Target: ~7 methods, all parameterized, no callbacks
+Dumb by design. Target: ~7 methods, all parameterized, no callbacks
 (Promises), no per-driver semantics.
 
 ```ts
@@ -80,11 +80,11 @@ Notes:
 
 - **Async at the seam, always.** The web driver lives in a Worker (OPFS
   sync-access handles require it), so the seam must be Promise-shaped or web
-  becomes a second-class citizen — exactly what we promised not to do. The RN
+  becomes a second-class citizen, which is what we promised not to do. The RN
   JSI driver may resolve everything synchronously under the hood; core must
   never depend on same-tick resolution for correctness. If benchmarks later
   show microtask latency hurting hot paths, we can add an optional sync fast
-  path as a driver *capability* — an optimization, not a semantic.
+  path as a driver *capability*, an optimization rather than a semantic.
 - **Parameterized SQL end to end.** Upstream inlines query values via string
   escaping (its own code flags this as wrong). Our compiler emits `?`
   placeholders everywhere; `SqlValue` is the entire value vocabulary crossing
@@ -106,11 +106,12 @@ those; the two sides desync in production (RecordCache has a telemetry-
 confirmed recovery path for it). We drop the protocol: drivers always return
 full rows; core's RecordCache (the identity map) decides whether to reuse an
 existing Model. One owner, no desync class. The serialization cost this
-protocol saved is real but unproven on Hermes + JSI — if profiling shows it
+protocol saved is real but unproven on Hermes + JSI; if profiling shows it
 matters, the fix is a columnar result format or a driver-side row filter
-keyed by an explicit id-list argument, not a stateful shadow cache.
+keyed by an explicit id-list argument rather than a stateful shadow cache.
 
-**2. Tombstones and local storage are core features, not driver methods.**
+**2. Tombstones and local storage are core features rather than driver
+methods.**
 `_status='deleted'` rows and a `local_storage` table are ordinary SQL that
 core issues through the driver. Sync reads tombstones with a compiled query
 like any other. Removes 5 methods from the seam and makes the web driver
@@ -130,8 +131,8 @@ becomes a compiler flag, not a description-tree rewrite.
 **4. React Native driver is a C++ TurboModule.** Bridgeless-compatible by
 construction: codegen'd spec, C++ implementation shared across iOS/Android,
 JSI under the hood without touching `RCTCxxBridge` or manual
-`global.*` installs. Android links JSI via prefab (`ReactAndroid::jsi`) —
-never compiles `jsi.cpp` (the RN 0.86 breakage). We bundle the sqlite3
+`global.*` installs. Android links JSI via prefab (`ReactAndroid::jsi`)
+and never compiles `jsi.cpp` (the RN 0.86 breakage). We bundle the sqlite3
 amalgamation (predictable version, FTS5 on, 16KB-page-aligned `.so`, modern
 NDK/AGP). Database work runs on the JS thread guarded by a mutex, matching
 upstream's JSI mode; teardown hooks into the TurboModule invalidate lifecycle
@@ -139,7 +140,7 @@ instead of upstream's Catalyst-reflection hack.
 
 **5. One notification mechanism, no RxJS.** Upstream's core is already
 Rx-free behind a shim; it maintains parallel Rx and callback subscriber lists
-with load-bearing ordering. We keep only the callback bus +
+with order-sensitive callbacks. We keep only the callback bus +
 `SharedSubscribable`-style multicast; `observe()` returns a minimal
 Observable-compatible object for ecosystem interop without the dependency.
 
@@ -162,8 +163,8 @@ the error propagates to the writer block.
 - The **sync engine** (rev-cursor, push-returns-cursor to kill the echo,
   server-side snapshot rules to kill the lost-write race) is pure core logic
   over the same seam — designed in its own doc.
-- The **web driver** is an implementation task, not a design task: same SQL,
-  same compiler, Worker + OPFS plumbing only.
+- The **web driver** is an implementation task rather than a design task:
+  same SQL, same compiler, Worker + OPFS plumbing only.
 
 ## Open questions
 

@@ -4,14 +4,14 @@ The browser `SqliteDriver`: **SQLite-WASM running in a dedicated Worker**,
 persistent via the OPFS SyncAccessHandle pool VFS, reached over a
 postMessage RPC. This is the architecture the whole seam was designed
 around: OPFS sync-access handles exist only in workers, the main thread
-can only reach a worker asynchronously — hence the Promise-shaped driver
+can only reach a worker asynchronously, hence the Promise-shaped driver
 contract everywhere.
 
 ## Status: core verified against real sqlite-wasm; OPFS is browser-pending
 
 The worker-side server is transport-abstracted (`Endpoint`), so the test
 suite runs the **exact same server code against real SQLite-WASM
-in-process under Node** — driver → RPC → wasm SQLite, end to end,
+in-process under Node**: driver → RPC → wasm SQLite, end to end,
 including the full stack (Database, models, observation, sync) on top.
 What Node cannot provide is OPFS itself; the `storage: 'opfs'` path needs
 a real browser run (checklist below).
@@ -64,6 +64,6 @@ const db = await Database.open({
       worker termination (page-reload equivalent). Run:
       `pnpm --filter @remelondb/driver-web test:browser`
 - [x] Worker + wasm loading through the Vite pipeline (vitest browser
-      mode) — a production Vite app build remains a one-time smoke test
-- [ ] Multi-tab behavior (SAH pool is single-connection by design —
+      mode); a production Vite app build remains a one-time smoke test
+- [ ] Multi-tab behavior (SAH pool is single-connection by design;
       document the recommended SharedWorker/leader-election pattern)
