@@ -7,14 +7,15 @@ around: OPFS sync-access handles exist only in workers, the main thread
 can only reach a worker asynchronously, hence the Promise-shaped driver
 contract everywhere.
 
-## Status: core verified against real sqlite-wasm; OPFS is browser-pending
+## Status: verified on OPFS in Chromium, Firefox, WebKit, and Safari
 
 The worker-side server is transport-abstracted (`Endpoint`), so the test
 suite runs the **exact same server code against real SQLite-WASM
 in-process under Node**: driver → RPC → wasm SQLite, end to end,
 including the full stack (Database, models, observation, sync) on top.
-What Node cannot provide is OPFS itself; the `storage: 'opfs'` path needs
-a real browser run (checklist below).
+The `storage: 'opfs'` path additionally runs as a real-browser
+conformance suite on all three engines, plus real Safari via
+safaridriver (checklist below).
 
 ## Usage
 
@@ -58,11 +59,20 @@ const db = await Database.open({
       user_version, error surfaces
 - [x] Full stack on the driver: Database + models + observation + sync
 - [x] Loud failure when OPFS is unavailable (no silent downgrade)
-- [x] `storage: 'opfs'` in real Chromium and Firefox (vitest browser mode +
-      Playwright): the FULL conformance suite on OPFS, persistence,
-      `destroy()` unlinking pool + journal files, and durability across
-      worker termination (page-reload equivalent). Run:
-      `pnpm --filter @remelondb/driver-web test:browser`
+- [x] `storage: 'opfs'` in real Chromium, Firefox, and WebKit (vitest
+      browser mode + Playwright): the FULL conformance suite on OPFS,
+      persistence, `destroy()` unlinking pool + journal files, and
+      durability across worker termination (page-reload equivalent). Run:
+      `pnpm --filter @remelondb/driver-web test:browser` (`BROWSER=firefox`
+      / `BROWSER=webkit` for the others; WebKit needs the persistent
+      context wired up in `vitest.webkit-provider.ts` — ephemeral WebKit
+      contexts have no OPFS backing store)
+- [x] Real Safari via `BROWSER=safari` (webdriverio + safaridriver,
+      macOS only): the full conformance suite, 51/51. One-time setup:
+      enable "Allow remote automation" in Safari's Developer settings
+      (`sudo safaridriver --enable`). Not headless — Safari can't. Only
+      one automation session may exist; kill stray `safaridriver`
+      processes if the session refuses to start.
 - [x] Worker + wasm loading through the Vite pipeline (vitest browser
       mode); a production Vite app build remains a one-time smoke test
 - [ ] Multi-tab behavior (SAH pool is single-connection by design;
