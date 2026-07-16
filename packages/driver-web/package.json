@@ -1,7 +1,6 @@
 {
   "name": "@remelondb/driver-web",
   "version": "0.0.1",
-  "private": true,
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -17,7 +16,43 @@
     "playwright": "^1.61.1"
   },
   "scripts": {
-    "test:browser": "vitest run --config vitest.browser.config.ts"
+    "test:browser": "vitest run --config vitest.browser.config.ts",
+    "build": "tsdown && node scripts/fix-worker-url.mjs"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "description": "remelonDB SqliteDriver for the browser (SQLite-WASM + OPFS in a Worker)",
+  "keywords": [
+    "remelondb",
+    "watermelondb",
+    "sqlite",
+    "offline-first",
+    "database",
+    "sync"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dustyway/remelonDB.git",
+    "directory": "packages/driver-web"
+  },
+  "homepage": "https://github.com/dustyway/remelonDB#readme",
+  "bugs": "https://github.com/dustyway/remelonDB/issues",
+  "sideEffects": false,
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "import": "./dist/index.mjs"
+      },
+      "./worker": {
+        "types": "./dist/worker.d.mts",
+        "import": "./dist/worker.mjs"
+      }
+    },
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "src",
+    "scripts"
+  ]
 }

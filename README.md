@@ -139,12 +139,36 @@ watermelondb-upstream/   reference checkout of upstream (gitignored)
   [records](docs/reference/records.md) ·
   [the driver contract](docs/reference/driver.md)
 
+## Using it in an app
+
+The packages are not on npm yet; releases carry packed tarballs.
+Install by URL, with one `overrides` entry so the drivers' dependency
+on `@remelondb/core` resolves to the tarball instead of the registry:
+
+```jsonc
+// package.json
+{
+  "dependencies": {
+    "@remelondb/core": "<tarball url or file:path>",
+    "@remelondb/driver-web": "<tarball url or file:path>"
+  },
+  "overrides": {
+    "@remelondb/core": "<same spec as above>"
+  }
+}
+```
+
+Packages ship compiled ESM plus type declarations (`dist/`); no
+TypeScript tooling is required to consume them. CI packs the tarballs
+and consumes them from a plain Node project on every push.
+
 ## Development
 
 ```sh
 pnpm install        # needs build-script approval for better-sqlite3 (preconfigured)
 pnpm test           # vitest: unit + conformance suites
 pnpm typecheck      # tsc --noEmit, strict
+pnpm build          # tsdown: dist/ (ESM + .d.ts) for every package
 ```
 
 Testing philosophy: pure layers get exact-output unit tests in `core`;

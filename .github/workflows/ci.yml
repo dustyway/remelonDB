@@ -22,6 +22,53 @@ jobs:
       - run: pnpm test
       - run: pnpm typecheck
 
+  # Consume the packed tarballs from a plain Node project — proves the
+  # published artifacts (dist exports, workspace-dep rewriting) work for
+  # consumers with no TS toolchain, not just inside the monorepo.
+  pack-consume:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Pack and consume from plain Node
+        run: |
+          mkdir -p /tmp/tarballs /tmp/consume
+          pnpm -r --filter './packages/*' pack --pack-destination /tmp/tarballs
+          CORE=$(ls /tmp/tarballs/remelondb-core-*.tgz)
+          NODE_DRV=$(ls /tmp/tarballs/remelondb-driver-node-*.tgz)
+          cd /tmp/consume
+          node -e "
+            require('fs').writeFileSync('package.json', JSON.stringify({
+              name: 'consume', private: true, type: 'module',
+              dependencies: {
+                '@remelondb/core': 'file:' + process.argv[1],
+                '@remelondb/driver-node': 'file:' + process.argv[2],
+              },
+              overrides: { '@remelondb/core': 'file:' + process.argv[1] },
+            }, null, 2))
+          " "$CORE" "$NODE_DRV"
+          npm install
+          cat > main.mjs <<'EOF'
+          import { appSchema, tableSchema, Database, Model, Q } from '@remelondb/core'
+          import { NodeSqliteDriver } from '@remelondb/driver-node'
+          const schema = appSchema({ version: 1, tables: [tableSchema({ name: 'tasks', columns: [{ name: 'name', type: 'string' }] })] })
+          class Task extends Model { static table = 'tasks' }
+          const db = await Database.open({ driver: new NodeSqliteDriver(), schema, modelClasses: [Task], name: ':memory:' })
+          await db.write(() => db.get('tasks').create({ name: 'ci' }))
+          const rows = await db.get('tasks').query(Q.where('name', 'ci')).fetch()
+          if (rows.length !== 1) throw new Error('tarball consumption failed')
+          console.log('pack-consume OK')
+          EOF
+          node main.mjs
+
   # The web driver's full conformance suite in real Chromium: real Worker,
   # real OPFS SAH-pool storage, durability across worker termination.
   web-browser:

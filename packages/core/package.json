@@ -1,10 +1,42 @@
 {
   "name": "@remelondb/core",
   "version": "0.0.1",
-  "private": true,
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "description": "remelonDB core: reactive offline-first database over a pluggable SQLite driver — queries as data, schema/migrations, observation, sync engine",
+  "keywords": [
+    "remelondb",
+    "watermelondb",
+    "sqlite",
+    "offline-first",
+    "database",
+    "sync"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dustyway/remelonDB.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/dustyway/remelonDB#readme",
+  "bugs": "https://github.com/dustyway/remelonDB/issues",
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsdown"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "import": "./dist/index.mjs"
+      }
+    },
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "src"
+  ]
 }

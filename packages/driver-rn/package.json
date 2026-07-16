@@ -1,7 +1,6 @@
 {
   "name": "@remelondb/driver-rn",
   "version": "0.0.1",
-  "private": true,
   "exports": {
     ".": "./src/index.ts"
   },
@@ -12,10 +11,12 @@
     "android",
     "scripts",
     "*.podspec",
-    "react-native.config.js"
+    "react-native.config.js",
+    "dist"
   ],
   "scripts": {
-    "fetch-sqlite": "node scripts/fetch-sqlite.mjs"
+    "fetch-sqlite": "node scripts/fetch-sqlite.mjs",
+    "build": "tsdown"
   },
   "dependencies": {
     "@remelondb/core": "workspace:*"
@@ -41,5 +42,32 @@
       }
     }
   },
-  "license": "MIT"
+  "license": "MIT",
+  "description": "remelonDB SqliteDriver for React Native: pure C++ TurboModule with bundled SQLite",
+  "keywords": [
+    "remelondb",
+    "watermelondb",
+    "sqlite",
+    "offline-first",
+    "database",
+    "sync"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dustyway/remelonDB.git",
+    "directory": "packages/driver-rn"
+  },
+  "homepage": "https://github.com/dustyway/remelonDB#readme",
+  "bugs": "https://github.com/dustyway/remelonDB/issues",
+  "sideEffects": false,
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "import": "./dist/index.mjs"
+      }
+    },
+    "access": "public"
+  },
+  "type": "module"
 }

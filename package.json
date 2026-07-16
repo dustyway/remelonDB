@@ -4,10 +4,12 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "pnpm -r build"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
+    "tsdown": "^0.22.7",
     "typescript": "^5.8.3",
     "vitest": "^3.2.4"
   },
