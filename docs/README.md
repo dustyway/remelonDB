@@ -18,6 +18,7 @@ they track the code and are updated with it.
 | [sync-design.md](sync-design.md) | Generic reimplementation of WatermelonDB's sync protocol with two contract-level fixes: an opaque commit-ordered cursor (kills the lost-write race) and push-responds-like-a-pull (kills the push echo). |
 | [upstream-study.md](upstream-study.md) | Condensed factual findings from reading upstream WatermelonDB: what to keep, what's broken, with file/line receipts. Basis for the other docs. |
 | [schema-inferred-types.md](schema-inferred-types.md) | Implemented: record types, collection types, and Q column checking all derive from the schema literal (Drizzle-style single source of truth). Surface change only; the query AST and runtime stay. |
+| [zod-adapter.md](zod-adapter.md) | Proposal: @remelondb/zod — derive client tables from shared Zod schemas (zodTable) and validate both sync directions with wire schemas built from the same objects. No core changes; validation lands at the trust boundaries. |
 
 ## Reference guides
 

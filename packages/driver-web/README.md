@@ -51,8 +51,18 @@ same database fails loudly (consistent with the no-silent-downgrade
 rule) — it does not corrupt anything, and it does not silently fall
 back to memory.
 
-So a multi-tab app must route every tab through one connection. Two
-patterns, in order of preference:
+The minimum viable policy needs no routing at all: **single-owner with
+takeover**. One tab holds a Web Lock and owns the database; a second
+tab, instead of hitting the open failure, offers "continue here
+instead?" and steals the lock (`{ steal: true }`). One subtlety:
+stealing the lock does **not** release the OPFS handles — the old tab
+must close its driver first, so the new tab retries `open()` until that
+happens (tab death releases the handles via worker teardown, so the
+retry always converges). Only one tab is active at a time, but the
+handoff is explicit and nothing can race.
+
+For apps that need every tab live simultaneously, route every tab
+through one connection. Two patterns, in order of preference:
 
 1. **Web Locks leader election** (works everywhere, including Chrome
    for Android, which has no `SharedWorker`): every tab requests the
@@ -75,9 +85,13 @@ patterns, in order of preference:
    Structurally simpler — one owner by construction, no election, no
    handover — but unavailable on Chrome for Android.
 
-Neither is shipped as a helper yet; the driver deliberately stays a
-single-connection seam. If you only target desktop browsers, prefer the
-SharedWorker; if Android web matters, use the lock election.
+None of these ship as helpers yet; the driver deliberately stays a
+single-connection seam. Planned: an `acquireTabOwnership()` helper in
+this package packaging the takeover choreography, and `Database.close()`
+in core (drain the writer queue, then close the driver) so teardown on
+takeover is clean. If you only target desktop browsers and need true
+multi-tab, prefer the SharedWorker; if Android web matters, use the
+lock election.
 
 ## Layout
 
