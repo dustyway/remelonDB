@@ -68,10 +68,10 @@ writeFileSync(
 )
 writeFileSync(
   join(appDir, 'main.js'),
-  `import { appSchema, column, table, Database, ModelFor, Q } from '@remelondb/core'
+  `import { appSchema, column as c, table, Database, ModelFor, Q } from '@remelondb/core'
 import { WebSqliteDriver } from '@remelondb/driver-web'
 
-const tasks = table('tasks', { name: column.string() })
+const tasks = table('tasks', { name: c.string() })
 const schema = appSchema({ version: 1, tables: [tasks] })
 
 class Task extends ModelFor(tasks) {}

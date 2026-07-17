@@ -12,7 +12,7 @@ import {
   Q,
   schemaMigrations,
   column as c,
-  table as defineTable,
+  table,
   type QueryAssociation,
   type RawRecord,
 } from '@remelondb/core'
@@ -21,13 +21,13 @@ import { NodeSqliteDriver } from './NodeSqliteDriver'
 const schema = appSchema({
   version: 1,
   tables: [
-    defineTable('tasks', {
+    table('tasks', {
       name: c.string(),
       position: c.number().indexed(),
       is_done: c.boolean(),
       project_id: c.string().optional(),
     }),
-    defineTable('projects', {
+    table('projects', {
       name: c.string(),
     }),
   ],
@@ -72,7 +72,7 @@ describe('Database core', () => {
       const schemaV2 = appSchema({
         version: 2,
         tables: [
-          defineTable('tasks', {
+          table('tasks', {
             name: c.string(),
             position: c.number().indexed(),
             is_done: c.boolean(),
@@ -80,7 +80,7 @@ describe('Database core', () => {
             priority: c.number(),
           }),
           schema.tables['projects']!,
-          defineTable('tags', { label: c.string() }),
+          table('tags', { label: c.string() }),
         ],
       })
       const migrations = schemaMigrations({

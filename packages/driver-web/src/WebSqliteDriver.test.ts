@@ -12,7 +12,7 @@ import {
   Q,
   synchronize,
   column as c,
-  table as defineTable,
+  table,
 } from '@remelondb/core'
 import { serveSqliteWorker } from './server'
 import { createChannel, createInProcessDriver } from './testing'
@@ -29,7 +29,7 @@ describe('web driver specifics', () => {
 })
 
 describe('full stack on the web driver', () => {
-  const tasksTable = defineTable('tasks', {
+  const tasksTable = table('tasks', {
     name: c.string(),
     is_done: c.boolean(),
   })

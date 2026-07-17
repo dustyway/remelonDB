@@ -11,7 +11,7 @@ import {
   hasUnsyncedChanges,
   synchronize,
   column as c,
-  table as defineTable,
+  table,
   CURSOR_KEY,
   type DirtyRaw,
   type SyncChanges,
@@ -25,7 +25,7 @@ import { NodeSqliteDriver } from './NodeSqliteDriver'
 const schema = appSchema({
   version: 1,
   tables: [
-    defineTable('tasks', {
+    table('tasks', {
       name: c.string(),
       position: c.number(),
     }),

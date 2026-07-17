@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { WorkQueue } from './WorkQueue'
 import { encodeBatch } from './encodeBatch'
-import { appSchema, column as c, table as defineTable } from '../schema/index'
+import { appSchema, column as c, table } from '../schema/index'
 import { markAsChanged, sanitizedRaw, type RawRecord } from '../rawRecord/index'
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -51,15 +51,15 @@ describe('encodeBatch', () => {
   const schema = appSchema({
     version: 1,
     tables: [
-      defineTable('tasks', {
+      table('tasks', {
         name: c.string(),
         is_done: c.boolean(),
       }),
     ],
   })
-  const table = schema.tables['tasks']!
+  const tasksTable = schema.tables['tasks']!
   const raw = (fields: Record<string, unknown>): RawRecord =>
-    sanitizedRaw(fields, table)
+    sanitizedRaw(fields, tasksTable)
 
   it('encodes creates and groups consecutive identical statements', () => {
     const statements = encodeBatch(
@@ -111,13 +111,13 @@ describe('encodeBatch', () => {
 })
 
 describe('markAsChanged', () => {
-  const table = defineTable('t', {
+  const testTable = table('t', {
     a: c.string(),
     b: c.string(),
   })
 
   it('accumulates the changed-column set on synced records', () => {
-    const raw = sanitizedRaw({ _status: 'synced' }, table)
+    const raw = sanitizedRaw({ _status: 'synced' }, testTable)
     markAsChanged(raw, 'a')
     expect(raw._status).toBe('updated')
     expect(raw._changed).toBe('a')
@@ -127,7 +127,7 @@ describe('markAsChanged', () => {
   })
 
   it('leaves created records untracked', () => {
-    const raw = sanitizedRaw({}, table)
+    const raw = sanitizedRaw({}, testTable)
     markAsChanged(raw, 'a')
     expect(raw._status).toBe('created')
     expect(raw._changed).toBe('')

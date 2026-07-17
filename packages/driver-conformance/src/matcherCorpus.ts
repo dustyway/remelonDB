@@ -6,7 +6,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   appSchema,
-  column,
+  column as c,
   canEncodeMatcher,
   encodeMatcher,
   encodeQuery,
@@ -21,11 +21,11 @@ import {
 import type { ResolvedOptions } from './index'
 
 const itemsTable = table('items', {
-  name: column.string(),
-  position: column.number(),
-  is_done: column.boolean(),
-  project_id: column.string().optional(),
-  score: column.number().optional(),
+  name: c.string(),
+  position: c.number(),
+  is_done: c.boolean(),
+  project_id: c.string().optional(),
+  score: c.number().optional(),
 })
 const schema = appSchema({ version: 1, tables: [itemsTable] })
 

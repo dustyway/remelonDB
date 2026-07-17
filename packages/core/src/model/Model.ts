@@ -42,7 +42,6 @@ export interface ModelClass<M extends Model = Model> {
   // Collection<any>: precise collection typing here creates variance
   // knots between Model subclasses and the binding machinery; the
   // table↔class pairing is checked at runtime by Database.open.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   new (collection: Collection<any>, raw: RawRecord): M
   readonly table: string
   readonly associations?: AssociationsMap
@@ -58,7 +57,6 @@ export type TypedModel<T extends TableSchema<ColumnsSpec>> = Model &
   Omit<InferRecord<T>, 'id'>
 
 export interface TypedModelClass<T extends TableSchema<ColumnsSpec>> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   new (collection: Collection<any>, raw: RawRecord): TypedModel<T>
   readonly table: string
   readonly schema: T

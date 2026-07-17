@@ -108,9 +108,14 @@ needs them is already working with `RawRecord`).
 const collection = db.get(tasks)  // Collection<typeof tasks>
 ```
 
-`db.get` takes the table object (or a model class), not a string. The
-unchecked string-plus-type-parameter cast from failure mode 3 disappears;
-passing a table that is not in the database's schema is a type error.
+`db.get` takes the table object (or a model class: `db.get(Task)`), so
+the unchecked cast from failure mode 3 is no longer needed. Two honest
+limits: the string overload still exists for dynamic and internal
+access, so the old cast form remains *expressible*, just never
+necessary; and `Database` is not generic over its schema, so passing a
+table object that is not part of this database's schema fails at
+runtime (with a clear error), not at compile time. Making `Database`
+schema-generic would close both and is listed under open questions.
 
 ### 4. Models keep the class, lose the `declare`s
 
@@ -151,8 +156,11 @@ iteration and is listed as an open question.
 
 ## What this buys, checkably
 
-- The three failure modes above become compile errors. A test file of
-  `@ts-expect-error` cases pins each one.
+- Failure modes 1 and 2 become compile errors, pinned by
+  `@ts-expect-error` cases (schema/typeInference.test.ts). Mode 3 (the
+  unchecked cast) is eliminated by replacement rather than removal: the
+  typed `db.get(Task)`/`db.get(tasks)` forms make it unnecessary, but
+  the string overload remains for dynamic access (see section 3).
 - The flashcard tutorial loses every `declare` line.
 - Zod adapter interop: `zodTable(z.object({...}))` can emit the same
   `TableSchema` + types, and `InferRecord` must equal `z.infer` for the
@@ -169,6 +177,9 @@ afternoon of find-and-edit verified by typecheck.
 
 ## Open questions
 
+- Making `Database` generic over its `AppSchema`, so `db.get(tasks)`
+  rejects tables outside the schema at compile time and the untyped
+  string overload can retire from the public surface.
 - `Q.on` and association typing: checking joined-table columns needs the
   association graph in types; worth it, but a second iteration.
 - `created_at`/`updated_at`: keep the convention (validated number

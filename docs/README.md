@@ -17,7 +17,7 @@ they track the code and are updated with it.
 | [architecture-layers.md](architecture-layers.md) | The portability seam is a ~7-method `SqliteDriver` (dumb SQL executor), not an ORM-flavored adapter. Async at the seam. Record caching owned by JS only. Tombstones/local storage are core features, not driver methods. RN driver is a C++ TurboModule. |
 | [sync-design.md](sync-design.md) | Generic reimplementation of WatermelonDB's sync protocol with two contract-level fixes: an opaque commit-ordered cursor (kills the lost-write race) and push-responds-like-a-pull (kills the push echo). |
 | [upstream-study.md](upstream-study.md) | Condensed factual findings from reading upstream WatermelonDB: what to keep, what's broken, with file/line receipts. Basis for the other docs. |
-| [schema-inferred-types.md](schema-inferred-types.md) | Proposal: derive record types, collection types, and Q column checking from the schema literal (Drizzle-style single source of truth). Surface change only; the query AST and runtime stay. |
+| [schema-inferred-types.md](schema-inferred-types.md) | Implemented: record types, collection types, and Q column checking all derive from the schema literal (Drizzle-style single source of truth). Surface change only; the query AST and runtime stay. |
 
 ## Reference guides
 

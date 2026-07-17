@@ -133,7 +133,6 @@ export class Database {
    */
   get<
     MC extends {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       new (...args: any[]): Model
       readonly table: string
       readonly schema: TableSchema<ColumnsSpec>

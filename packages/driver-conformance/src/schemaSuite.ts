@@ -11,7 +11,7 @@ import {
   schemaMigrations,
   stepsForMigration,
   column as c,
-  table as defineTable,
+  table,
   type SqliteDriver,
 } from '@remelondb/core'
 import type { ResolvedOptions } from './index'
@@ -19,7 +19,7 @@ import type { ResolvedOptions } from './index'
 const schemaV1 = appSchema({
   version: 1,
   tables: [
-    defineTable('tasks', {
+    table('tasks', {
       name: c.string(),
       position: c.number().indexed(),
     }),

@@ -9,3 +9,4 @@ dist/
 # fetched by packages/driver-rn/scripts/fetch-sqlite.mjs
 packages/driver-rn/cpp/vendor/
 dist/
+.idea/

@@ -7,18 +7,18 @@ import {
   Q,
   sanitizedRaw,
   column as c,
-  table as defineTable,
+  table,
   type SqliteDriver,
 } from '@remelondb/core'
 import type { ResolvedOptions } from './index'
 
-const table = defineTable('tasks', {
+const tasksTable = table('tasks', {
   name: c.string(),
   position: c.number(),
   is_done: c.boolean(),
   project_id: c.string().optional(),
 })
-const schema = appSchema({ version: 1, tables: [table] })
+const schema = appSchema({ version: 1, tables: [tasksTable] })
 
 export function recordsSuite(options: ResolvedOptions): void {
   describe('raw record round-trip through the engine', () => {
@@ -45,7 +45,7 @@ export function recordsSuite(options: ResolvedOptions): void {
           is_done: true,
           project_id: null,
         },
-        table,
+        tasksTable,
       )
       await driver.execute(
         'insert into tasks ("id", "_changed", "_status", "name", "position", "is_done", "project_id") values (?, ?, ?, ?, ?, ?, ?)',
@@ -67,7 +67,7 @@ export function recordsSuite(options: ResolvedOptions): void {
       const rows = await driver.query(sql, args)
       expect(rows).toHaveLength(1)
       expect(rows[0]?.['is_done']).toBe(1) // stored representation
-      expect(sanitizedRaw(rows[0]!, table)).toEqual(raw)
+      expect(sanitizedRaw(rows[0]!, tasksTable)).toEqual(raw)
     })
   })
 }

@@ -11,14 +11,14 @@ import {
   ModelFor,
   Q,
   synchronize,
-  table as defineTable,
+  table,
   type AssociationsMap,
   type SyncPullArgs,
   type SyncPullResult,
 } from '@remelondb/core'
 import { NodeSqliteDriver } from './NodeSqliteDriver'
 
-const tasksTable = defineTable('tasks', {
+const tasksTable = table('tasks', {
   name: c.string(),
   is_done: c.boolean(),
   project_id: c.string().optional(),
@@ -26,7 +26,7 @@ const tasksTable = defineTable('tasks', {
   updated_at: c.number(),
 })
 
-const projectsTable = defineTable('projects', {
+const projectsTable = table('projects', {
   name: c.string(),
 })
 
@@ -129,7 +129,7 @@ describe('Model layer', () => {
     const { project, task, orphan } = await db.write(async () => {
       const project = await db.get(Project).create({ id: 'p1', name: 'proj' })
       const task = await db
-        .get<Task>('tasks')
+        .get(Task)
         .create({ id: 't1', name: 'a', project_id: 'p1' })
       const orphan = await db.get(Task).create({ id: 't2', name: 'b' })
       return { project, task, orphan }
@@ -143,7 +143,7 @@ describe('Model layer', () => {
 
     // model associations feed the query compiler too
     const viaJoin = await db
-      .get<Task>('tasks')
+      .get(Task)
       .query(Q.on('projects', 'name', 'proj'))
       .fetch()
     expect(viaJoin).toEqual([task])
@@ -166,7 +166,7 @@ describe('Model layer', () => {
   it('query.observe emits model instances', async () => {
     const emissions: Task[][] = []
     const unsubscribe = db
-      .get<Task>('tasks')
+      .get(Task)
       .query(Q.where('is_done', false))
       .observe((records) => emissions.push(records))
     await new Promise((resolve) => setTimeout(resolve, 10))
@@ -183,7 +183,7 @@ describe('Model layer', () => {
     const badSchema = appSchema({
       version: 1,
       tables: [
-        defineTable('bads', { update: c.string() }),
+        table('bads', { update: c.string() }),
       ],
     })
     class Bad extends Model {
