@@ -3,11 +3,13 @@
 This walkthrough builds the data layer of a small flashcard app: decks
 containing cards, reviews recorded as you study, a due-cards study
 queue, a live counter for the UI, a schema migration, and a sync hookup
-at the end. Every runnable snippet below also lives in
-[scripts/check-tutorial.mjs](../scripts/check-tutorial.mjs), which CI
-executes against the built packages on every push — so what you read
-here is code that provably runs. You can paste the pieces into a Node
-project and follow along.
+at the end. CI executes the code blocks below straight out of this
+file: [scripts/check-tutorial.mjs](../scripts/check-tutorial.mjs)
+extracts them and runs them against the built packages on every push,
+so what you read here is code that provably runs. (Blocks marked as
+fragments — the migration re-open sketch and the sync hookup, which
+needs a real backend — are illustrative and skipped.) You can paste the
+pieces into a Node project and follow along.
 
 The examples use `NodeSqliteDriver` so they run anywhere. In an app you
 swap only the driver import: `RnSqliteDriver` from
@@ -224,7 +226,12 @@ const migrations = schemaMigrations({
     },
   ],
 })
+```
 
+Then pass the migrations when opening (sketch — fill in your own
+driver and name):
+
+```js fragment
 const db = await Database.open({ driver, schema, migrations, ... })
 ```
 
@@ -237,7 +244,7 @@ steps fails `open` loudly; data destruction is never implicit.
 engine handles the rest (cursor storage, applying remote changes,
 marking local ones as synced):
 
-```js
+```js fragment
 import { synchronize } from '@remelondb/core'
 
 await synchronize({

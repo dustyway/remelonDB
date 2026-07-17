@@ -1,150 +1,136 @@
-// Executable check for docs/tutorial.md: runs the tutorial's code
-// sections verbatim against the built workspace packages, so the
-// tutorial cannot drift from the real API. Sections 2-8 and the §9
-// migrations object execute with assertions; the §9 re-open fragment
-// (literal `...`) and §10's network sync are illustrative and are
-// checked for imports/shape only.
+// Executable check for docs/tutorial.md: extracts the tutorial's ```js
+// code blocks AT RUNTIME and executes them, in order, against the built
+// workspace packages — the markdown is the single source, so editing the
+// tutorial alone is enough to change (or break) this check. Blocks
+// fenced ```js fragment are illustrative (the migration re-open sketch,
+// the network sync hookup) and are skipped.
+//
+// Transformations applied to the extracted code, and nothing else:
+// - import specifiers '@remelondb/*' resolve to the built dist files
+//   (imports are also merged, since blocks re-import as the tutorial
+//   introduces symbols);
+// - a setBadge shim stands in for the app's badge API;
+// - the database file lands in a temp directory;
+// - assertions are appended so results are checked, not just executed.
 //
 // Run: pnpm build && node scripts/check-tutorial.mjs
-// Deviations from the tutorial text: import specifiers point at the
-// built packages, a setBadge shim replaces the app's badge API, and the
-// database file lands in a temp directory.
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import {
-  appSchema, column as c, table, ModelFor, Database, Q,
-  schemaMigrations, addColumns, synchronize,
-} from '../packages/core/dist/index.mjs'
-import { NodeSqliteDriver } from '../packages/driver-node/dist/index.mjs'
+import { pathToFileURL } from 'node:url'
 
-const workDir = await mkdtemp(join(tmpdir(), 'remelondb-tutorial-'))
-process.chdir(workDir)
+const MODULES = {
+  '@remelondb/core': new URL('../packages/core/dist/index.mjs', import.meta.url)
+    .href,
+  '@remelondb/driver-node': new URL(
+    '../packages/driver-node/dist/index.mjs',
+    import.meta.url,
+  ).href,
+}
 
+// --- extract ```js blocks (skip ```js fragment) ---
+const markdown = await readFile(
+  new URL('../docs/tutorial.md', import.meta.url),
+  'utf8',
+)
+const blocks = []
+let fragments = 0
+let current = null
+for (const line of markdown.split('\n')) {
+  if (current === null) {
+    if (line.trim() === '```js') current = []
+    else if (line.trim() === '```js fragment') fragments++
+  } else if (line.trim() === '```') {
+    blocks.push(current.join('\n'))
+    current = null
+  } else {
+    current.push(line)
+  }
+}
+if (blocks.length === 0) throw new Error('no ```js blocks found in tutorial')
+
+// --- merge imports, rewrite sources, collect bodies ---
+const IMPORT_RE = /^import\s*\{([^}]*)\}\s*from\s*'([^']+)'\s*$/
+const specifiersByModule = new Map()
+const localNames = new Map() // local name -> full specifier (collision check)
+const addSpecifier = (module_, spec) => {
+  const url = MODULES[module_]
+  if (!url) throw new Error(`tutorial imports unknown module '${module_}'`)
+  const set = specifiersByModule.get(url) ?? new Set()
+  specifiersByModule.set(url, set)
+  const local = spec.includes(' as ') ? spec.split(' as ')[1].trim() : spec
+  const existing = localNames.get(local)
+  if (existing && existing !== `${module_}:${spec}`) {
+    throw new Error(`conflicting imports for local name '${local}'`)
+  }
+  localNames.set(local, `${module_}:${spec}`)
+  set.add(spec)
+}
+const bodies = blocks.map((block) =>
+  block
+    .split('\n')
+    .filter((line) => {
+      const match = line.match(IMPORT_RE)
+      if (!match) return true
+      for (const spec of match[1].split(',')) {
+        const trimmed = spec.trim()
+        if (trimmed) addSpecifier(match[2], trimmed)
+      }
+      return false
+    })
+    .join('\n'),
+)
+addSpecifier('@remelondb/core', 'synchronize') // §10 is a fragment; assert the export below
+
+const imports = [...specifiersByModule]
+  .map(([url, specs]) => `import { ${[...specs].join(', ')} } from '${url}'`)
+  .join('\n')
+
+const SHIMS = `
 const badge = []
 const setBadge = (n) => badge.push(n)
+`
 
-// §2 Define the schema
-const decks = table('decks', {
-  title: c.string(),
-  created_at: c.number(),
-  updated_at: c.number(),
-})
-const cards = table('cards', {
-  deck_id: c.string().indexed(),
-  front: c.string(),
-  back: c.string(),
-  due_at: c.number().indexed(),
-  created_at: c.number(),
-  updated_at: c.number(),
-})
-const reviews = table('reviews', {
-  card_id: c.string().indexed(),
-  rating: c.number(),
-  reviewed_at: c.number(),
-})
-const schema = appSchema({ version: 1, tables: [decks, cards, reviews] })
-
-// §3 Define the models
-class Deck extends ModelFor(decks) {
-  static associations = {
-    cards: { type: 'has_many', foreignKey: 'deck_id' },
-  }
-}
-class Card extends ModelFor(cards) {
-  static associations = {
-    decks: { type: 'belongs_to', key: 'deck_id' },
-    reviews: { type: 'has_many', foreignKey: 'card_id' },
-  }
-}
-class Review extends ModelFor(reviews) {
-  static associations = {
-    cards: { type: 'belongs_to', key: 'card_id' },
-  }
-}
-
-// §4 Open the database
-const db = await Database.open({
-  driver: new NodeSqliteDriver(),
-  schema,
-  modelClasses: [Deck, Card, Review],
-  name: 'flashcards.db',   // ':memory:' for experiments
-})
-
-// §5 Create a deck and its cards
-const deck = await db.write(() =>
-  db.get(Deck).create({ title: 'Spanish basics' }),
-)
-const FRONTS = [
-  ['hola', 'hello'], ['adiós', 'goodbye'], ['gracias', 'thank you'],
-  ['por favor', 'please'], ['lo siento', 'sorry'],
-]
-await db.write(async () => {
-  const ops = FRONTS.map(([front, back]) =>
-    db.get(Card).prepareCreate({
-      deck_id: deck.id, front, back, due_at: Date.now(),
-    }),
-  )
-  await db.batch(ops)   // one transaction; all or nothing
-})
-
-// §6 The study queue
-const dueCards = await db.get(Card).query(
-  Q.where('deck_id', deck.id),
-  Q.where('due_at', Q.lte(Date.now())),
-  Q.sortBy('due_at'),
-  Q.take(20),
-).fetch()
-
-// §7 Live counts for the UI
-const unsubscribe = db.get(Card).query(
-  Q.where('due_at', Q.lte(Date.now())),
-).observeCount((n) => setBadge(n))
-
-// §8 Record a review
-const card = dueCards[0]
-const DAY = 24 * 60 * 60 * 1000
-await db.write(async () => {
-  await db.get(Review).create({
-    card_id: card.id, rating: 3, reviewed_at: Date.now(),
-  })
-  await card.update(() => { card.due_at = Date.now() + DAY })
-})
-const cardsInDeck = await deck.children('cards').fetch()
-const parent = await card.related('decks')          // the Deck, or null
-const deckReviews = await db.get(Review).query(
-  Q.on('cards', 'deck_id', deck.id),                // join through cards
-).fetch()
-
-// §9 Grow the schema (the migrations object only; see header)
-const migrations = schemaMigrations({
-  migrations: [
-    {
-      toVersion: 2,
-      steps: [
-        addColumns({
-          table: 'cards',
-          columns: { notes: c.string().optional() },
-        }),
-      ],
-    },
-  ],
-})
-
-// §10 Sync: network snippet is not runnable here; the import must exist
-if (typeof synchronize !== 'function') throw new Error('synchronize missing')
-
-// --- assertions ---
-const assert = (cond, msg) => { if (!cond) throw new Error(`FAIL: ${msg}`) }
-assert(dueCards.length === 5, `dueCards: ${dueCards.length}`)
-assert(cardsInDeck.length === 5, `children: ${cardsInDeck.length}`)
+const ASSERTIONS = `
+// --- assertions (appended by scripts/check-tutorial.mjs) ---
+const assert = (cond, msg) => { if (!cond) throw new Error('FAIL: ' + msg) }
+assert(typeof synchronize === 'function', 'synchronize missing from core')
+assert(dueCards.length === 5, 'dueCards: ' + dueCards.length)
+assert(cardsInDeck.length === 5, 'children: ' + cardsInDeck.length)
 assert(parent && parent.id === deck.id, 'related returned wrong deck')
-assert(deckReviews.length === 1, `join query: ${deckReviews.length}`)
+assert(deckReviews.length === 1, 'join query: ' + deckReviews.length)
 assert(card.due_at > Date.now(), 'update builder did not set due_at')
 await new Promise((r) => setTimeout(r, 30))
 assert(badge.length >= 1, 'observeCount never fired')
-assert(badge[badge.length - 1] === 4, `badge should end at 4: ${badge}`)
+assert(badge[badge.length - 1] === 4, 'badge should end at 4: ' + badge)
 assert(migrations.maxVersion === 2, 'migrations object wrong')
 unsubscribe()
+globalThis.__tutorialCheckPassed = { blocks: ${blocks.length}, badge }
+`
+
+const assembled = [
+  '// AUTO-ASSEMBLED from docs/tutorial.md — do not edit',
+  imports,
+  SHIMS,
+  ...bodies,
+  ASSERTIONS,
+].join('\n')
+
+// --- execute in a temp dir ---
+const workDir = await mkdtemp(join(tmpdir(), 'remelondb-tutorial-'))
+const file = join(workDir, 'assembled.mjs')
+await writeFile(file, assembled)
+process.chdir(workDir)
+try {
+  await import(pathToFileURL(file).href)
+} catch (error) {
+  console.error(`assembled module kept at ${file} for inspection`)
+  throw error
+}
+process.chdir(tmpdir())
 await rm(workDir, { recursive: true, force: true })
-console.log('TUTORIAL CHECK: PASS', { dueCards: dueCards.length, badge })
+console.log('TUTORIAL CHECK: PASS', {
+  blocksRun: blocks.length,
+  fragmentsSkipped: fragments,
+  ...globalThis.__tutorialCheckPassed,
+})
