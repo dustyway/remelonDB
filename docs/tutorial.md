@@ -3,8 +3,10 @@
 This walkthrough builds the data layer of a small flashcard app: decks
 containing cards, reviews recorded as you study, a due-cards study
 queue, a live counter for the UI, a schema migration, and a sync hookup
-at the end. Every snippet below is taken from a script that runs
-against the packed packages; you can paste the pieces into a Node
+at the end. Every runnable snippet below also lives in
+[scripts/check-tutorial.mjs](../scripts/check-tutorial.mjs), which CI
+executes against the built packages on every push — so what you read
+here is code that provably runs. You can paste the pieces into a Node
 project and follow along.
 
 The examples use `NodeSqliteDriver` so they run anywhere. In an app you

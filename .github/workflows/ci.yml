@@ -38,6 +38,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      # The tutorial's code sections, executed against the built packages
+      # (scripts/check-tutorial.mjs) — docs cannot drift from the API.
+      - run: pnpm check:tutorial
       - name: Pack and consume from plain Node
         run: |
           mkdir -p /tmp/tarballs /tmp/consume
