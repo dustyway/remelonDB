@@ -8,8 +8,17 @@ export type {
 
 export * as Q from './query/Q'
 
-export { appSchema, tableSchema } from './schema/index'
-export type { AppSchema, TableSchema, ColumnSchema, ColumnType } from './schema/index'
+export { appSchema, column, table } from './schema/index'
+export type {
+  AppSchema,
+  ColumnDef,
+  ColumnName,
+  ColumnSchema,
+  ColumnsSpec,
+  ColumnType,
+  InferRecord,
+  TableSchema,
+} from './schema/index'
 
 export {
   schemaMigrations,
@@ -45,8 +54,14 @@ export { WorkQueue } from './database/WorkQueue'
 export { encodeBatch } from './database/encodeBatch'
 export type { BatchOperation } from './database/encodeBatch'
 
-export { Model, defineModelAccessors } from './model/Model'
-export type { ModelClass, AssociationsMap } from './model/Model'
+export { Model, ModelFor, defineModelAccessors } from './model/Model'
+export type {
+  AssociationsMap,
+  ColumnsOf,
+  ModelClass,
+  TypedModel,
+  TypedModelClass,
+} from './model/Model'
 
 export { synchronize, CURSOR_KEY, LAST_SCHEMA_VERSION_KEY } from './sync/synchronize'
 export type { SynchronizeOptions } from './sync/synchronize'

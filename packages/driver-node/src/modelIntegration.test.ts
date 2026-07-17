@@ -1,61 +1,50 @@
 /**
- * The Model layer end to end: declare-field accessors, update builders,
+ * The Model layer end to end: schema-generated accessors, update builders,
  * identity, relations, observation, timestamps, and interplay with sync.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   appSchema,
+  column as c,
   Database,
   Model,
+  ModelFor,
   Q,
   synchronize,
-  tableSchema,
+  table as defineTable,
   type AssociationsMap,
   type SyncPullArgs,
   type SyncPullResult,
 } from '@remelondb/core'
 import { NodeSqliteDriver } from './NodeSqliteDriver'
 
-const schema = appSchema({
-  version: 1,
-  tables: [
-    tableSchema({
-      name: 'tasks',
-      columns: [
-        { name: 'name', type: 'string' },
-        { name: 'is_done', type: 'boolean' },
-        { name: 'project_id', type: 'string', isOptional: true },
-        { name: 'created_at', type: 'number' },
-        { name: 'updated_at', type: 'number' },
-      ],
-    }),
-    tableSchema({
-      name: 'projects',
-      columns: [{ name: 'name', type: 'string' }],
-    }),
-  ],
+const tasksTable = defineTable('tasks', {
+  name: c.string(),
+  is_done: c.boolean(),
+  project_id: c.string().optional(),
+  created_at: c.number(),
+  updated_at: c.number(),
 })
 
-class Task extends Model {
-  static override readonly table = 'tasks'
+const projectsTable = defineTable('projects', {
+  name: c.string(),
+})
+
+const schema = appSchema({
+  version: 1,
+  tables: [tasksTable, projectsTable],
+})
+
+class Task extends ModelFor(tasksTable) {
   static override readonly associations = {
     projects: { type: 'belongs_to', key: 'project_id' },
   } satisfies AssociationsMap
-
-  declare name: string
-  declare is_done: boolean
-  declare project_id: string | null
-  declare created_at: number
-  declare updated_at: number
 }
 
-class Project extends Model {
-  static override readonly table = 'projects'
+class Project extends ModelFor(projectsTable) {
   static override readonly associations = {
     tasks: { type: 'has_many', foreignKey: 'project_id' },
   } satisfies AssociationsMap
-
-  declare name: string
 }
 
 describe('Model layer', () => {
@@ -79,7 +68,7 @@ describe('Model layer', () => {
   it('creates typed models with generated accessors and timestamps', async () => {
     const before = Date.now()
     const task = await db.write(() =>
-      db.get<Task>('tasks').create({ name: 'write models', is_done: false }),
+      db.get(Task).create({ name: 'write models', is_done: false }),
     )
     expect(task).toBeInstanceOf(Task)
     expect(task.name).toBe('write models')
@@ -91,16 +80,16 @@ describe('Model layer', () => {
 
   it('maintains model identity across find/query/create', async () => {
     const created = await db.write(() =>
-      db.get<Task>('tasks').create({ id: 't1', name: 'a' }),
+      db.get(Task).create({ id: 't1', name: 'a' }),
     )
-    const found = await db.get<Task>('tasks').find('t1')
-    const [queried] = await db.get<Task>('tasks').query().fetch()
+    const found = await db.get(Task).find('t1')
+    const [queried] = await db.get(Task).query().fetch()
     expect(found).toBe(created)
     expect(queried).toBe(created)
   })
 
   it('records are read-only outside update()', async () => {
-    const task = await db.write(() => db.get<Task>('tasks').create({ name: 'x' }))
+    const task = await db.write(() => db.get(Task).create({ name: 'x' }))
     expect(() => {
       task.name = 'nope'
     }).toThrow("outside of update()")
@@ -108,7 +97,7 @@ describe('Model layer', () => {
 
   it('update() builder writes through sanitize + dirty tracking and touches updated_at', async () => {
     const task = await db.write(() =>
-      db.get<Task>('tasks').create({ id: 't1', name: 'v1' }),
+      db.get(Task).create({ id: 't1', name: 'v1' }),
     )
     const createdAt = task.updated_at
     await new Promise((resolve) => setTimeout(resolve, 5))
@@ -127,7 +116,7 @@ describe('Model layer', () => {
   })
 
   it('builder writes are sanitized like any other write', async () => {
-    const task = await db.write(() => db.get<Task>('tasks').create({ name: 'x' }))
+    const task = await db.write(() => db.get(Task).create({ name: 'x' }))
     await db.write(() =>
       task.update(() => {
         task.is_done = 1 as never // storage representation in…
@@ -138,11 +127,11 @@ describe('Model layer', () => {
 
   it('navigates belongs_to and has_many associations', async () => {
     const { project, task, orphan } = await db.write(async () => {
-      const project = await db.get<Project>('projects').create({ id: 'p1', name: 'proj' })
+      const project = await db.get(Project).create({ id: 'p1', name: 'proj' })
       const task = await db
         .get<Task>('tasks')
         .create({ id: 't1', name: 'a', project_id: 'p1' })
-      const orphan = await db.get<Task>('tasks').create({ id: 't2', name: 'b' })
+      const orphan = await db.get(Task).create({ id: 't2', name: 'b' })
       return { project, task, orphan }
     })
 
@@ -161,7 +150,7 @@ describe('Model layer', () => {
   })
 
   it('observes a single record until deletion', async () => {
-    const task = await db.write(() => db.get<Task>('tasks').create({ id: 't1' }))
+    const task = await db.write(() => db.get(Task).create({ id: 't1' }))
     const emissions: (Task | null)[] = []
     const unsubscribe = task.observe((record) => emissions.push(record))
     expect(emissions).toEqual([task])
@@ -183,7 +172,7 @@ describe('Model layer', () => {
     await new Promise((resolve) => setTimeout(resolve, 10))
 
     const task = await db.write(() =>
-      db.get<Task>('tasks').create({ is_done: false }),
+      db.get(Task).create({ is_done: false }),
     )
     expect(emissions).toEqual([[], [task]])
     expect(emissions[1]?.[0]).toBeInstanceOf(Task)
@@ -194,7 +183,7 @@ describe('Model layer', () => {
     const badSchema = appSchema({
       version: 1,
       tables: [
-        tableSchema({ name: 'bads', columns: [{ name: 'update', type: 'string' }] }),
+        defineTable('bads', { update: c.string() }),
       ],
     })
     class Bad extends Model {
@@ -209,7 +198,7 @@ describe('Model layer', () => {
 
   it('sync updates flow into existing model instances', async () => {
     const task = await db.write(() =>
-      db.get<Task>('tasks').create({ id: 't1', name: 'local', is_done: false }),
+      db.get(Task).create({ id: 't1', name: 'local', is_done: false }),
     )
     const pullChanges = async (_args: SyncPullArgs): Promise<SyncPullResult> => ({
       changes: {

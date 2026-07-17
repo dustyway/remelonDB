@@ -10,7 +10,8 @@ import {
   Q,
   schemaMigrations,
   stepsForMigration,
-  tableSchema,
+  column as c,
+  table as defineTable,
   type SqliteDriver,
 } from '@remelondb/core'
 import type { ResolvedOptions } from './index'
@@ -18,12 +19,9 @@ import type { ResolvedOptions } from './index'
 const schemaV1 = appSchema({
   version: 1,
   tables: [
-    tableSchema({
-      name: 'tasks',
-      columns: [
-        { name: 'name', type: 'string' },
-        { name: 'position', type: 'number', isIndexed: true },
-      ],
+    defineTable('tasks', {
+      name: c.string(),
+      position: c.number().indexed(),
     }),
   ],
 })
@@ -35,16 +33,16 @@ const migrations = schemaMigrations({
       steps: [
         addColumns({
           table: 'tasks',
-          columns: [
-            { name: 'priority', type: 'number', isIndexed: true },
-            { name: 'note', type: 'string', isOptional: true },
-          ],
+          columns: {
+            priority: c.number().indexed(),
+            note: c.string().optional(),
+          },
         }),
       ],
     },
     {
       toVersion: 3,
-      steps: [createTable({ name: 'tags', columns: [{ name: 'label', type: 'string' }] })],
+      steps: [createTable({ name: 'tags', columns: { label: c.string() } })],
     },
   ],
 })

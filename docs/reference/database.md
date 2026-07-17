@@ -36,17 +36,17 @@ All work is serialized through one strictly-FIFO queue:
 
 ## Collections and CRUD
 
-`db.get(table)` (or `db.get<Task>(table)` with a model class) returns the
-table's Collection:
+`db.get(tasks)` (a table object) or `db.get(Task)` (a model class) returns
+the table's typed Collection:
 
 ```ts
 await db.write(async () => {
-  const task = await db.get('tasks').create({ name: 'a', position: 1 })
-  await db.get('tasks').update(task.id, { name: 'b' })   // sanitized, dirty-tracked
-  await db.get('tasks').markAsDeleted(task.id)           // sync tombstone
-  await db.get('tasks').destroyPermanently(task.id)      // gone for real
+  const task = await db.get(Task).create({ name: 'a', position: 1 })
+  await db.get(Task).update(task.id, { name: 'b' })   // sanitized, dirty-tracked
+  await db.get(Task).markAsDeleted(task.id)           // sync tombstone
+  await db.get(Task).destroyPermanently(task.id)      // gone for real
 })
-const found = await db.get('tasks').find('some-id')      // throws if missing
+const found = await db.get(Task).find('some-id')      // throws if missing
 ```
 
 - `create`/`update` auto-stamp `created_at`/`updated_at` when those columns
@@ -67,11 +67,11 @@ error propagates out of the write block.
 ## Observation
 
 ```ts
-const unsub = db.get('tasks')
+const unsub = db.get(Task)
   .query(Q.where('is_done', false))
   .observe((records) => render(records))
 
-const unsub2 = db.get('tasks').query().observeCount((n) => setBadge(n))
+const unsub2 = db.get(Task).query().observeCount((n) => setBadge(n))
 ```
 
 Two strategies, chosen automatically per query:

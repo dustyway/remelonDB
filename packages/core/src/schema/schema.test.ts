@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { appSchema, tableSchema } from './index'
+import { appSchema, column as c, table } from './index'
 import {
   addColumns,
   createTable,
@@ -9,19 +9,17 @@ import {
 } from './migrations'
 import { encodeMigrationSteps, encodeSchema } from './encodeSchema'
 
-const tasksTable = tableSchema({
-  name: 'tasks',
-  columns: [
-    { name: 'name', type: 'string' },
-    { name: 'position', type: 'number', isIndexed: true },
-    { name: 'project_id', type: 'string', isOptional: true },
-  ],
+const tasksTable = table('tasks', {
+  name: c.string(),
+  position: c.number().indexed(),
+  project_id: c.string().optional(),
 })
 
 describe('schema construction', () => {
   it('builds and indexes tables', () => {
     expect(tasksTable.columns['position']?.isIndexed).toBe(true)
-    expect(tasksTable.columnArray.map((c) => c.name)).toEqual([
+    expect(tasksTable.columns['project_id']?.isOptional).toBe(true)
+    expect(tasksTable.columnArray.map((col) => col.name)).toEqual([
       'name',
       'position',
       'project_id',
@@ -31,31 +29,30 @@ describe('schema construction', () => {
     expect(Object.isFrozen(schema)).toBe(true)
   })
 
+  it('column builders are immutable values', () => {
+    const base = c.string()
+    const optional = base.optional()
+    expect(base.isOptional).toBe(false)
+    expect(optional.isOptional).toBe(true)
+    expect(optional.indexed()).not.toBe(optional)
+    // one builder value can be reused across columns safely
+    const t = table('t', { a: base, b: base })
+    expect(t.columns['a']?.name).toBe('a')
+    expect(t.columns['b']?.name).toBe('b')
+  })
+
   it('rejects invalid schemas', () => {
+    // duplicate columns are impossible by construction now (object keys);
+    // reserved names and created_at/updated_at rules still throw
+    expect(() => table('tasks', { id: c.string() })).toThrow('reserved')
+    expect(() => table('tasks', { RowId: c.string() })).toThrow('reserved')
+    expect(() => table('local_storage', {})).toThrow('reserved')
+    expect(() => table('tasks', { created_at: c.string() })).toThrow(
+      'non-optional number',
+    )
     expect(() =>
-      tableSchema({ name: 'tasks', columns: [{ name: 'id', type: 'string' }] }),
-    ).toThrow('reserved')
-    expect(() =>
-      tableSchema({ name: 'tasks', columns: [{ name: 'RowId', type: 'string' }] }),
-    ).toThrow('reserved')
-    expect(() =>
-      tableSchema({ name: 'local_storage', columns: [] }),
-    ).toThrow('reserved')
-    expect(() =>
-      tableSchema({
-        name: 'tasks',
-        columns: [{ name: 'created_at', type: 'string' }],
-      }),
+      table('tasks', { created_at: c.number().optional() }),
     ).toThrow('non-optional number')
-    expect(() =>
-      tableSchema({
-        name: 'tasks',
-        columns: [
-          { name: 'a', type: 'string' },
-          { name: 'a', type: 'number' },
-        ],
-      }),
-    ).toThrow('more than once')
     expect(() => appSchema({ version: 0, tables: [] })).toThrow('positive integer')
     expect(() =>
       appSchema({ version: 1, tables: [tasksTable, tasksTable] }),
@@ -81,10 +78,10 @@ describe('migrations', () => {
         steps: [
           addColumns({
             table: 'tasks',
-            columns: [
-              { name: 'priority', type: 'number' },
-              { name: 'note', type: 'string', isOptional: true },
-            ],
+            columns: {
+              priority: c.number(),
+              note: c.string().optional(),
+            },
           }),
         ],
       },
@@ -93,7 +90,7 @@ describe('migrations', () => {
         steps: [
           createTable({
             name: 'tags',
-            columns: [{ name: 'label', type: 'string', isIndexed: true }],
+            columns: { label: c.string().indexed() },
           }),
           unsafeExecuteSql(`update "tasks" set "priority" = 1`),
         ],

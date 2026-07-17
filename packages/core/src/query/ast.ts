@@ -49,20 +49,20 @@ export interface Comparison {
   readonly right: ComparisonRight
 }
 
-export interface WhereDescription {
+export interface WhereDescription<C extends string = string> {
   readonly type: 'where'
-  readonly left: string
+  readonly left: C
   readonly comparison: Comparison
 }
 
-export interface And {
+export interface And<C extends string = string> {
   readonly type: 'and'
-  readonly conditions: readonly Where[]
+  readonly conditions: readonly Where<C>[]
 }
 
-export interface Or {
+export interface Or<C extends string = string> {
   readonly type: 'or'
-  readonly conditions: readonly Where[]
+  readonly conditions: readonly Where<C>[]
 }
 
 /** A condition on a joined table (`Q.on`). */
@@ -78,13 +78,25 @@ export interface UnsafeSqlExpr {
   readonly sql: string
 }
 
-export type Where = WhereDescription | And | Or | On | UnsafeSqlExpr
+/**
+ * The C parameter carries the column names a clause references, so typed
+ * collections can reject misspelled columns at the query site
+ * (docs/schema-inferred-types.md). Purely phantom: the runtime AST is
+ * unchanged, and the default keeps untyped consumers (compiler, matcher)
+ * on plain strings. `Q.on` conditions stay string-typed for now.
+ */
+export type Where<C extends string = string> =
+  | WhereDescription<C>
+  | And<C>
+  | Or<C>
+  | On
+  | UnsafeSqlExpr
 
 export type SortOrder = 'asc' | 'desc'
 
-export interface SortBy {
+export interface SortBy<C extends string = string> {
   readonly type: 'sortBy'
-  readonly sortColumn: string
+  readonly sortColumn: C
   readonly sortOrder: SortOrder
 }
 
@@ -118,9 +130,9 @@ export interface UnsafeSqlQuery {
   readonly values: readonly Value[]
 }
 
-export type Clause =
-  | Where
-  | SortBy
+export type Clause<C extends string = string> =
+  | Where<C>
+  | SortBy<C>
   | Take
   | Skip
   | JoinTables

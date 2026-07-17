@@ -17,6 +17,7 @@ they track the code and are updated with it.
 | [architecture-layers.md](architecture-layers.md) | The portability seam is a ~7-method `SqliteDriver` (dumb SQL executor), not an ORM-flavored adapter. Async at the seam. Record caching owned by JS only. Tombstones/local storage are core features, not driver methods. RN driver is a C++ TurboModule. |
 | [sync-design.md](sync-design.md) | Generic reimplementation of WatermelonDB's sync protocol with two contract-level fixes: an opaque commit-ordered cursor (kills the lost-write race) and push-responds-like-a-pull (kills the push echo). |
 | [upstream-study.md](upstream-study.md) | Condensed factual findings from reading upstream WatermelonDB: what to keep, what's broken, with file/line receipts. Basis for the other docs. |
+| [schema-inferred-types.md](schema-inferred-types.md) | Proposal: derive record types, collection types, and Q column checking from the schema literal (Drizzle-style single source of truth). Surface change only; the query AST and runtime stay. |
 
 ## Reference guides
 
@@ -26,7 +27,7 @@ they track the code and are updated with it.
 | [reference/models.md](reference/models.md) | The Model layer: declare-field accessors (no decorators), update builders, identity, relations, per-record observation. |
 | [reference/queries.md](reference/queries.md) | The Q DSL: every operator with its SQL and semantics, joins, LIKE escaping, unsafe escape hatches, compilation, the in-memory matcher and its gate. |
 | [reference/sync.md](reference/sync.md) | Using `synchronize`: wire shapes, conflict semantics, resync, migration pulls, testing a backend. |
-| [reference/schema.md](reference/schema.md) | `appSchema`/`tableSchema`, standard columns, reserved names, DDL output, migrations and the no-silent-reset contract. |
+| [reference/schema.md](reference/schema.md) | `appSchema`/`table()`/column builders, inferred record types, standard columns, reserved names, DDL output, migrations and the no-silent-reset contract. |
 | [reference/records.md](reference/records.md) | `RawRecord`, the `sanitizedRaw` trust boundary and its coercion rules, sync fields (`_status`/`_changed`), ids. |
 | [reference/driver.md](reference/driver.md) | The `SqliteDriver` contract: method obligations, value conventions, batch atomicity, why the seam is async, how to implement and conformance-test a new driver. |
 

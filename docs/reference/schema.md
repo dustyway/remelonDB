@@ -7,38 +7,36 @@ of single SQL statements for a driver to run atomically.
 ## Defining a schema
 
 ```ts
-import { appSchema, tableSchema } from '@remelondb/core'
+import { appSchema, column as c, table } from '@remelondb/core'
 
-const schema = appSchema({
-  version: 1,
-  tables: [
-    tableSchema({
-      name: 'tasks',
-      columns: [
-        { name: 'name', type: 'string' },
-        { name: 'position', type: 'number', isIndexed: true },
-        { name: 'is_done', type: 'boolean' },
-        { name: 'project_id', type: 'string', isOptional: true },
-      ],
-    }),
-  ],
+const tasks = table('tasks', {
+  name: c.string(),
+  position: c.number().indexed(),
+  is_done: c.boolean(),
+  project_id: c.string().optional(),
 })
+
+const schema = appSchema({ version: 1, tables: [tasks] })
 ```
 
-- **Column types**: `'string' | 'number' | 'boolean'`. Columns are stored
-  untyped in SQLite (dynamic typing); the declared type drives JS-side
-  sanitization (see [records.md](records.md)) and migration backfill
-  defaults.
-- **`isOptional`**: the column may be `null`. Non-optional columns are
+- **Column builders**: `c.string()`, `c.number()`, `c.boolean()`. Columns
+  are stored untyped in SQLite (dynamic typing); the declared type drives
+  JS-side sanitization (see [records.md](records.md)) and migration
+  backfill defaults.
+- **`.optional()`**: the column may be `null`. Non-optional columns are
   coerced to a type default (`''`/`0`/`false`) rather than null.
-- **`isIndexed`**: creates `create index "…" on "table" ("column")`.
+- **`.indexed()`**: creates `create index "…" on "table" ("column")`.
 - **`created_at` / `updated_at`**, if declared, must be non-optional
   `number` columns (epoch-millisecond timestamps, maintained by the future
   Model layer).
+- **Record types are inferred**: `InferRecord<typeof tasks>` is the typed
+  record shape (`.optional()` columns become `T | null`). Collections
+  obtained via `db.get(tasks)` or `db.get(Task)` are typed by it, and
+  misspelled column names in `Q.where`/`Q.sortBy` are compile errors.
 
 Validation at construction (all throw with specific messages): identifiers
-must match `^[a-zA-Z_][a-zA-Z0-9_]*$`; duplicate tables/columns are
-rejected; `version` must be a positive integer.
+must match `^[a-zA-Z_][a-zA-Z0-9_]*$`; duplicate tables are rejected;
+`version` must be a positive integer.
 
 ### Standard columns and reserved names
 
@@ -92,7 +90,7 @@ tooling and tests.
 ```ts
 import {
   schemaMigrations, createTable, addColumns, unsafeExecuteSql,
-  stepsForMigration, encodeMigrationSteps,
+  stepsForMigration, encodeMigrationSteps, column as c,
 } from '@remelondb/core'
 
 const migrations = schemaMigrations({
@@ -102,14 +100,14 @@ const migrations = schemaMigrations({
       steps: [
         addColumns({
           table: 'tasks',
-          columns: [
-            { name: 'priority', type: 'number', isIndexed: true },
-            { name: 'note', type: 'string', isOptional: true },
-          ],
+          columns: {
+            priority: c.number().indexed(),
+            note: c.string().optional(),
+          },
         }),
       ],
     },
-    { toVersion: 3, steps: [createTable({ name: 'tags', columns: [/* … */] })] },
+    { toVersion: 3, steps: [createTable({ name: 'tags', columns: { /* … */ } })] },
   ],
 })
 ```
@@ -117,8 +115,10 @@ const migrations = schemaMigrations({
 - Migrations must be **sorted and contiguous** (`toVersion` 2, 3, 4, …);
   gaps and duplicates are construction errors. `minVersion`/`maxVersion`
   are derived.
-- Steps are data, like queries. Available steps:
-  - `createTable({...})` — same validation as `tableSchema`.
+- Steps are data, like queries. Both `createTable` and `addColumns` take a
+  `columns` map of column builders, the same shape `table()` uses. Available
+  steps:
+  - `createTable({name, columns})` — same validation as `table()`.
   - `addColumns({table, columns})` — compiles to
     `alter table … add "col" default <literal>`; SQLite backfills existing
     rows with the default natively (`''`/`0` per type, `null` if optional —

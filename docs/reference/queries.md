@@ -9,7 +9,7 @@ In an app you build queries through a collection and fetch/observe them
 ([database.md](database.md)); the compiler runs under the hood:
 
 ```ts
-db.get('tasks').query(
+db.get(Task).query(
   Q.where('is_done', false),
   Q.where('position', Q.gt(2)),
   Q.sortBy('position', Q.desc),

@@ -6,19 +6,17 @@ import {
   encodeSchema,
   Q,
   sanitizedRaw,
-  tableSchema,
+  column as c,
+  table as defineTable,
   type SqliteDriver,
 } from '@remelondb/core'
 import type { ResolvedOptions } from './index'
 
-const table = tableSchema({
-  name: 'tasks',
-  columns: [
-    { name: 'name', type: 'string' },
-    { name: 'position', type: 'number' },
-    { name: 'is_done', type: 'boolean' },
-    { name: 'project_id', type: 'string', isOptional: true },
-  ],
+const table = defineTable('tasks', {
+  name: c.string(),
+  position: c.number(),
+  is_done: c.boolean(),
+  project_id: c.string().optional(),
 })
 const schema = appSchema({ version: 1, tables: [table] })
 

@@ -12,7 +12,12 @@
  * missing migration path is an explicit error, never a silent reset.
  */
 import type { SqliteDriver } from '../driver/SqliteDriver'
-import type { AppSchema } from '../schema/index'
+import type {
+  AppSchema,
+  ColumnName,
+  ColumnsSpec,
+  TableSchema,
+} from '../schema/index'
 import {
   stepsForMigration,
   type SchemaMigrations,
@@ -28,7 +33,13 @@ import {
 import { encodeBatch, type BatchOperation } from './encodeBatch'
 import { LocalStorage } from './LocalStorage'
 import { WorkQueue } from './WorkQueue'
-import type { ModelClass } from '../model/Model'
+import type {
+  ColumnsOf,
+  Model,
+  ModelClass,
+  TypedModel,
+  TypedModelClass,
+} from '../model/Model'
 import type { RawRecord } from '../rawRecord/index'
 
 export interface DatabaseOptions {
@@ -115,12 +126,39 @@ export class Database {
     return database
   }
 
-  get<M = RawRecord>(table: string): Collection<M> {
+  /**
+   * The collection for a table. Pass a model class or a table definition
+   * for a typed collection (records, Q column names); the string form is
+   * for dynamic/internal access and is untyped.
+   */
+  get<
+    MC extends {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      new (...args: any[]): Model
+      readonly table: string
+      readonly schema: TableSchema<ColumnsSpec>
+    },
+  >(
+    modelClass: MC,
+  ): Collection<InstanceType<MC>, ColumnsOf<MC>>
+  get<T extends TableSchema<ColumnsSpec>>(
+    table: T,
+  ): Collection<TypedModel<T>, ColumnName<T>>
+  get<M = RawRecord>(table: string): Collection<M>
+  get(
+    arg: string | TableSchema | TypedModelClass<TableSchema<ColumnsSpec>>,
+  ): Collection<unknown, string> {
+    const table =
+      typeof arg === 'string'
+        ? arg
+        : typeof arg === 'function'
+          ? arg.table
+          : arg.name
     const collection = this.collections.get(table)
     if (!collection) {
       throw new Error(`No collection for table '${table}' — is it in the schema?`)
     }
-    return collection as Collection<M>
+    return collection as Collection<unknown, string>
   }
 
   /** Run exclusive write work. Mutations are only allowed inside. */

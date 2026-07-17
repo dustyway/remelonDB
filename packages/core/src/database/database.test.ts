@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { WorkQueue } from './WorkQueue'
 import { encodeBatch } from './encodeBatch'
-import { appSchema, tableSchema } from '../schema/index'
+import { appSchema, column as c, table as defineTable } from '../schema/index'
 import { markAsChanged, sanitizedRaw, type RawRecord } from '../rawRecord/index'
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -51,12 +51,9 @@ describe('encodeBatch', () => {
   const schema = appSchema({
     version: 1,
     tables: [
-      tableSchema({
-        name: 'tasks',
-        columns: [
-          { name: 'name', type: 'string' },
-          { name: 'is_done', type: 'boolean' },
-        ],
+      defineTable('tasks', {
+        name: c.string(),
+        is_done: c.boolean(),
       }),
     ],
   })
@@ -114,12 +111,9 @@ describe('encodeBatch', () => {
 })
 
 describe('markAsChanged', () => {
-  const table = tableSchema({
-    name: 't',
-    columns: [
-      { name: 'a', type: 'string' },
-      { name: 'b', type: 'string' },
-    ],
+  const table = defineTable('t', {
+    a: c.string(),
+    b: c.string(),
   })
 
   it('accumulates the changed-column set on synced records', () => {

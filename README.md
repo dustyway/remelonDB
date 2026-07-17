@@ -52,35 +52,26 @@ The full TypeScript side works today, on Node:
 
 ```ts
 import {
-  appSchema, tableSchema, Database, Model, Q, synchronize,
+  appSchema, column as c, table, Database, ModelFor, Q, synchronize,
   type AssociationsMap,
 } from '@remelondb/core'
 import { NodeSqliteDriver } from '@remelondb/driver-node'
 
-const schema = appSchema({
-  version: 1,
-  tables: [
-    tableSchema({
-      name: 'tasks',
-      columns: [
-        { name: 'name', type: 'string' },
-        { name: 'position', type: 'number', isIndexed: true },
-        { name: 'is_done', type: 'boolean' },
-        { name: 'project_id', type: 'string', isOptional: true },
-      ],
-    }),
-  ],
+const tasks = table('tasks', {
+  name: c.string(),
+  position: c.number().indexed(),
+  is_done: c.boolean(),
+  project_id: c.string().optional(),
 })
 
-class Task extends Model {
-  static override readonly table = 'tasks'
+const schema = appSchema({ version: 1, tables: [tasks] })
+
+class Task extends ModelFor(tasks) {
   static override readonly associations = {
     projects: { type: 'belongs_to', key: 'project_id' },
   } satisfies AssociationsMap
-
-  declare name: string        // type-only; accessors are schema-generated
-  declare position: number
-  declare is_done: boolean
+  // no field declarations: name/position/is_done/project_id are typed
+  // from the table definition; accessors are schema-generated
 }
 
 const db = await Database.open({
@@ -91,12 +82,12 @@ const db = await Database.open({
 })
 
 const task = await db.write(() =>
-  db.get<Task>('tasks').create({ name: 'try it', position: 1 }),
+  db.get(Task).create({ name: 'try it', position: 1 }),
 )
 await db.write(() => task.update(() => { task.is_done = true }))
 
 const unsubscribe = db
-  .get<Task>('tasks')
+  .get(Task)
   .query(Q.where('is_done', false), Q.sortBy('position'))
   .observe((open) => console.log('open tasks:', open.length))
 
@@ -110,7 +101,7 @@ packages/
   core/          @remelondb/core — everything platform-independent
     src/driver/       the SqliteDriver seam (types only)
     src/query/        query AST, Q builders, Q → SQL compiler
-    src/schema/       appSchema/tableSchema, migrations, DDL compiler
+    src/schema/       appSchema/table/column builders, migrations, DDL compiler
     src/rawRecord/    sanitizedRaw, dirty tracking
     src/observation/  the in-memory matcher
     src/database/     Database, Collection, Query, WorkQueue, RecordCache

@@ -1,9 +1,15 @@
 /**
- * Schema definitions. Columns are typeless in SQL (SQLite dynamic typing,
- * matching upstream); the declared ColumnType drives JS-side sanitization
- * and migration backfill defaults. Every table implicitly gets the standard
- * columns `id` (primary key), `_status` and `_changed` (sync dirty
- * tracking) — user schemas cannot redeclare them.
+ * Schema definitions (docs/schema-inferred-types.md). Columns are typeless
+ * in SQL (SQLite dynamic typing, matching upstream); the declared
+ * ColumnType drives JS-side sanitization and migration backfill defaults.
+ * Every table implicitly gets the standard columns `id` (primary key),
+ * `_status` and `_changed` (sync dirty tracking) — user schemas cannot
+ * redeclare them.
+ *
+ * A schema literal is the single source of truth: record types
+ * (InferRecord), column-name checking in Q, and collection types are all
+ * derived from the `table()` definition. The builders produce plain
+ * ColumnSchema data; everything type-level is phantom and erased.
  */
 import { ensureName } from '../utils/checkName'
 import { deepFreeze } from '../utils/deepFreeze'
@@ -17,16 +23,85 @@ export interface ColumnSchema {
   readonly isIndexed?: boolean
 }
 
-export interface TableSchema {
+/**
+ * A column under construction: what `column.string()` etc. return, before
+ * `table()` attaches the name. Carries its type and optionality in the
+ * type system for inference; `optional()`/`indexed()` return new frozen
+ * values (builders are immutable).
+ */
+export interface ColumnDef<
+  T extends ColumnType = ColumnType,
+  Optional extends boolean = boolean,
+> {
+  readonly type: T
+  readonly isOptional: Optional
+  readonly isIndexed: boolean
+  optional(): ColumnDef<T, true>
+  indexed(): ColumnDef<T, Optional>
+}
+
+function columnDef<T extends ColumnType, Optional extends boolean>(
+  type: T,
+  isOptional: Optional,
+  isIndexed: boolean,
+): ColumnDef<T, Optional> {
+  return Object.freeze({
+    type,
+    isOptional,
+    isIndexed,
+    optional(): ColumnDef<T, true> {
+      return columnDef(type, true, isIndexed)
+    },
+    indexed(): ColumnDef<T, Optional> {
+      return columnDef(type, isOptional, true)
+    },
+  })
+}
+
+/** The column builders: `column.string()`, `column.number()`, `column.boolean()`. */
+export const column = {
+  string: (): ColumnDef<'string', false> => columnDef('string', false, false),
+  number: (): ColumnDef<'number', false> => columnDef('number', false, false),
+  boolean: (): ColumnDef<'boolean', false> => columnDef('boolean', false, false),
+}
+
+/** The columns map a `table()` definition takes. */
+export type ColumnsSpec = {
+  readonly [name: string]: ColumnDef<ColumnType, boolean>
+}
+
+export interface TableSchema<Cols extends ColumnsSpec = ColumnsSpec> {
   readonly name: string
   readonly columns: { readonly [name: string]: ColumnSchema }
   readonly columnArray: readonly ColumnSchema[]
+  /** Type-only inference carrier; always undefined at runtime. */
+  readonly $cols?: Cols
 }
 
 export interface AppSchema {
   readonly version: number
   readonly tables: { readonly [name: string]: TableSchema }
 }
+
+/** The record type a table's rows have in app code. */
+export type InferRecord<T extends TableSchema<ColumnsSpec>> =
+  T extends TableSchema<infer Cols>
+    ? { readonly id: string } & {
+        [K in keyof Cols & string]:
+          | (Cols[K] extends ColumnDef<infer CT, boolean>
+              ? CT extends 'string'
+                ? string
+                : CT extends 'number'
+                  ? number
+                  : boolean
+              : never)
+          | (Cols[K] extends ColumnDef<ColumnType, true> ? null : never)
+      }
+    : never
+
+/** The column names Q clauses may reference for a table (includes `id`). */
+export type ColumnName<T extends TableSchema<ColumnsSpec>> =
+  T extends TableSchema<infer Cols> ? (keyof Cols & string) | 'id' : string
 
 const RESERVED_COLUMNS = new Set([
   'id',
@@ -57,29 +132,53 @@ export function validateColumnSchema(column: ColumnSchema): ColumnSchema {
   return column
 }
 
-export function tableSchema(spec: {
-  name: string
-  columns: readonly ColumnSchema[]
-}): TableSchema {
-  ensureName(spec.name, 'table')
-  if (spec.name === 'local_storage' || spec.name.startsWith('sqlite_')) {
-    throw new Error(`Table name '${spec.name}' is reserved`)
+/** @internal Shared by table() and migrations' createTable. */
+export function buildTableSchema(
+  name: string,
+  columnArray: readonly ColumnSchema[],
+): TableSchema {
+  ensureName(name, 'table')
+  if (name === 'local_storage' || name.startsWith('sqlite_')) {
+    throw new Error(`Table name '${name}' is reserved`)
   }
   const columns: { [name: string]: ColumnSchema } = {}
-  for (const column of spec.columns) {
+  for (const column of columnArray) {
     validateColumnSchema(column)
     if (columns[column.name]) {
       throw new Error(
-        `Table '${spec.name}' declares column '${column.name}' more than once`,
+        `Table '${name}' declares column '${column.name}' more than once`,
       )
     }
     columns[column.name] = column
   }
-  return deepFreeze({
-    name: spec.name,
-    columns,
-    columnArray: [...spec.columns],
-  })
+  return deepFreeze({ name, columns, columnArray: [...columnArray] })
+}
+
+/** @internal Convert a builders map to plain ColumnSchema data. */
+export function columnsFromSpec(spec: ColumnsSpec): ColumnSchema[] {
+  return Object.entries(spec).map(([name, def]) => ({
+    name,
+    type: def.type,
+    isOptional: def.isOptional,
+    isIndexed: def.isIndexed,
+  }))
+}
+
+/**
+ * Define a table. The definition is the single source of truth: pass the
+ * returned object to appSchema, to Database.get, and to ModelFor.
+ *
+ *   const tasks = table('tasks', {
+ *     name: column.string(),
+ *     position: column.number().indexed(),
+ *     project_id: column.string().optional(),
+ *   })
+ */
+export function table<const Cols extends ColumnsSpec>(
+  name: string,
+  cols: Cols,
+): TableSchema<Cols> {
+  return buildTableSchema(name, columnsFromSpec(cols)) as TableSchema<Cols>
 }
 
 export function appSchema(spec: {

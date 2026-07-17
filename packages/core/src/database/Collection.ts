@@ -40,7 +40,13 @@ export type CollectionChangeSet = readonly CollectionChange[]
 
 export type Unsubscribe = () => void
 
-export class Collection<M = RawRecord> {
+/**
+ * M is the record type handed out (a typed Model when bound, RawRecord
+ * otherwise); C is the union of legal Q column names for this table.
+ * Both flow from Database.get's overloads; C defaults to string so
+ * dynamically-obtained collections accept any column.
+ */
+export class Collection<M = RawRecord, C extends string = string> {
   readonly cache = new RecordCache()
   private subscribers: Array<(changes: CollectionChangeSet) => void> = []
   private modelClass: ModelClass | null = null
@@ -81,8 +87,11 @@ export class Collection<M = RawRecord> {
     return model as M
   }
 
-  query(...clauses: Clause[]): Query<M> {
-    return new Query(this, Q.buildQueryDescription(clauses))
+  query(...clauses: Clause<C>[]): Query<M> {
+    return new Query(
+      this as Collection<M>,
+      Q.buildQueryDescription(clauses as readonly Clause[]),
+    )
   }
 
   /** @internal The cached raw for an id, loaded from storage if needed. */
@@ -91,7 +100,8 @@ export class Collection<M = RawRecord> {
     if (cached) {
       return cached
     }
-    const raws = await this.query(Q.where('id', id)).fetchRaws()
+    // 'id' is in every table's ColumnName union, but C is generic here
+    const raws = await this.query(Q.where('id', id) as Clause<C>).fetchRaws()
     const raw = raws[0]
     if (!raw) {
       throw new Error(`Record '${this.table}/${id}' not found`)

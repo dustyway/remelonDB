@@ -204,22 +204,32 @@ function ensureConditions(
   return clauses as readonly Where[]
 }
 
-export function where(
-  left: string,
+export function where<C extends string>(
+  left: C,
   valueOrComparisonArg: Value | Comparison,
-): WhereDescription {
+): WhereDescription<C> {
   const comp = isComparison(valueOrComparisonArg)
     ? valueOrComparisonArg
     : eq(ensureValue(valueOrComparisonArg))
-  return { type: 'where', left: ensureName(left, 'column'), comparison: comp }
+  return {
+    type: 'where',
+    left: ensureName(left, 'column') as C,
+    comparison: comp,
+  }
 }
 
-export function and(...conditions: Where[]): And {
-  return { type: 'and', conditions: ensureConditions(conditions, 'Q.and') }
+export function and<C extends string>(...conditions: Where<C>[]): And<C> {
+  return {
+    type: 'and',
+    conditions: ensureConditions(conditions, 'Q.and') as readonly Where<C>[],
+  }
 }
 
-export function or(...conditions: Where[]): Or {
-  return { type: 'or', conditions: ensureConditions(conditions, 'Q.or') }
+export function or<C extends string>(...conditions: Where<C>[]): Or<C> {
+  return {
+    type: 'or',
+    conditions: ensureConditions(conditions, 'Q.or') as readonly Where<C>[],
+  }
 }
 
 export function on(
@@ -253,13 +263,16 @@ export function on(table: string, ...args: readonly unknown[]): On {
 export const asc: SortOrder = 'asc'
 export const desc: SortOrder = 'desc'
 
-export function sortBy(sortColumn: string, sortOrder: SortOrder = asc): SortBy {
+export function sortBy<C extends string>(
+  sortColumn: C,
+  sortOrder: SortOrder = asc,
+): SortBy<C> {
   if (sortOrder !== 'asc' && sortOrder !== 'desc') {
     throw new Error(`Q.sortBy: invalid sort order '${String(sortOrder)}'`)
   }
   return {
     type: 'sortBy',
-    sortColumn: ensureName(sortColumn, 'column'),
+    sortColumn: ensureName(sortColumn, 'column') as C,
     sortOrder,
   }
 }

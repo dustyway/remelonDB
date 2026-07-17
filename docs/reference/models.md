@@ -8,31 +8,35 @@ wrap the cached raws one-to-one.
 ## Defining a model
 
 ```ts
-import { Model, type AssociationsMap } from '@remelondb/core'
+import { column as c, table, ModelFor, type AssociationsMap } from '@remelondb/core'
 
-class Task extends Model {
-  static override readonly table = 'tasks'
+const tasks = table('tasks', {
+  name: c.string(),
+  is_done: c.boolean(),
+  project_id: c.string().optional(),
+  created_at: c.number(),
+  updated_at: c.number(),
+})
+
+class Task extends ModelFor(tasks) {
   static override readonly associations = {
     projects: { type: 'belongs_to', key: 'project_id' },
     comments: { type: 'has_many', foreignKey: 'task_id' },
   } satisfies AssociationsMap
-
-  declare name: string
-  declare is_done: boolean
-  declare project_id: string | null
-  declare created_at: number
-  declare updated_at: number
+  // no field declarations: name/is_done/project_id/created_at/updated_at
+  // are typed from the table definition
 }
 
 const db = await Database.open({ ..., modelClasses: [Task] })
 ```
 
-**No decorators.** Field accessors are generated on the class prototype
-from the table schema when the class is bound. Subclass fields are
-`declare`-only (type-level, no runtime emit — a plain `name!: string` field
-would shadow the generated accessor with `undefined`). Property names equal
-column names. A column that collides with the Model API (`update`, `id`,
-`observe`, …) fails `Database.open` with a clear error.
+**No decorators, no field declarations.** `ModelFor(tasks)` binds the class
+to its table (`static table` is set by the factory; subclasses don't write
+it) and types every instance field from the table definition. Field
+accessors are generated on the class prototype from the table schema when
+the class is bound. Property names equal column names. A column that
+collides with the Model API (`update`, `id`, `observe`, …) fails
+`Database.open` with a clear error.
 
 Booleans read as real `true`/`false`, numbers as numbers, optional columns
 as `T | null` — whatever `sanitizedRaw` guarantees
@@ -41,7 +45,7 @@ as `T | null` — whatever `sanitizedRaw` guarantees
 ## Reading and writing
 
 ```ts
-const task = await db.get<Task>('tasks').find('t1')
+const task = await db.get(Task).find('t1')
 task.name            // read anywhere
 task.name = 'x'      // ❌ throws — records are read-only outside update()
 
@@ -72,7 +76,7 @@ a model in UI state and observing it is therefore safe and cheap.
 
 ```ts
 // 1. Q.on joins in queries (compiler reads associations from the class)
-db.get<Task>('tasks').query(Q.on('projects', 'is_archived', false))
+db.get(Task).query(Q.on('projects', 'is_archived', false))
 
 // 2. belongs_to navigation
 const project = await task.related<Project>('projects')   // Model | null

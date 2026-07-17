@@ -26,73 +26,62 @@ updates after each review; reviews are append-only facts about what
 happened.
 
 ```js
-import { appSchema, tableSchema } from '@remelondb/core'
+import { appSchema, column as c, table } from '@remelondb/core'
 
-const schema = appSchema({
-  version: 1,
-  tables: [
-    tableSchema({
-      name: 'decks',
-      columns: [
-        { name: 'title', type: 'string' },
-        { name: 'created_at', type: 'number' },
-        { name: 'updated_at', type: 'number' },
-      ],
-    }),
-    tableSchema({
-      name: 'cards',
-      columns: [
-        { name: 'deck_id', type: 'string', isIndexed: true },
-        { name: 'front', type: 'string' },
-        { name: 'back', type: 'string' },
-        { name: 'due_at', type: 'number', isIndexed: true },
-        { name: 'created_at', type: 'number' },
-        { name: 'updated_at', type: 'number' },
-      ],
-    }),
-    tableSchema({
-      name: 'reviews',
-      columns: [
-        { name: 'card_id', type: 'string', isIndexed: true },
-        { name: 'rating', type: 'number' },
-        { name: 'reviewed_at', type: 'number' },
-      ],
-    }),
-  ],
+const decks = table('decks', {
+  title: c.string(),
+  created_at: c.number(),
+  updated_at: c.number(),
 })
+
+const cards = table('cards', {
+  deck_id: c.string().indexed(),
+  front: c.string(),
+  back: c.string(),
+  due_at: c.number().indexed(),
+  created_at: c.number(),
+  updated_at: c.number(),
+})
+
+const reviews = table('reviews', {
+  card_id: c.string().indexed(),
+  rating: c.number(),
+  reviewed_at: c.number(),
+})
+
+const schema = appSchema({ version: 1, tables: [decks, cards, reviews] })
 ```
 
 `created_at`/`updated_at` are auto-stamped on create and update because
-they are declared. `isIndexed` on `deck_id` and `due_at` backs the
+they are declared. `.indexed()` on `deck_id` and `due_at` backs the
 queries this app runs constantly. Details: [schema
 reference](reference/schema.md).
 
 ## 3. Define the models
 
-Models give records typed accessors and association helpers. Accessors
-are generated from the schema when the class is bound, so the class
-body only declares associations (and, in TypeScript, `declare` fields).
+Models give records typed accessors and association helpers. Each class
+extends `ModelFor(tableObject)`, which binds it to its table and (in
+TypeScript) types every field from the table definition. Accessors are
+generated from the schema when the class is bound, so the class body
+only declares associations.
 
 ```js
-import { Model } from '@remelondb/core'
+import { ModelFor } from '@remelondb/core'
 
-class Deck extends Model {
-  static table = 'decks'
+class Deck extends ModelFor(decks) {
   static associations = {
     cards: { type: 'has_many', foreignKey: 'deck_id' },
   }
 }
 
-class Card extends Model {
-  static table = 'cards'
+class Card extends ModelFor(cards) {
   static associations = {
     decks: { type: 'belongs_to', key: 'deck_id' },
     reviews: { type: 'has_many', foreignKey: 'card_id' },
   }
 }
 
-class Review extends Model {
-  static table = 'reviews'
+class Review extends ModelFor(reviews) {
   static associations = {
     cards: { type: 'belongs_to', key: 'card_id' },
   }
@@ -124,7 +113,7 @@ atomic batch:
 
 ```js
 const deck = await db.write(() =>
-  db.get('decks').create({ title: 'Spanish basics' }),
+  db.get(Deck).create({ title: 'Spanish basics' }),
 )
 
 const FRONTS = [
@@ -133,7 +122,7 @@ const FRONTS = [
 ]
 await db.write(async () => {
   const ops = FRONTS.map(([front, back]) =>
-    db.get('cards').prepareCreate({
+    db.get(Card).prepareCreate({
       deck_id: deck.id, front, back, due_at: Date.now(),
     }),
   )
@@ -152,7 +141,7 @@ is "cards of this deck that are due, oldest first":
 ```js
 import { Q } from '@remelondb/core'
 
-const dueCards = await db.get('cards').query(
+const dueCards = await db.get(Card).query(
   Q.where('deck_id', deck.id),
   Q.where('due_at', Q.lte(Date.now())),
   Q.sortBy('due_at'),
@@ -170,7 +159,7 @@ Observation keeps UI in step with the database without re-querying by
 hand. A due-count badge:
 
 ```js
-const unsubscribe = db.get('cards').query(
+const unsubscribe = db.get(Card).query(
   Q.where('due_at', Q.lte(Date.now())),
 ).observeCount((n) => setBadge(n))
 ```
@@ -189,7 +178,7 @@ const card = dueCards[0]
 const DAY = 24 * 60 * 60 * 1000
 
 await db.write(async () => {
-  await db.get('reviews').create({
+  await db.get(Review).create({
     card_id: card.id, rating: 3, reviewed_at: Date.now(),
   })
   await card.update(() => { card.due_at = Date.now() + DAY })
@@ -206,7 +195,7 @@ Associations from section 3 come with helpers:
 ```js
 const cardsInDeck = await deck.children('cards').fetch()
 const parent = await card.related('decks')          // the Deck, or null
-const deckReviews = await db.get('reviews').query(
+const deckReviews = await db.get(Review).query(
   Q.on('cards', 'deck_id', deck.id),                // join through cards
 ).fetch()
 ```
@@ -218,7 +207,7 @@ schema version, add the column to the table schema, and describe the
 step in a migration so existing installs upgrade in place:
 
 ```js
-import { schemaMigrations, addColumns } from '@remelondb/core'
+import { schemaMigrations, addColumns, column as c } from '@remelondb/core'
 
 const migrations = schemaMigrations({
   migrations: [
@@ -227,7 +216,7 @@ const migrations = schemaMigrations({
       steps: [
         addColumns({
           table: 'cards',
-          columns: [{ name: 'notes', type: 'string', isOptional: true }],
+          columns: { notes: c.string().optional() },
         }),
       ],
     },

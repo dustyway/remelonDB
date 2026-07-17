@@ -6,28 +6,26 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   appSchema,
+  column,
   canEncodeMatcher,
   encodeMatcher,
   encodeQuery,
   encodeSchema,
   Q,
   sanitizedRaw,
-  tableSchema,
+  table,
   type Clause,
   type RawRecord,
   type SqliteDriver,
 } from '@remelondb/core'
 import type { ResolvedOptions } from './index'
 
-const itemsTable = tableSchema({
-  name: 'items',
-  columns: [
-    { name: 'name', type: 'string' },
-    { name: 'position', type: 'number' },
-    { name: 'is_done', type: 'boolean' },
-    { name: 'project_id', type: 'string', isOptional: true },
-    { name: 'score', type: 'number', isOptional: true },
-  ],
+const itemsTable = table('items', {
+  name: column.string(),
+  position: column.number(),
+  is_done: column.boolean(),
+  project_id: column.string().optional(),
+  score: column.number().optional(),
 })
 const schema = appSchema({ version: 1, tables: [itemsTable] })
 

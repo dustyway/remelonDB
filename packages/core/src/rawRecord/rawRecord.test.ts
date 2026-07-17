@@ -1,17 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { tableSchema } from '../schema/index'
+import { column as c, table as defineTable } from '../schema/index'
 import { nullValue, sanitizedRaw, setRawSanitized } from './index'
 import { randomId } from '../utils/randomId'
 
-const table = tableSchema({
-  name: 'tasks',
-  columns: [
-    { name: 'name', type: 'string' },
-    { name: 'position', type: 'number' },
-    { name: 'is_done', type: 'boolean' },
-    { name: 'project_id', type: 'string', isOptional: true },
-    { name: 'rating', type: 'number', isOptional: true },
-  ],
+const table = defineTable('tasks', {
+  name: c.string(),
+  position: c.number(),
+  is_done: c.boolean(),
+  project_id: c.string().optional(),
+  rating: c.number().optional(),
 })
 
 describe('sanitizedRaw', () => {

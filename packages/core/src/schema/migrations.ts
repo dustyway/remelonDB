@@ -8,9 +8,11 @@
  * caller must treat that as an explicit error or opt into a reset.
  */
 import {
-  tableSchema,
+  buildTableSchema,
+  columnsFromSpec,
   validateColumnSchema,
   type ColumnSchema,
+  type ColumnsSpec,
   type TableSchema,
 } from './index'
 import { ensureName } from '../utils/checkName'
@@ -41,21 +43,26 @@ export interface SchemaMigrations {
 
 export function createTable(spec: {
   name: string
-  columns: readonly ColumnSchema[]
+  columns: ColumnsSpec
 }): MigrationStep {
-  return { type: 'create_table', schema: tableSchema(spec) }
+  return {
+    type: 'create_table',
+    schema: buildTableSchema(spec.name, columnsFromSpec(spec.columns)),
+  }
 }
 
 export function addColumns(spec: {
   table: string
-  columns: readonly ColumnSchema[]
+  columns: ColumnsSpec
 }): MigrationStep {
   ensureName(spec.table, 'table')
-  if (spec.columns.length === 0) {
+  const columns = columnsFromSpec(spec.columns)
+  if (columns.length === 0) {
     throw new Error('addColumns: at least one column is required')
   }
-  spec.columns.forEach(validateColumnSchema)
-  return { type: 'add_columns', table: spec.table, columns: [...spec.columns] }
+  // buildTableSchema-level checks without building a table: validate each
+  columns.forEach(validateColumnSchema)
+  return { type: 'add_columns', table: spec.table, columns }
 }
 
 export function unsafeExecuteSql(sql: string): MigrationStep {

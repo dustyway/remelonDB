@@ -2,24 +2,21 @@
  * The Model layer: typed, ergonomic record classes over the raw-record
  * engine. Unlike upstream's Babel-decorator API, field accessors are
  * generated on the prototype from the table schema when a model class is
- * bound (Database.open modelClasses) — subclasses declare fields
- * type-only:
+ * bound (Database.open modelClasses), and field *types* are inferred from
+ * the table definition via the ModelFor factory
+ * (docs/schema-inferred-types.md) — nothing is declared by hand:
  *
- *   class Task extends Model {
- *     static override table = 'tasks'
+ *   class Task extends ModelFor(tasks) {
  *     static override associations = {
  *       projects: { type: 'belongs_to', key: 'project_id' },
  *       comments: { type: 'has_many', foreignKey: 'task_id' },
  *     } satisfies AssociationsMap
- *     declare name: string
- *     declare position: number
  *   }
  *
- * `declare` emits no runtime field, so the generated accessors work; a
- * hand-written getter/setter on the class takes precedence (the generator
- * skips existing properties... it throws, actually — see
- * defineModelAccessors — hand-written accessors must use a different name
- * than the column and read this._raw directly).
+ * The generated accessors land on the prototype; a hand-written
+ * getter/setter with the same name as a column throws at bind time (see
+ * defineModelAccessors) — use a different name and read this._raw
+ * directly.
  *
  * Writes only work inside the update() builder; they flow through the
  * collection's sanitize + dirty-tracking path.
@@ -27,6 +24,12 @@
 import type { RawRecord, SyncStatus } from '../rawRecord/index'
 import type { Collection, Unsubscribe } from '../database/Collection'
 import type { Query } from '../database/Query'
+import type {
+  ColumnName,
+  ColumnsSpec,
+  InferRecord,
+  TableSchema,
+} from '../schema/index'
 import * as Q from '../query/Q'
 
 export type AssociationsMap = {
@@ -36,14 +39,65 @@ export type AssociationsMap = {
 }
 
 export interface ModelClass<M extends Model = Model> {
-  new (collection: Collection<M>, raw: RawRecord): M
+  // Collection<any>: precise collection typing here creates variance
+  // knots between Model subclasses and the binding machinery; the
+  // table↔class pairing is checked at runtime by Database.open.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  new (collection: Collection<any>, raw: RawRecord): M
   readonly table: string
   readonly associations?: AssociationsMap
+  readonly schema?: TableSchema
 }
+
+/**
+ * A Model whose fields are inferred from a table definition: the Model
+ * behaviors plus mutable properties for every schema column (writes still
+ * only work inside update()). `id` comes from Model and stays readonly.
+ */
+export type TypedModel<T extends TableSchema<ColumnsSpec>> = Model &
+  Omit<InferRecord<T>, 'id'>
+
+export interface TypedModelClass<T extends TableSchema<ColumnsSpec>> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  new (collection: Collection<any>, raw: RawRecord): TypedModel<T>
+  readonly table: string
+  readonly schema: T
+  readonly associations?: AssociationsMap
+}
+
+/**
+ * The typed model base-class factory (docs/schema-inferred-types.md):
+ *
+ *   const tasks = table('tasks', { name: column.string(), ... })
+ *   class Task extends ModelFor(tasks) {
+ *     static override associations = { ... } satisfies AssociationsMap
+ *   }
+ *
+ * Field types come from the table definition; there is nothing to
+ * declare and nothing that can drift. (A plain generic class cannot type
+ * its instance fields from a type parameter, hence the factory.)
+ */
+export function ModelFor<T extends TableSchema<ColumnsSpec>>(
+  schema: T,
+): TypedModelClass<T> {
+  class Bound extends Model {
+    static override readonly table = schema.name
+    static override readonly schema = schema
+  }
+  return Bound as unknown as TypedModelClass<T>
+}
+
+/** The Q column names legal for a model class (used by Database.get). */
+export type ColumnsOf<MC> = MC extends { readonly schema: infer T }
+  ? T extends TableSchema<ColumnsSpec>
+    ? ColumnName<T>
+    : string
+  : string
 
 export class Model {
   static readonly table: string = ''
   static readonly associations?: AssociationsMap
+  static readonly schema?: TableSchema
 
   /** @internal Non-null only while an update() builder runs. */
   _pendingFields: { [column: string]: unknown } | null = null

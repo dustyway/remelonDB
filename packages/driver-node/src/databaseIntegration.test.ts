@@ -11,7 +11,8 @@ import {
   Database,
   Q,
   schemaMigrations,
-  tableSchema,
+  column as c,
+  table as defineTable,
   type QueryAssociation,
   type RawRecord,
 } from '@remelondb/core'
@@ -20,18 +21,14 @@ import { NodeSqliteDriver } from './NodeSqliteDriver'
 const schema = appSchema({
   version: 1,
   tables: [
-    tableSchema({
-      name: 'tasks',
-      columns: [
-        { name: 'name', type: 'string' },
-        { name: 'position', type: 'number', isIndexed: true },
-        { name: 'is_done', type: 'boolean' },
-        { name: 'project_id', type: 'string', isOptional: true },
-      ],
+    defineTable('tasks', {
+      name: c.string(),
+      position: c.number().indexed(),
+      is_done: c.boolean(),
+      project_id: c.string().optional(),
     }),
-    tableSchema({
-      name: 'projects',
-      columns: [{ name: 'name', type: 'string' }],
+    defineTable('projects', {
+      name: c.string(),
     }),
   ],
 })
@@ -75,18 +72,15 @@ describe('Database core', () => {
       const schemaV2 = appSchema({
         version: 2,
         tables: [
-          tableSchema({
-            name: 'tasks',
-            columns: [
-              { name: 'name', type: 'string' },
-              { name: 'position', type: 'number', isIndexed: true },
-              { name: 'is_done', type: 'boolean' },
-              { name: 'project_id', type: 'string', isOptional: true },
-              { name: 'priority', type: 'number' },
-            ],
+          defineTable('tasks', {
+            name: c.string(),
+            position: c.number().indexed(),
+            is_done: c.boolean(),
+            project_id: c.string().optional(),
+            priority: c.number(),
           }),
           schema.tables['projects']!,
-          tableSchema({ name: 'tags', columns: [{ name: 'label', type: 'string' }] }),
+          defineTable('tags', { label: c.string() }),
         ],
       })
       const migrations = schemaMigrations({
@@ -96,7 +90,7 @@ describe('Database core', () => {
             steps: [
               addColumns({
                 table: 'tasks',
-                columns: [{ name: 'priority', type: 'number' }],
+                columns: { priority: c.number() },
               }),
             ],
           },

@@ -8,10 +8,11 @@ import { describe, expect, it } from 'vitest'
 import {
   appSchema,
   Database,
-  Model,
+  ModelFor,
   Q,
   synchronize,
-  tableSchema,
+  column as c,
+  table as defineTable,
 } from '@remelondb/core'
 import { serveSqliteWorker } from './server'
 import { createChannel, createInProcessDriver } from './testing'
@@ -28,24 +29,13 @@ describe('web driver specifics', () => {
 })
 
 describe('full stack on the web driver', () => {
-  const schema = appSchema({
-    version: 1,
-    tables: [
-      tableSchema({
-        name: 'tasks',
-        columns: [
-          { name: 'name', type: 'string' },
-          { name: 'is_done', type: 'boolean' },
-        ],
-      }),
-    ],
+  const tasksTable = defineTable('tasks', {
+    name: c.string(),
+    is_done: c.boolean(),
   })
+  const schema = appSchema({ version: 1, tables: [tasksTable] })
 
-  class Task extends Model {
-    static override readonly table = 'tasks'
-    declare name: string
-    declare is_done: boolean
-  }
+  class Task extends ModelFor(tasksTable) {}
 
   it('Database + models + observation + sync work end to end', async () => {
     const db = await Database.open({
@@ -56,13 +46,13 @@ describe('full stack on the web driver', () => {
     })
 
     const emissions: Task[][] = []
-    db.get<Task>('tasks')
+    db.get(Task)
       .query(Q.where('is_done', false))
       .observe((records) => emissions.push(records))
     await new Promise((resolve) => setTimeout(resolve, 20)) // initial fetch
 
     const task = await db.write(() =>
-      db.get<Task>('tasks').create({ id: 't1', name: 'web works', is_done: false }),
+      db.get(Task).create({ id: 't1', name: 'web works', is_done: false }),
     )
     expect(task.name).toBe('web works')
     await db.write(() => task.update(() => (task.is_done = true)))

@@ -14,7 +14,9 @@ interface RawRecord {
 }
 ```
 
-## The trust boundary: `sanitizedRaw(dirty, tableSchema)`
+## The trust boundary: `sanitizedRaw(dirty, table)`
+
+The second argument is a `TableSchema` — the object `table()` returns.
 
 Input is an untrusted `DirtyRaw` — an adapter row, a sync payload, user
 data. Output is a RawRecord where:

@@ -25,30 +25,21 @@ code written against core behaves identically on all of them.
 
 ```ts
 import {
-  appSchema, tableSchema, Database, Model, Q, synchronize,
-  type AssociationsMap,
+  appSchema, column as c, table, Database, ModelFor, Q, synchronize,
 } from '@remelondb/core'
 import { NodeSqliteDriver } from '@remelondb/driver-node'
 
-const schema = appSchema({
-  version: 1,
-  tables: [
-    tableSchema({
-      name: 'tasks',
-      columns: [
-        { name: 'name', type: 'string' },
-        { name: 'position', type: 'number', isIndexed: true },
-        { name: 'is_done', type: 'boolean' },
-      ],
-    }),
-  ],
+const tasks = table('tasks', {
+  name: c.string(),
+  position: c.number().indexed(),
+  is_done: c.boolean(),
 })
 
-class Task extends Model {
-  static override readonly table = 'tasks'
-  declare name: string        // type-only; accessors are schema-generated
-  declare position: number
-  declare is_done: boolean
+const schema = appSchema({ version: 1, tables: [tasks] })
+
+class Task extends ModelFor(tasks) {
+  // no field declarations: name/position/is_done are typed from the
+  // table definition; accessors are schema-generated
 }
 
 const db = await Database.open({
@@ -59,12 +50,12 @@ const db = await Database.open({
 })
 
 const task = await db.write(() =>
-  db.get<Task>('tasks').create({ name: 'try it', position: 1 }),
+  db.get(Task).create({ name: 'try it', position: 1 }),
 )
 await db.write(() => task.update(() => { task.is_done = true }))
 
 const unsubscribe = db
-  .get<Task>('tasks')
+  .get(Task)
   .query(Q.where('is_done', false), Q.sortBy('position'))
   .observe((open) => console.log('open tasks:', open.length))
 

@@ -68,22 +68,13 @@ writeFileSync(
 )
 writeFileSync(
   join(appDir, 'main.js'),
-  `import { appSchema, tableSchema, Database, Model, Q } from '@remelondb/core'
+  `import { appSchema, column, table, Database, ModelFor, Q } from '@remelondb/core'
 import { WebSqliteDriver } from '@remelondb/driver-web'
 
-const schema = appSchema({
-  version: 1,
-  tables: [
-    tableSchema({
-      name: 'tasks',
-      columns: [{ name: 'name', type: 'string' }],
-    }),
-  ],
-})
+const tasks = table('tasks', { name: column.string() })
+const schema = appSchema({ version: 1, tables: [tasks] })
 
-class Task extends Model {
-  static table = 'tasks'
-}
+class Task extends ModelFor(tasks) {}
 
 const el = document.getElementById('result')
 try {
@@ -93,8 +84,8 @@ try {
     modelClasses: [Task],
     name: 'vite-smoke.db',
   })
-  await db.write(() => db.get('tasks').create({ name: 'from production build' }))
-  const rows = await db.get('tasks').query(Q.where('name', 'from production build')).fetch()
+  await db.write(() => db.get(Task).create({ name: 'from production build' }))
+  const rows = await db.get(Task).query(Q.where('name', 'from production build')).fetch()
   el.textContent = 'SMOKE PASS rows=' + rows.length
 } catch (e) {
   el.textContent = 'SMOKE FAIL: ' + e

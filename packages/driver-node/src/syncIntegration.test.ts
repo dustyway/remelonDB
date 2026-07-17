@@ -10,7 +10,8 @@ import {
   Database,
   hasUnsyncedChanges,
   synchronize,
-  tableSchema,
+  column as c,
+  table as defineTable,
   CURSOR_KEY,
   type DirtyRaw,
   type SyncChanges,
@@ -24,12 +25,9 @@ import { NodeSqliteDriver } from './NodeSqliteDriver'
 const schema = appSchema({
   version: 1,
   tables: [
-    tableSchema({
-      name: 'tasks',
-      columns: [
-        { name: 'name', type: 'string' },
-        { name: 'position', type: 'number' },
-      ],
+    defineTable('tasks', {
+      name: c.string(),
+      position: c.number(),
     }),
   ],
 })

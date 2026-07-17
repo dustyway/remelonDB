@@ -7,9 +7,10 @@ import React, { useEffect, useState } from 'react'
 import { SafeAreaView, ScrollView, StatusBar, StyleSheet, Text } from 'react-native'
 import {
   appSchema,
-  tableSchema,
+  column as c,
+  table,
   Database,
-  Model,
+  ModelFor,
   Q,
 } from '@remelondb/core'
 import { RnSqliteDriver } from '@remelondb/driver-rn'
@@ -124,29 +125,16 @@ async function runSeamTests(push: (r: Result) => void): Promise<void> {
   })
 }
 
-class SmokeTask extends Model {
-  static override readonly table = 'tasks'
-}
-type SmokeTaskFields = SmokeTask & {
-  name: string
-  position: number
-  is_done: boolean
-}
+const tasks = table('tasks', {
+  name: c.string(),
+  position: c.number().indexed(),
+  is_done: c.boolean(),
+})
+
+class SmokeTask extends ModelFor(tasks) {}
 
 async function runCoreTest(push: (r: Result) => void): Promise<void> {
-  const schema = appSchema({
-    version: 1,
-    tables: [
-      tableSchema({
-        name: 'tasks',
-        columns: [
-          { name: 'name', type: 'string' },
-          { name: 'position', type: 'number', isIndexed: true },
-          { name: 'is_done', type: 'boolean' },
-        ],
-      }),
-    ],
-  })
+  const schema = appSchema({ version: 1, tables: [tasks] })
 
   try {
     const cleaner = new RnSqliteDriver()
@@ -159,14 +147,14 @@ async function runCoreTest(push: (r: Result) => void): Promise<void> {
       modelClasses: [SmokeTask],
       name: 'smoke-core.db',
     })
-    const task = (await db.write(() =>
-      db.get<SmokeTask>('tasks').create({ name: 'on device', position: 1 }),
-    )) as SmokeTaskFields
+    const task = await db.write(() =>
+      db.get(SmokeTask).create({ name: 'on device', position: 1 }),
+    )
     await db.write(() => task.update(() => { task.is_done = true }))
-    const done = (await db
-      .get<SmokeTask>('tasks')
+    const done = await db
+      .get(SmokeTask)
       .query(Q.where('is_done', true))
-      .fetch()) as SmokeTaskFields[]
+      .fetch()
     assert(done.length === 1, `done tasks: ${done.length}`)
     assert(done[0].name === 'on device', `name: ${done[0].name}`)
     push({ name: 'core Database end-to-end', ok: true })
