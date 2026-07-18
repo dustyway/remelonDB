@@ -2,8 +2,10 @@
 
 Normative contract between `synchronize()` and a backend, as implemented
 in `@remelondb/core` (`src/sync/`). Rationale and design history live in
-[sync-design.md](sync-design.md); this document is what a server is
-built and tested against. MUST/SHOULD/MAY are used in the RFC sense.
+[sync-design.md](sync-design.md); a formal model with checked
+invariants lives in [sync_model.qnt](sync_model.qnt) (run in CI). This
+document is what a server is built and tested against. MUST/SHOULD/MAY
+are used in the RFC sense.
 
 The protocol is transport-agnostic: `synchronize()` calls injected
 `pullChanges`/`pushChanges` functions and sees only the JSON values
@@ -115,11 +117,18 @@ Semantics:
   without those foreign changes reintroduces the lost-write race
   through the back door. The client applies `changes`, marks synced,
   adopts `cursor` — its own writes never echo.
-- **Degraded mode is legal.** `cursor: null, changes: null` means "the
-  server applied the push but cannot compute the interleave". The
-  client keeps its old cursor; the next pull re-delivers the push echo,
-  which apply absorbs by equality. Correct either way — the fast path
-  is a per-backend upgrade, invisible to app code.
+- **Degraded mode is legal — and sometimes mandatory.** `cursor: null,
+  changes: null` means "the server applied the push but cannot compute
+  the interleave". The client keeps its old cursor; the next pull
+  re-delivers the push echo, which apply absorbs by equality. Correct
+  either way — the fast path is a per-backend upgrade, invisible to app
+  code. A server MUST degrade whenever it cannot compute the interleave
+  *completely* — in particular when the request cursor predates its
+  tombstone/change-log retention floor: the window has lost deletions,
+  a "complete as far as we know" interleave would silently resurrect a
+  deleted record on the client, and the degraded path routes the client
+  into the next pull's `resyncRequired` instead. (Found by the formal
+  model — see sync_model.qnt, `fullPathOk`.)
 
 ## 4. Backend obligations, testable
 
@@ -137,8 +146,9 @@ A conforming backend:
    never with silently incomplete data.
 4. Applies pushes atomically; answers `conflict` when any pushed record
    is stale; applies nothing on conflict.
-5. Never returns a push cursor without the interleaved foreign changes
-   (degraded `null`/`null` is the escape hatch).
+5. Never returns a push cursor without the *complete* interleaved
+   foreign changes (degraded `null`/`null` is the escape hatch, and is
+   mandatory when the request cursor predates the retention floor).
 6. Excludes rejected records' effects entirely; rejection lists name
    ids that exist in the request.
 7. Scopes every response to the authenticated client's data.

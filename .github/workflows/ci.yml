@@ -21,6 +21,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
       - run: pnpm typecheck
+      # The sync protocol's formal model (docs/sync-wire.md): invariants
+      # must hold across 25k simulated traces
+      - run: npx --yes @informalsystems/quint typecheck docs/sync_model.qnt
+      - run: npx --yes @informalsystems/quint run docs/sync_model.qnt --invariant=allInvariants --max-samples=25000 --max-steps=60
 
   # Consume the packed tarballs from a plain Node project — proves the
   # published artifacts (dist exports, workspace-dep rewriting) work for
