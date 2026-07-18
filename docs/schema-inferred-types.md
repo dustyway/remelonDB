@@ -1,5 +1,16 @@
 # Schema-inferred types
 
+In plain words: you write each table once —
+`table('tasks', { name: c.string() })` — and every type in your app
+follows from it. Misspell a column and the compiler complains instead
+of your app silently misbehaving.
+
+**Just want to use it?** The [tutorial](tutorial.md) walks it end to
+end and the [schema reference](reference/schema.md) has the rules. This
+page is the design record — why the API has this shape, what it
+deliberately avoids, what is still open — written for people changing
+the library rather than using it.
+
 Status: implemented. The schema literal is the single source of truth:
 record types, model fields, collection types, and `Q` column checking
 all derive from one `table()` definition. Motivated by matching the
