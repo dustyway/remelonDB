@@ -39,6 +39,19 @@ All work is serialized through one strictly-FIFO queue:
 `db.get(tasks)` (a table object) or `db.get(Task)` (a model class) returns
 the table's typed Collection:
 
+The two forms differ in what the records *are*. Records from a
+collection with a bound model class (listed in `Database.open`'s
+`modelClasses`) are model instances — the `update` builder,
+`markAsDeleted()`, `observe()`, association helpers. Without a bound
+class, records are plain typed rows: fields read fine, but record
+methods do not exist at runtime even though the table-object form's
+types currently claim they do — calling `record.update()` on an unbound
+collection throws. Rule of thumb: bind a model class and use
+`db.get(Model)` whenever you mutate through records; the bare
+table-object form suits read-only access and model-less tables.
+Collection-level CRUD (`collection.update(id, fields)`,
+`collection.markAsDeleted(id)`) works either way.
+
 ```ts
 await db.write(async () => {
   const task = await db.get(Task).create({ name: 'a', position: 1 })
