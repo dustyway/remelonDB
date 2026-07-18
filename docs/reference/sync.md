@@ -18,8 +18,8 @@ await synchronize({
       method: 'POST',
       body: JSON.stringify({ cursor, schemaVersion, migration }),
     })
-    if (response.status === 410) return { resyncRequired: true }
-    return response.json() // { changes, cursor }
+    if (!response.ok) throw new Error(`pull: HTTP ${response.status}`)
+    return response.json() // { changes, cursor } | { resyncRequired: true }
   },
 
   pushChanges: async ({ changes, cursor }) => {
@@ -27,13 +27,20 @@ await synchronize({
       method: 'POST',
       body: JSON.stringify({ changes, cursor }),
     })
-    if (response.status === 409) return { conflict: true }
-    return response.json() // { cursor, changes, rejected? }
+    if (!response.ok) throw new Error(`push: HTTP ${response.status}`)
+    return response.json() // { cursor, changes, rejected? } | { conflict: true }
   },
 })
 ```
 
-Transport is entirely yours — the engine only sees the two functions.
+Transport is entirely yours — the engine only sees the two functions. In
+the canonical HTTP binding ([sync-wire.md](../sync-wire.md)) every
+protocol outcome — including `resyncRequired` and `conflict` — is an
+HTTP 200 with the variant in the body, so the adapters stay this thin;
+transport-level failures (401, 5xx) throw, and the sync reports as
+failed with local state untouched. A server may encode outcomes in
+status codes instead — the adapter then translates, and the engine
+never knows the difference.
 `pushChanges` is optional (pull-only replicas). Also exported:
 `hasUnsyncedChanges(db)`, and the lower-level phases
 (`fetchLocalChanges`, `applyRemoteChanges`, `markLocalChangesAsSynced`)
