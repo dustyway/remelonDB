@@ -1,0 +1,5 @@
+export { createSyncEngine } from './engine'
+export type { SyncEngineOptions, SyncHandlers, TableConfig } from './engine'
+export { createMemoryStore } from './memoryStore'
+export type { MemoryStore } from './memoryStore'
+export type { StoredChange, SyncStore, SyncStoreTx, WireRow } from './store'

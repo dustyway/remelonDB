@@ -1,0 +1,51 @@
+{
+  "name": "@remelondb/server",
+  "version": "0.0.3",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@remelondb/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@remelondb/server-conformance": "workspace:*",
+    "vitest": "^3.2.4"
+  },
+  "license": "MIT",
+  "description": "remelonDB sync backend engine: the wire protocol implemented once above a small storage seam, with an in-memory store and conformance-proven semantics",
+  "keywords": [
+    "remelondb",
+    "watermelondb",
+    "sync",
+    "offline-first",
+    "server",
+    "backend"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dustyway/remelonDB.git",
+    "directory": "packages/server"
+  },
+  "homepage": "https://github.com/dustyway/remelonDB#readme",
+  "bugs": "https://github.com/dustyway/remelonDB/issues",
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsdown",
+    "prepack": "tsdown"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "import": "./dist/index.mjs"
+      }
+    },
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "src",
+    "!src/**/*.test.ts"
+  ]
+}

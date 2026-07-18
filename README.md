@@ -113,6 +113,12 @@ packages/
                  pure C++ TurboModule + bundled SQLite (see its README)
   driver-web/    @remelondb/driver-web — browser driver:
                  SQLite-WASM + OPFS in a Worker (see its README)
+  zod/           @remelondb/zod — shared Zod schemas as the source of
+                 truth: zodTable + sync wire validators
+  server/        @remelondb/server — the sync backend engine over a
+                 storage seam (docs/server-design.md)
+  server-conformance/  @remelondb/server-conformance — the wire spec's
+                 checklist as a runnable suite + in-memory reference
 docs/            design decisions and reference guides — see docs/README.md
 watermelondb-upstream/   reference checkout of upstream (gitignored)
 ```
