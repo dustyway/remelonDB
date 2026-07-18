@@ -1,6 +1,6 @@
 # @remelondb/zod: shared schemas as the single source of truth
 
-Status: design proposal, not implemented. Second step of the plan begun
+Status: implemented (packages/zod). Second step of the plan begun
 in [schema-inferred-types.md](schema-inferred-types.md): that doc made
 the table literal the source of truth *inside* a client; this one lets a
 shared Zod schema be the source of truth *across* a whole stack (server
