@@ -48,6 +48,8 @@ Three concrete failure modes, none caught by the compiler:
   syntax plus a type layer.
 - Keep the door open for the Zod adapter (separate design): a Zod object
   must be mechanically convertible into the same table definitions.
+  (Since built: `zodTable` in [zod-adapter.md](zod-adapter.md) produces
+  identical `TableSchema` output, pinned by test.)
 
 Non-goals: a Drizzle-style chained query builder (the serializable query
 AST is load-bearing for observation and sync and stays); runtime
