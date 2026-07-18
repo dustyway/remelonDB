@@ -53,12 +53,17 @@ end-to-end; every package README checklist is fully ticked.
 The sync protocol has a normative wire contract
 ([docs/sync-wire.md](docs/sync-wire.md)) and a formal Quint model
 checked in CI ([docs/sync_model.qnt](docs/sync_model.qnt)) — and both
-halves ship: the client engine in core, and a backend as
-[`@remelondb/server`](packages/server) (the protocol above a storage
-seam), held to the contract by
-[`@remelondb/server-conformance`](packages/server-conformance).
-[`@remelondb/zod`](packages/zod) derives tables and wire validators
-from shared Zod schemas.
+halves ship. The client engine lives in core. The backend half,
+[`@remelondb/server`](packages/server), is not a hosted service but a
+library you embed in your own Node backend: it hands you plain
+`pull`/`push` functions to wire into two routes, with every protocol
+semantic — cursors, conflict detection, per-record rejection —
+implemented once above an eight-method storage seam. It ships with an
+in-memory store for development and tests; for durable storage you
+implement the seam over your database and prove the adapter with
+[`@remelondb/server-conformance`](packages/server-conformance), the
+wire contract as a runnable suite. [`@remelondb/zod`](packages/zod)
+derives tables and wire validators from shared Zod schemas.
 
 A taste of the API — the same code on every platform, swapping only
 the driver import:
@@ -117,8 +122,10 @@ packages/
                  SQLite-WASM + OPFS in a Worker (see its README)
   zod/           @remelondb/zod — shared Zod schemas as the source of
                  truth: zodTable + sync wire validators
-  server/        @remelondb/server — the sync backend engine over a
-                 storage seam (docs/server-design.md)
+  server/        @remelondb/server — embeddable sync backend engine:
+                 protocol semantics over a storage seam; in-memory
+                 store included, bring a store adapter for persistence
+                 (docs/server-design.md)
   server-conformance/  @remelondb/server-conformance — the wire spec's
                  checklist as a runnable suite + in-memory reference
 docs/            design decisions and reference guides — see docs/README.md
