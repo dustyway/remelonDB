@@ -23,6 +23,11 @@ const schema = appSchema({ version: 1, tables: [tasks] })
   are stored untyped in SQLite (dynamic typing); the declared type drives
   JS-side sanitization (see [records.md](records.md)) and migration
   backfill defaults.
+- Tables can also be **derived from a shared Zod object** instead of
+  written by hand — `zodTable('tasks', TaskSchema)` in
+  [`@remelondb/zod`](../../packages/zod/README.md) produces the identical
+  `TableSchema`, with the record types guaranteed to match `z.infer`
+  ([zod-adapter.md](../zod-adapter.md)).
 - **`.optional()`**: the column may be `null`. Non-optional columns are
   coerced to a type default (`''`/`0`/`false`) rather than null.
 - **`.indexed()`**: creates `create index "…" on "table" ("column")`.
