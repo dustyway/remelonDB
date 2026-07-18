@@ -1,0 +1,57 @@
+name: Release
+
+# Publishes every workspace package to npm via trusted publishing (OIDC)
+# when a v* tag is pushed. Per-package trusted publishers are configured
+# on npmjs.com (docs/releasing.md); no tokens live in this repo.
+# Packages whose tagged version is already on the registry are skipped,
+# so re-runs and first-time-manual publishes are safe.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  id-token: write # OIDC token for npm trusted publishing
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      # trusted publishing needs npm >= 11.5.1
+      - run: npm install -g npm@latest && npm --version
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm typecheck
+      - run: pnpm build
+      - name: Pack and publish (skip versions already on the registry)
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          mkdir -p /tmp/tarballs
+          pnpm -r --filter './packages/*' pack --pack-destination /tmp/tarballs
+          FAIL=0
+          for t in /tmp/tarballs/*.tgz; do
+            PKG=$(tar -xzOf "$t" package/package.json | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).name')
+            VER=$(tar -xzOf "$t" package/package.json | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).version')
+            if [ "$VER" != "$TAG" ]; then
+              echo "::error::$PKG is $VER but the tag is $TAG — bump before tagging"
+              FAIL=1
+              continue
+            fi
+            if npm view "$PKG@$VER" version >/dev/null 2>&1; then
+              echo "$PKG@$VER already on the registry — skipping"
+              continue
+            fi
+            echo "publishing $PKG@$VER"
+            npm publish "$t"
+          done
+          exit $FAIL
