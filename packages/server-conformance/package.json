@@ -1,0 +1,53 @@
+{
+  "name": "@remelondb/server-conformance",
+  "version": "0.0.3",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@remelondb/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "vitest": ">=3"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4"
+  },
+  "license": "MIT",
+  "description": "Executable backend contract: the sync wire protocol conformance suite (docs/sync-wire.md checklist) plus an in-memory reference server",
+  "keywords": [
+    "remelondb",
+    "watermelondb",
+    "sync",
+    "offline-first",
+    "conformance",
+    "server"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dustyway/remelonDB.git",
+    "directory": "packages/server-conformance"
+  },
+  "homepage": "https://github.com/dustyway/remelonDB#readme",
+  "bugs": "https://github.com/dustyway/remelonDB/issues",
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsdown",
+    "prepack": "tsdown"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "import": "./dist/index.mjs"
+      }
+    },
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "src",
+    "!src/**/*.test.ts"
+  ]
+}
