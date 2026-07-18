@@ -19,9 +19,11 @@ all platforms, which is the point of the driver seam.
 
 ## 1. Install
 
-See ["Using it in an app"](../README.md#using-it-in-an-app) in the root
-README: install the tarballs for `@remelondb/core` and one driver, with
-one `overrides` entry.
+Install `@remelondb/core` and one driver from npm:
+
+```sh
+pnpm add @remelondb/core @remelondb/driver-node
+```
 
 ## 2. Define the schema
 

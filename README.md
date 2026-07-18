@@ -136,21 +136,10 @@ watermelondb-upstream/   reference checkout of upstream (gitignored)
 
 ## Using it in an app
 
-The packages are not on npm yet; releases carry packed tarballs.
-Install by URL, with one `overrides` entry so the drivers' dependency
-on `@remelondb/core` resolves to the tarball instead of the registry:
+The packages are on npm under the `@remelondb` scope:
 
-```jsonc
-// package.json
-{
-  "dependencies": {
-    "@remelondb/core": "<tarball url or file:path>",
-    "@remelondb/driver-web": "<tarball url or file:path>"
-  },
-  "overrides": {
-    "@remelondb/core": "<same spec as above>"
-  }
-}
+```sh
+pnpm add @remelondb/core @remelondb/driver-web   # or driver-node / driver-rn
 ```
 
 Packages ship compiled ESM plus type declarations (`dist/`); no
