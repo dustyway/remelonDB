@@ -5,8 +5,9 @@ flashcard app's data layer end to end (schema, models, queries, live
 observation, a migration, and sync).
 
 Two kinds of documents live here. **Design decisions** record *why* the
-project is shaped the way it is; they are written once and amended, not
-rewritten. **Reference guides** describe *what exists and how to use it*;
+project is shaped the way it is — written for people changing the
+library, and dense on purpose; using remelonDB never requires reading
+them. **Reference guides** describe *what exists and how to use it*;
 they track the code and are updated with it.
 
 ## Design decisions
