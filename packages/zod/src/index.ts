@@ -20,6 +20,7 @@ import {
   type ColumnDef,
   type ColumnsSpec,
   type SyncChanges,
+  type SyncPushResult,
   type TableSchema,
 } from '@remelondb/core'
 import { z } from 'zod'
@@ -166,6 +167,9 @@ export function syncSchemas<
     z.strictObject({ resyncRequired: z.literal(true) }),
   ])
   const pushArgs = z.strictObject({ changes, cursor })
+  // Same story as `changes` for `rejected`: `.optional()` infers
+  // `| undefined`, which JSON input can never produce, so the core
+  // result type is the honest one (and the one `synchronize` takes).
   const pushResult = z.union([
     z
       .strictObject({
@@ -177,7 +181,7 @@ export function syncSchemas<
         message: 'cursor and changes are a package: both or neither',
       }),
     z.strictObject({ conflict: z.literal(true) }),
-  ])
+  ]) as unknown as z.ZodType<SyncPushResult>
 
   return { rows, changes, pullArgs, pullResult, pushArgs, pushResult }
 }

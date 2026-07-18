@@ -5,7 +5,9 @@ import {
   column as c,
   table,
   type InferRecord,
+  type SyncPullArgs,
   type SyncPullResult,
+  type SyncPushArgs,
   type SyncPushResult,
 } from '@remelondb/core'
 import { syncSchemas, zodTable } from './index'
@@ -22,6 +24,7 @@ type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B
   : 2
   ? true
   : false
+type Extends<A, B> = A extends B ? true : false
 const assertType = <_T extends true>(): void => undefined
 
 describe('zodTable', () => {
@@ -92,7 +95,7 @@ describe('syncSchemas', () => {
     const result: SyncPullResult = wire.pullResult.parse({
       changes,
       cursor: '42',
-    }) as SyncPullResult
+    })
     expect('changes' in result && result.cursor).toBe('42')
     expect(wire.pullResult.parse({ resyncRequired: true })).toEqual({
       resyncRequired: true,
@@ -104,7 +107,7 @@ describe('syncSchemas', () => {
       cursor: '43',
       changes,
       rejected: { tasks: ['r9'] },
-    }) as SyncPushResult
+    })
     expect('cursor' in ok && ok.cursor).toBe('43')
     expect(wire.pushResult.parse({ cursor: null, changes: null })).toBeTruthy()
     expect(wire.pushResult.parse({ conflict: true })).toEqual({ conflict: true })
@@ -127,6 +130,14 @@ describe('syncSchemas', () => {
     ).toThrow()
     // absent tables are fine (Changes is partial)
     expect(wire.pullResult.parse({ changes: {}, cursor: '1' })).toBeTruthy()
+  })
+
+  it('interop contract: parsed wire args feed synchronize and the engine', () => {
+    assertType<Extends<z.infer<typeof wire.pullArgs>, SyncPullArgs>>()
+    assertType<Extends<z.infer<typeof wire.pushArgs>, SyncPushArgs>>()
+    expect(
+      wire.pullArgs.parse({ cursor: null, schemaVersion: 1, migration: null }),
+    ).toBeTruthy()
   })
 
   it('honors a custom id schema', () => {
