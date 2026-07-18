@@ -46,11 +46,19 @@ dynamic and internal access — see section 3).
   `TableSchema` via `zodTable` ([zod-adapter.md](zod-adapter.md)),
   pinned by a deep-equality test.
 
-Non-goals, each protecting an invariant something else stands on: a
-Drizzle-style chained query builder (the serializable query AST is
-load-bearing for observation and sync); runtime validation of local
-writes (`sanitizedRaw` covers it; validation belongs at trust
-boundaries); changing the wire or storage format.
+Non-goals. Each one protects an invariant that another part of the
+system stands on:
+
+- **No Drizzle-style chained query builder.** Queries stay serializable
+  data because observation and sync inspect them; a builder that
+  compiles straight toward SQL would take that away.
+- **No runtime validation of local writes.** `sanitizedRaw` already
+  sanitizes every local write, and this design types them at compile
+  time. Validation effort belongs at the trust boundaries — the sync
+  wire — where the Zod adapter puts it.
+- **No change to the wire or storage format.** Everything at runtime is
+  byte-identical to the previous API, which is what keeps this a
+  refactor rather than a data-format event.
 
 ## Design
 
