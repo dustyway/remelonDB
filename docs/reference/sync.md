@@ -2,8 +2,10 @@
 
 How to *use* the sync engine. The protocol's design and rationale — the
 opaque commit-ordered cursor, why push responds like a pull, the backend
-MUSTs — live in [../sync-design.md](../sync-design.md); read that first if
-you're implementing a backend.
+MUSTs — live in [../sync-design.md](../sync-design.md). The backend itself
+ships as [`@remelondb/server`](../../packages/server); read the design doc
+first if you're backing it with your own `SyncStore` adapter or building
+a backend from scratch.
 
 ## Calling synchronize
 
