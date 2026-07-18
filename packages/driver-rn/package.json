@@ -1,6 +1,6 @@
 {
   "name": "@remelondb/driver-rn",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "exports": {
     ".": "./src/index.ts"
   },
@@ -65,7 +65,8 @@
     "exports": {
       ".": {
         "types": "./dist/index.d.mts",
-        "import": "./dist/index.mjs"
+        "import": "./dist/index.mjs",
+        "default": "./dist/index.mjs"
       }
     },
     "access": "public"

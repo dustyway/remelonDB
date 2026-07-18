@@ -1,6 +1,6 @@
 {
   "name": "@remelondb/driver-web",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -44,11 +44,13 @@
     "exports": {
       ".": {
         "types": "./dist/index.d.mts",
-        "import": "./dist/index.mjs"
+        "import": "./dist/index.mjs",
+        "default": "./dist/index.mjs"
       },
       "./worker": {
         "types": "./dist/worker.d.mts",
-        "import": "./dist/worker.mjs"
+        "import": "./dist/worker.mjs",
+        "default": "./dist/worker.mjs"
       }
     },
     "access": "public"
