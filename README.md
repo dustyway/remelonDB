@@ -60,51 +60,41 @@ seam), held to the contract by
 [`@remelondb/zod`](packages/zod) derives tables and wire validators
 from shared Zod schemas.
 
-The full TypeScript side works today, on Node:
+A taste of the API — the same code on every platform, swapping only
+the driver import:
 
 ```ts
-import {
-  appSchema, column as c, table, Database, ModelFor, Q, synchronize,
-  type AssociationsMap,
-} from '@remelondb/core'
+import { appSchema, column as c, table, Database, ModelFor, Q } from '@remelondb/core'
 import { NodeSqliteDriver } from '@remelondb/driver-node'
 
 const tasks = table('tasks', {
   name: c.string(),
   position: c.number().indexed(),
   is_done: c.boolean(),
-  project_id: c.string().optional(),
 })
 
 const schema = appSchema({ version: 1, tables: [tasks] })
 
-class Task extends ModelFor(tasks) {
-  static override readonly associations = {
-    projects: { type: 'belongs_to', key: 'project_id' },
-  } satisfies AssociationsMap
-  // no field declarations: name/position/is_done/project_id are typed
-  // from the table definition; accessors are schema-generated
-}
+// no field declarations: name/position/is_done are typed from the
+// table definition; accessors are schema-generated
+class Task extends ModelFor(tasks) {}
 
 const db = await Database.open({
-  driver: new NodeSqliteDriver(),
+  driver: new NodeSqliteDriver(),   // RnSqliteDriver / WebSqliteDriver in apps
   schema,
   modelClasses: [Task],
   name: 'app.db',
 })
 
-const task = await db.write(() =>
-  db.get(Task).create({ name: 'try it', position: 1 }),
-)
-await db.write(() => task.update(() => { task.is_done = true }))
+await db.write(() => db.get(Task).create({ name: 'try it', position: 1 }))
 
-const unsubscribe = db
-  .get(Task)
+db.get(Task)
   .query(Q.where('is_done', false), Q.sortBy('position'))
   .observe((open) => console.log('open tasks:', open.length))
-
-await synchronize({ database: db, pullChanges, pushChanges }) // your backend
 ```
+
+The full walkthrough — associations, migrations, and sync against the
+shipped backend engine — is [docs/tutorial.md](docs/tutorial.md).
 
 ## Repository layout
 
