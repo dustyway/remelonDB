@@ -124,6 +124,35 @@ push(changes, cursor)
   sends `migration = { from, tables, columns }` so the server includes
   full records for newly tracked tables and columns.
 
+### The cursor, and how it expires
+
+Why is there a cursor at all? It is the minimal state that makes both
+halves of the protocol work. On pull, it tells the server where the
+client stopped, so sync can be incremental instead of a full download
+every time. On push, it is the conflict horizon — "reject my edits if
+anything I touched changed after this point" — without which the
+server could not know what state an edit was based on, and conflict
+detection would be impossible. That is also why pull always precedes
+push: a push carries the cursor of the pull before it. The client's
+entire obligation is: store the string, echo it back.
+
+A cursor is also a promise the server makes: "I can still tell you
+everything that changed after this snapshot." Keeping that promise
+costs storage — above all, the server must remember every deletion
+committed after the snapshot (tombstones, or a change log) — and no
+server keeps it forever. Expiry is the server withdrawing the
+promise, not a timeout: after a retention window of its choosing it
+prunes old tombstones and, in the same stroke, raises the *floor* —
+the oldest revision it can still serve completely (`gcFloor` in the
+storage seam; the shipped store's `gc(floor)` raises it). Any pull
+whose cursor lies below the floor is answered `resyncRequired`: the
+server no longer knows everything it would need to send, and
+answering with silently incomplete data is forbidden (obligation 3).
+A cursor the server never issued — garbage, or a token from another
+deployment — gets the same answer. "Expired" therefore always means
+the client stayed away longer than the server's retention window, and
+the cost is a full re-download, never wrong data.
+
 ## Backend obligations
 
 A conforming backend MUST:
