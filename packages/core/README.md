@@ -1,7 +1,9 @@
 # @remelondb/core
 
-The platform-independent whole of [remelonDB](https://github.com/dustyway/remelonDB),
-a reactive, offline-first, syncable database layer rebuilt from
+The platform-independent whole of [remelonDB](https://github.com/dustyway/remelonDB):
+an offline-first data layer with multi-device sync — reactive SQLite,
+typed schemas inferred from one definition, and a model-checked sync
+protocol — rebuilt from
 [WatermelonDB](https://github.com/Nozbe/WatermelonDB)'s best ideas on one
 engine: SQLite everywhere.
 

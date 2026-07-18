@@ -1,9 +1,11 @@
 # remelonDB
 
 A from-scratch rewrite of [WatermelonDB](https://github.com/Nozbe/WatermelonDB):
-a reactive, offline-first, syncable database layer for React Native, web, and
-Node, built on **one engine (SQLite) everywhere** and designed for the React
-Native New Architecture from day one.
+an offline-first data layer with multi-device sync — reactive SQLite on
+React Native, web, and Node, typed schemas inferred from one definition,
+and a model-checked sync protocol shipped as client, server engine, and
+conformance suites. Built on **one engine (SQLite) everywhere** and
+designed for the React Native New Architecture from day one.
 
 ## Why a rewrite
 
@@ -47,6 +49,16 @@ real Safari over OPFS), and
 suite as Node, plus a real reload-teardown cycle on iOS). A production
 `vite build` smoke test covers the packed-tarball consumer path
 end-to-end; every package README checklist is fully ticked.
+
+The sync protocol has a normative wire contract
+([docs/sync-wire.md](docs/sync-wire.md)) and a formal Quint model
+checked in CI ([docs/sync_model.qnt](docs/sync_model.qnt)) — and both
+halves ship: the client engine in core, and a backend as
+[`@remelondb/server`](packages/server) (the protocol above a storage
+seam), held to the contract by
+[`@remelondb/server-conformance`](packages/server-conformance).
+[`@remelondb/zod`](packages/zod) derives tables and wire validators
+from shared Zod schemas.
 
 The full TypeScript side works today, on Node:
 
