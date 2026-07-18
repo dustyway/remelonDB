@@ -1,28 +1,18 @@
 # Schema-inferred types
 
-Status: implemented. Motivated by making remelonDB's
-type story match the schema-first style of its first consumer's stack
-(Drizzle on the server, Zod for shared validation).
+Status: implemented. The schema literal is the single source of truth:
+record types, model fields, collection types, and `Q` column checking
+all derive from one `table()` definition. Motivated by matching the
+schema-first style of remelonDB's reference consumer stack (Drizzle on
+the server, Zod for shared validation).
 
-## The problem
+## The failure class this removes
 
-Today the schema and the types are written twice, and nothing checks that
-they agree:
+Written with a duplicated schema — a runtime definition plus
+hand-declared model fields — nothing checks that the two agree:
 
 ```ts
-const schema = appSchema({
-  version: 1,
-  tables: [
-    tableSchema({
-      name: 'tasks',
-      columns: [
-        { name: 'name', type: 'string' },
-        { name: 'position', type: 'number', isIndexed: true },
-      ],
-    }),
-  ],
-})
-
+// the pre-0.0.4 API
 class Task extends Model {
   static override readonly table = 'tasks'
   declare name: string      // hand-written duplicate of the schema
@@ -30,7 +20,7 @@ class Task extends Model {
 }
 ```
 
-Three concrete failure modes, none caught by the compiler:
+Three concrete failure modes, none caught by a compiler:
 
 1. A `declare` that drifts from the schema (wrong name, wrong type,
    missing `| null` on an optional column) produces records whose types lie.
@@ -38,30 +28,33 @@ Three concrete failure modes, none caught by the compiler:
 3. `db.get<Task>('tasks')` is an unchecked cast; the string and the type
    parameter are not connected.
 
-## Goals
+Modes 1 and 2 are compile errors under this design, pinned by
+`@ts-expect-error` cases (`schema/typeInference.test.ts`). Mode 3 is
+eliminated by replacement: the typed `db.get(Task)` / `db.get(tasks)`
+forms make the cast unnecessary (the string overload survives for
+dynamic and internal access — see section 3).
 
-- One source of truth: the schema literal. Record types, column-name
-  checking, and collection types are all derived from it.
-- No runtime redesign: the schema module's output objects
+## Shape of the design
+
+- **One source of truth**: everything below derives from the `table()`
+  literal.
+- **A surface change only**: the schema module's runtime output
   (`TableSchema`, `AppSchema`), the DDL compiler, migrations, and the
-  query AST stay exactly as they are. This is a surface change: input
-  syntax plus a type layer.
-- Keep the door open for the Zod adapter (separate design): a Zod object
-  must be mechanically convertible into the same table definitions.
-  (Since built: `zodTable` in [zod-adapter.md](zod-adapter.md) produces
-  identical `TableSchema` output, pinned by test.)
+  query AST are byte-identical to the pre-design runtime — the change
+  is input syntax plus a phantom type layer.
+- **Mechanically derivable**: a Zod object converts into the identical
+  `TableSchema` via `zodTable` ([zod-adapter.md](zod-adapter.md)),
+  pinned by a deep-equality test.
 
-Non-goals: a Drizzle-style chained query builder (the serializable query
-AST is load-bearing for observation and sync and stays); runtime
-validation of local writes (`sanitizedRaw` already covers it); changing
-the wire or storage format.
+Non-goals, each protecting an invariant something else stands on: a
+Drizzle-style chained query builder (the serializable query AST is
+load-bearing for observation and sync); runtime validation of local
+writes (`sanitizedRaw` covers it; validation belongs at trust
+boundaries); changing the wire or storage format.
 
 ## Design
 
 ### 1. Column builders, object-map syntax
-
-The old helper took a columns array and built a name-keyed map
-internally. The definition syntax is now the map directly, with builders:
 
 ```ts
 import { column as c, table } from '@remelondb/core'
@@ -76,15 +69,12 @@ export const tasks = table('tasks', {
 export const schema = appSchema({ version: 1, tables: [tasks] })
 ```
 
-Builders are tiny: three constructors (`string`, `number`, `boolean`) and
-two modifiers (`optional()`, `indexed()`). Each produces a plain
-`ColumnSchema` object at runtime; `table()` produces a `TableSchema` plus
-the type information described next. Reserved-name and
-`created_at`/`updated_at` validation is unchanged.
-
-The array syntax is removed, not deprecated: the package is unpublished,
-and one blessed way to write a schema is worth more than compatibility
-with zero external users.
+Builders are tiny: three constructors (`string`, `number`, `boolean`)
+and two modifiers (`optional()`, `indexed()`). Each produces a plain
+`ColumnSchema` object at runtime; `table()` produces a `TableSchema`
+plus the type information described next. Reserved-name and
+`created_at`/`updated_at` validation live in `table()`. This is the one
+way to write a schema — there is no alternative syntax to keep in sync.
 
 ### 2. Record types are inferred
 
@@ -101,31 +91,33 @@ type TaskRecord = InferRecord<typeof tasks>
 
 Mapping rules: `string`/`number`/`boolean` map to themselves;
 `.optional()` adds `| null`; `id` is always present and readonly;
-`_status`/`_changed` do not appear (they are core-internal, and code that
-needs them is already working with `RawRecord`).
+`_status`/`_changed` do not appear (they are core-internal, and code
+that needs them works with `RawRecord`).
 
 ### 3. Tables are values; collections are typed by them
 
 ```ts
-const collection = db.get(tasks)  // Collection<typeof tasks>
+const collection = db.get(tasks)  // typed records, checked Q columns
 ```
 
 `db.get` takes the table object (or a model class: `db.get(Task)`), so
-the unchecked cast from failure mode 3 is no longer needed. Two honest
-limits: the string overload still exists for dynamic and internal
-access, so the old cast form remains *expressible*, just never
-necessary; and `Database` is not generic over its schema, so passing a
-table object that is not part of this database's schema fails at
-runtime (with a clear error), not at compile time. Making `Database`
-schema-generic would close both and is listed under open questions.
+the unchecked cast from failure mode 3 is never necessary. Two honest
+limits: the string overload exists for dynamic and internal access, so
+the old cast form remains *expressible*; and `Database` is not generic
+over its schema, so a table object outside this database's schema fails
+at runtime (with a clear error), not at compile time. Both close with
+the schema-generic `Database` under open questions. Bound vs unbound
+collections also differ at runtime — see
+[reference/database.md](reference/database.md) and the open question
+below.
 
 ### 4. Models keep the class, lose the `declare`s
 
 ```ts
 class Task extends ModelFor(tasks) {
   // no declared fields: name/position/is_done/project_id are typed
-  // from the table definition; accessors are generated at bind time
-  // as today; `static override associations = {...}` still goes here
+  // from the table definition; accessors are generated at bind time;
+  // `static override associations = {...}` still goes here
 }
 ```
 
@@ -136,46 +128,25 @@ way to declare properties whose names come from a generic, so
 carries the inferred fields.
 
 The class layer stays because behavior lives there (update builders,
-associations, sync-aware writes). What changes is that field types come
-from the table object instead of hand duplication. `static table` is set
-by `ModelFor` from the table object (subclasses don't write it), which
-also lets `Database.open` check that every model's table is in the app
-schema.
+associations, sync-aware writes); field types come from the table object
+instead of hand duplication. `static table` is set by `ModelFor` from
+the table object (subclasses don't write it), which also lets
+`Database.open` check that every model's table is in the app schema.
 
-A class-free record API (plain typed objects, functions for writes) would
-be the fuller Drizzle match but requires reworking record identity in the
-observation layer and the record cache. Deliberately out of scope;
-revisit after the Zod adapter ships.
+A class-free record API (plain typed objects, functions for writes)
+would be the fuller Drizzle match but requires reworking record
+identity in the observation layer and the record cache; it remains out
+of scope.
 
 ### 5. Column names in `Q` are checked
 
 `Q.where` and `Q.sortBy` carry their column name as a type parameter
 (`Clause<'position'>`); `collection.query(...)` constrains accepted
-clauses to `Clause<keyof InferRecord<T>>`. A misspelled column becomes a
-compile error at the query site. The runtime AST is byte-for-byte
-unchanged; `Q.on` (joined tables) stays string-typed in the first
-iteration and is listed as an open question.
-
-## What this buys, checkably
-
-- Failure modes 1 and 2 become compile errors, pinned by
-  `@ts-expect-error` cases (schema/typeInference.test.ts). Mode 3 (the
-  unchecked cast) is eliminated by replacement rather than removal: the
-  typed `db.get(Task)`/`db.get(tasks)` forms make it unnecessary, but
-  the string overload remains for dynamic access (see section 3).
-- The flashcard tutorial loses every `declare` line.
-- Zod adapter interop: `zodTable(z.object({...}))` can emit the same
-  `TableSchema` + types, and `InferRecord` must equal `z.infer` for the
-  supported column vocabulary. That equality is testable with a
-  type-level assertion.
-
-## Migration impact
-
-Mechanical, contained to schema definitions and model classes: the
-tutorial, README examples, all test schemas, and the conformance suite's
-corpus setup. No driver, DDL, sync, or observation code changes. Estimate:
-the type layer and builders are the real work; the migration is an
-afternoon of find-and-edit verified by typecheck.
+clauses to the table's column union. A misspelled column is a compile
+error at the query site. The runtime AST is byte-for-byte unchanged;
+`Q.on` (joined tables) stays string-typed — see open questions. Values
+are not yet typed per column (`Q.where('position', '5')` compiles); see
+open questions.
 
 ## Open questions
 
@@ -188,8 +159,14 @@ afternoon of find-and-edit verified by typecheck.
   typechecks and throws. The honest type for the unbound case is the
   record shape without methods; distinguishing bound from unbound in
   types likely also needs the schema-generic `Database`.
-- `Q.on` and association typing: checking joined-table columns needs the
-  association graph in types; worth it, but a second iteration.
+- Per-column value typing in `Q`: SQLite compares type-aware (the
+  number `5` never equals the string `'5'`), so a mistyped comparison
+  value silently matches nothing — the same silent-wrong-answer class
+  this design exists to kill, one level deeper. Wants a value-type
+  parameter on comparisons and careful attention to error-message
+  quality; shares machinery with Zod-enum support.
+- `Q.on` and association typing: checking joined-table columns needs
+  the association graph in types.
 - `created_at`/`updated_at`: keep the convention (validated number
   columns) or give them builder sugar (`c.timestamp()`) that types them
   as `number` and documents the convention in code.
