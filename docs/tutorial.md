@@ -328,4 +328,6 @@ What the server must guarantee, and why, is specified in
   [database & observation](reference/database.md): the day-to-day API.
 - [Schema & migrations](reference/schema.md),
   [records](reference/records.md): data shape and lifecycle.
-- [Sync design](sync-design.md): read before implementing a backend.
+- [Sync design](sync-design.md): the protocol's rationale. The backend
+  ships as [`@remelondb/server`](../packages/server); read this before
+  backing it with your own `SyncStore` adapter.
