@@ -1,0 +1,21 @@
+{
+  "name": "example-todo-sync",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "server": "node server.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remelondb/core": "workspace:*",
+    "@remelondb/driver-web": "workspace:*",
+    "@remelondb/server": "workspace:*",
+    "@remelondb/zod": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "vite": "^8.1.5"
+  }
+}
