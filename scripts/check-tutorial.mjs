@@ -3,7 +3,8 @@
 // workspace packages — the markdown is the single source, so editing the
 // tutorial alone is enough to change (or break) this check. Blocks
 // fenced ```js fragment are illustrative (the migration re-open sketch,
-// the network sync hookup) and are skipped.
+// the HTTP route wiring) and are skipped; the sync hookup itself runs
+// for real against @remelondb/server's memory store.
 //
 // Transformations applied to the extracted code, and nothing else:
 // - import specifiers '@remelondb/*' resolve to the built dist files
@@ -24,6 +25,10 @@ const MODULES = {
     .href,
   '@remelondb/driver-node': new URL(
     '../packages/driver-node/dist/index.mjs',
+    import.meta.url,
+  ).href,
+  '@remelondb/server': new URL(
+    '../packages/server/dist/index.mjs',
     import.meta.url,
   ).href,
 }
@@ -80,8 +85,6 @@ const bodies = blocks.map((block) =>
     })
     .join('\n'),
 )
-addSpecifier('@remelondb/core', 'synchronize') // §10 is a fragment; assert the export below
-
 const imports = [...specifiersByModule]
   .map(([url, specs]) => `import { ${[...specs].join(', ')} } from '${url}'`)
   .join('\n')
@@ -94,7 +97,13 @@ const setBadge = (n) => badge.push(n)
 const ASSERTIONS = `
 // --- assertions (appended by scripts/check-tutorial.mjs) ---
 const assert = (cond, msg) => { if (!cond) throw new Error('FAIL: ' + msg) }
-assert(typeof synchronize === 'function', 'synchronize missing from core')
+assert(clean === true, 'sync left unsynced changes behind')
+const echo = await handlers.pull({
+  cursor: null, schemaVersion: schema.version, migration: null,
+})
+assert(echo.changes.decks.updated.length === 1, 'server should hold 1 deck')
+assert(echo.changes.cards.updated.length === 5, 'server should hold 5 cards')
+assert(echo.changes.reviews.updated.length === 1, 'server should hold 1 review')
 assert(dueCards.length === 5, 'dueCards: ' + dueCards.length)
 assert(cardsInDeck.length === 5, 'children: ' + cardsInDeck.length)
 assert(parent && parent.id === deck.id, 'related returned wrong deck')

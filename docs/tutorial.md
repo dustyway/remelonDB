@@ -6,10 +6,11 @@ queue, a live counter for the UI, a schema migration, and a sync hookup
 at the end. CI executes the code blocks below straight out of this
 file: [scripts/check-tutorial.mjs](../scripts/check-tutorial.mjs)
 extracts them and runs them against the built packages on every push,
-so what you read here is code that provably runs. (Blocks marked as
-fragments — the migration re-open sketch and the sync hookup, which
-needs a real backend — are illustrative and skipped.) You can paste the
-pieces into a Node project and follow along.
+so what you read here is code that provably runs. That includes the
+sync hookup, which runs against the real backend engine in-process.
+(Blocks marked as fragments — the migration re-open sketch and the
+HTTP route wiring in section 10 — are illustrative and skipped.) You
+can paste the pieces into a Node project and follow along.
 
 The examples use `NodeSqliteDriver` so they run anywhere. In an app you
 swap only the driver import: `RnSqliteDriver` from
@@ -19,11 +20,25 @@ all platforms, which is the point of the driver seam.
 
 ## 1. Install
 
-Install `@remelondb/core` and one driver from npm:
+remelonDB is split into frontend and backend packages around one wire
+protocol. The frontend — your app — installs `@remelondb/core` and one
+driver from npm:
 
 ```sh
 pnpm add @remelondb/core @remelondb/driver-node
 ```
+
+The backend — wherever your sync endpoints live — installs the sync
+engine (wired up in section 10):
+
+```sh
+pnpm add @remelondb/server
+```
+
+Apps that never sync need only the first line. Two more packages exist
+for later: `@remelondb/server-conformance` proves a custom backend
+store against the protocol contract, and `@remelondb/zod` derives
+tables from shared Zod schemas ([zod-adapter.md](zod-adapter.md)).
 
 ## 2. Define the schema
 
@@ -242,24 +257,56 @@ steps fails `open` loudly; data destruction is never implicit.
 
 ## 10. Sync
 
-`synchronize()` needs two functions that talk to your backend; the
-engine handles the rest (cursor storage, applying remote changes,
-marking local ones as synced):
+Sync has two halves. The backend half is `@remelondb/server`: the wire
+protocol implemented once, above a small storage seam. Configure it
+with the tables to sync and get per-user pull/push handlers back:
 
-```js fragment
-import { synchronize } from '@remelondb/core'
+```js
+import { createMemoryStore, createSyncEngine } from '@remelondb/server'
+
+const engine = createSyncEngine({
+  store: createMemoryStore(),   // or your database adapter
+  tables: { decks: {}, cards: {}, reviews: {} },
+})
+const handlers = engine.as('user-1')   // { pull(args), push(args) }
+```
+
+The frontend half is `synchronize()` from core. It needs two functions
+that reach those handlers; the engine handles the rest (cursor
+storage, applying remote changes, conflict merges, marking local
+records as synced). Here the handlers are in-process, so the wiring is
+direct — this block really runs in CI, pushing the flashcards from
+section 5 into the memory store:
+
+```js
+import { synchronize, hasUnsyncedChanges } from '@remelondb/core'
 
 await synchronize({
   database: db,
-  pullChanges: async ({ cursor }) => {
+  pullChanges: (args) => handlers.pull(args),
+  pushChanges: (args) => handlers.push(args),
+})
+
+const clean = !(await hasUnsyncedChanges(db))   // true: everything pushed
+```
+
+In production the handlers sit behind two routes — every protocol
+outcome is a returned value, so a route handler is one line,
+`res.json(await handlers.push(req.body))` — and the client reaches
+them over HTTP:
+
+```js fragment
+await synchronize({
+  database: db,
+  pullChanges: async (args) => {
     const res = await fetch('/sync/pull', {
-      method: 'POST', body: JSON.stringify({ cursor }),
+      method: 'POST', body: JSON.stringify(args),
     })
     return res.json()   // { changes, cursor }
   },
-  pushChanges: async ({ changes, cursor }) => {
+  pushChanges: async (args) => {
     const res = await fetch('/sync/push', {
-      method: 'POST', body: JSON.stringify({ changes, cursor }),
+      method: 'POST', body: JSON.stringify(args),
     })
     return res.json()   // { cursor, changes }
   },
@@ -267,10 +314,13 @@ await synchronize({
 ```
 
 Changesets are per-table `created`/`updated`/`deleted` groups; the
-cursor is an opaque string your server defines. What the server must
-guarantee, and why, is specified in [sync-design.md](sync-design.md);
-the client-side details are in the [sync
-reference](reference/sync.md).
+cursor is an opaque string the server defines. The memory store is
+real enough to develop against; for a persistent backend you implement
+the `SyncStore` seam and prove it with
+[`@remelondb/server-conformance`](../packages/server-conformance).
+What the server must guarantee, and why, is specified in
+[sync-design.md](sync-design.md); the client-side details are in the
+[sync reference](reference/sync.md).
 
 ## Where next
 
