@@ -35,6 +35,10 @@ engine (wired up in section 10):
 pnpm add @remelondb/server
 ```
 
+The engine embeds in your own server and stores data in memory out of
+the box — enough for this tutorial and for development; durable
+storage comes from implementing its small storage seam.
+
 Apps that never sync need only the first line. Two more packages exist
 for later: `@remelondb/server-conformance` proves a custom backend
 store against the protocol contract, and `@remelondb/zod` derives
