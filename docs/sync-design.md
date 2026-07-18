@@ -1,183 +1,207 @@
 # Sync design: protocol and client engine
 
-Builds on `upstream-study.md` (sync section) and `architecture-layers.md`
-(sync is core logic over the SqliteDriver seam). This is a **generic**
-reimplementation of WatermelonDB's sync protocol: no specific backend is a
-design input. Upstream's shape is kept where it's sound; its two documented
-contract flaws are fixed at the protocol level.
+How remelonDB keeps devices in sync, and why the protocol looks the
+way it does. This is a generic reimplementation of
+[WatermelonDB](https://github.com/Nozbe/WatermelonDB)'s sync protocol:
+its shape is kept where it's sound, and its two contract-level flaws
+are fixed at the protocol level. No specific backend is a design
+input. The normative wire contract lives in
+[sync-wire.md](sync-wire.md); this doc is the rationale.
 
-## What we keep from upstream
+## How it works, in short
 
-The overall model is unchanged, because it's good:
+Every device keeps a full local copy of its data and works against it
+directly — offline is the normal case, not an error. Each local write
+also records *that* the record changed (`_status`: created, updated,
+or deleted) and *which columns* changed (`_changed`). Nothing else is
+needed later: the dirty flags are the entire sync state.
 
-- **Two-phase sync**: pull (apply remote changes) then push (send local
-  changes). Server is the master copy; client resolves conflicts.
-- **Content-based dirty tracking**: `_status ∈ {synced, created, updated,
-  deleted}` plus `_changed` (set of dirty column names), maintained on every
-  local write.
-- **Per-column client-wins merge**: resolved = remote record, overwritten by
-  the local values of columns in `_changed`; record stays dirty so those
-  columns are pushed next sync. Optional `conflictResolver` hook on top.
-- **Changeset wire shape**: `{ [table]: { created: RawRecord[], updated:
-  RawRecord[], deleted: RecordId[] } }`.
-- **Transport agnosticism**: the engine calls injected `pullChanges` /
-  `pushChanges` functions; HTTP, WebSocket, whatever — not our concern.
-- **Concurrency guards**: apply and mark-synced each run in a single writer
-  block; cursor re-checked before applying (two-sync collision); a record
-  modified between fetch-local and mark-synced fails its `areRecordsEqual`
-  check, stays dirty, and goes out with the next push. Idempotent apply.
+A sync is two phases, always in this order:
 
-## The two contract flaws, and the fixes
+1. **Pull** — ask the server "what changed since my cursor?", apply
+   those changes locally, store the new cursor.
+2. **Push** — send everything locally dirty to the server, and mark it
+   clean once accepted.
 
-### Flaw 1: the lost-write race → opaque commit-ordered cursor
+The *cursor* is an opaque token the server hands out; the client just
+stores it and echoes it back. The server is the master copy, but it
+never merges: when both sides changed the same record, the **client**
+resolves the conflict, column by column — the merged record is the
+remote version, with the locally-changed columns laid back on top. If
+two devices edited *different* columns, both edits survive. If they
+edited the *same* column, the later pusher wins. A `conflictResolver`
+hook can override this per record.
 
-Upstream's pull contract is `last_modified > lastPulledAt` with a
-server-chosen timestamp. If any write lands during the pull window with a
-timestamp ≤ the returned cursor (out-of-order commits, clock granularity,
-per-table queries without a shared snapshot), it is never pulled again: a
-silent lost write. Upstream delegates this entirely to backend discipline in
-prose.
+Changesets on the wire are per-table groups:
+`{ [table]: { created: [...], updated: [...], deleted: [ids] } }`.
+The engine calls injected `pullChanges`/`pushChanges` functions —
+HTTP, WebSocket, in-process: not the protocol's concern.
 
-**Fix — the cursor becomes an opaque token with a precise contract:**
+## The two flaws in upstream's contract
 
-- The client never inspects, compares, or arithmetics the cursor. It stores
-  the token (an arbitrary JSON string) and echoes it back. No client code
-  depends on it being a timestamp, a number, or ordered.
-- The server contract (the invariant everything rests on):
+Both flaws are silent in small tests and fatal at scale. Fixing them
+is the reason this protocol exists as a rewrite rather than a copy.
 
-  > `pull(c)` returns a changeset drawn from **one consistent snapshot** `S`
-  > and a cursor `c'` identifying `S`. Every change committed after `S`
-  > (including changes concurrent with the pull that commit later) MUST be
-  > returned by some future `pull(c')`.
+### Flaw 1: the lost-write race
 
-  Equivalently: change visibility must be **commit-ordered** with respect to
-  cursors, not write-time-ordered. Wall-clock timestamps assigned at write
-  time cannot satisfy this; a monotonic revision assigned at commit order, a
-  transaction-horizon watermark, or a single-writer change log all can. The
-  protocol doc mandates the invariant rather than the mechanism; the backend
-  guide (below) sketches known-good mechanisms.
+Upstream's pull contract is "give me rows with
+`last_modified > lastPulledAt`", with a server timestamp. Here is how
+that loses data: a write starts at 10:00:00.000 but its transaction
+commits a moment *after* a concurrent pull already ran. The pull's
+cursor says 10:00:00.050. The committed write's timestamp (10:00:00.000)
+is *before* the cursor — so no future pull ever returns it. The
+devices now disagree forever, and nothing reports an error. Any
+timestamp assigned at write time (not commit time) has this race, and
+upstream delegates the problem to backend discipline in prose.
 
-### Flaw 2: push-echo → push responds like a pull
+**The fix: the cursor becomes opaque, with a commit-ordered contract.**
+The client never inspects or compares cursors. The server must
+guarantee one invariant:
 
-Upstream's client re-downloads its own pushed changes on the next pull;
-they're absorbed by equality checks but transmitted, diffed, and, worse,
-they force the *next* pull to be non-empty forever under active use.
-Upstream's own limitations doc names the fix; we adopt it:
+> `pull(c)` returns changes drawn from **one consistent snapshot** `S`
+> and a cursor `c'` identifying `S`. Every change committed after `S`
+> — including changes concurrent with the pull that commit later —
+> MUST be returned by some future `pull(c')`.
 
-**Fix — the push response carries a cursor and any interleaved changes:**
+Visibility is ordered by *commit*, not by write time. Wall-clock
+timestamps cannot satisfy this; a revision sequence assigned in commit
+order, a transaction-horizon watermark, or a single-writer change log
+all can (see [Backend obligations](#backend-obligations)).
 
-```
-pushResponse = {
-  cursor:  Cursor | null,   // covers the push transaction's snapshot
-  changes: Changes | null,  // committed between request cursor and push
-                            // snapshot, EXCLUDING the pushed changes
-  rejected?: { [table]: RecordId[] }  // per-record rejections (optional)
-}
-```
+### Flaw 2: the push echo
 
-- Server applies the push in one transaction, computes the new cursor in
-  that same transaction, and returns changes other clients committed in
-  between (its own push excluded). Client applies `changes`, marks pushed
-  records synced, adopts `cursor`. The client's own writes never echo.
-- **Degraded mode is legal**: a backend that can't compute interleaved
-  changes returns `cursor: null, changes: null`; the client keeps its old
-  cursor and the next pull re-delivers the echo, which the apply engine
-  absorbs exactly as upstream does (`requiresUpdate` equality check). Sound
-  either way; the fast path is opt-in per backend, invisible to app code.
-- A cursor MUST NOT be returned without the interleaved changes: adopting a
-  cursor while skipping foreign changes committed under it would be the
-  lost-write race reintroduced by the back door. `cursor` and `changes` are
-  a package: both or neither.
+In upstream, the client re-downloads its own pushed changes on the
+next pull. Equality checks absorb them, but they are transmitted and
+diffed every time — under active use, no pull is ever empty. Upstream's
+own limitations doc names the fix; this protocol adopts it:
 
-## Protocol summary
+**The fix: a push responds like a pull.** The push response carries a
+new cursor plus whatever *other* clients committed in between
+(`changes`), excluding the push's own records. The client applies
+those foreign changes, marks its pushed records synced, and adopts the
+cursor — its own writes never echo back.
+
+Two rules keep this safe:
+
+- **Degraded mode is legal.** A backend that can't compute the
+  interleaved changes returns `cursor: null, changes: null`; the client
+  keeps its old cursor and the next pull re-delivers the echo, which
+  the apply engine absorbs. Correct either way; the fast path is
+  opt-in per backend.
+- **Cursor and changes are a package: both or neither.** Adopting a
+  cursor while skipping the foreign changes committed under it would
+  reintroduce the lost-write race through the back door.
+
+## Protocol at a glance
 
 ```
 pull(cursor | null, schemaVersion, migration | null)
-  → { changes, cursor }                    // normal
-  → { resyncRequired: true }               // cursor unknown/expired (tombstones
-                                           // or change log pruned past it)
+  → { changes, cursor }            // normal
+  → { resyncRequired: true }       // cursor unknown or expired
 
 push(changes, cursor)
-  → { cursor, changes, rejected? }         // accepted (possibly degraded nulls)
-  → { conflict: true }                     // some pushed record changed on the
-                                           // server after `cursor` — client must
-                                           // pull, re-merge, push again
+  → { cursor, changes, rejected? } // accepted (possibly degraded nulls)
+  → { conflict: true }             // something changed server-side after
+                                   // `cursor` — pull, re-merge, push again
 ```
 
-- **First sync**: `cursor = null`; server returns everything as `created`.
+- **First sync**: `cursor = null`; the server returns everything.
+- **Conflict loop**: on `conflict`, the client pulls, re-merges, and
+  pushes again, a bounded number of times (default 5), then surfaces
+  an error to the app.
 - **Resync**: on `resyncRequired`, the client re-pulls from `null` and
-  applies with a *replacement* strategy (reconcile against the full server
-  state: update matching ids, create missing, destroy local synced records
-  absent from the snapshot; local dirty records are merged per-column, and
-  push follows as usual). This gives servers a defined way to prune
-  tombstones/change logs with a bounded retention window instead of forever.
-- **Push conflict loop**: pull → merge → push is retried a bounded number of
-  times (default 5, matching the spirit of upstream's re-sync guidance),
-  then surfaces an error to the app.
-- **Record shape on the wire**: user columns + `id` only. `_status` and
-  `_changed` never cross the wire in either direction (upstream sends them
-  client→server with an apologetic TODO; here it's a protocol rule).
-  `created` carries full records; `updated` carries full records in v1
-  (sparse updates are an open question below).
-- **Migration pulls**: kept from upstream. After a local schema migration,
-  the client sends `migration = { from, tables, columns }` (derived from
-  migration steps since the last-synced schema version) so the server
-  includes full records for newly tracked tables/columns. Cursor semantics
-  are unaffected.
+  reconciles against the full server state (update matching ids,
+  create missing ones, destroy local *synced* records absent from the
+  snapshot — local dirty records are merged and pushed as usual). This
+  exists so servers can prune tombstones and change logs after a
+  bounded retention window instead of keeping them forever.
+- **Full records on the wire**: user columns plus `id`, nothing else.
+  `_status`/`_changed` never cross the wire (a protocol rule, not a
+  convention), and every record is complete — a sparse record would
+  silently clobber local values with schema defaults, so clients
+  reject it loudly.
+- **Migration pulls**: after a local schema migration, the client
+  sends `migration = { from, tables, columns }` so the server includes
+  full records for newly tracked tables and columns.
 
-## Backend obligations (the contract, condensed)
+## Backend obligations
 
 A conforming backend MUST:
 
-1. Serve each pull from one consistent snapshot (no per-table queries at
-   different points in time).
-2. Issue cursors that are commit-ordered: no change committed after a
-   cursor's snapshot may ever be invisible to pulls from that cursor.
-3. Retain deletions (tombstones or a change log) long enough to serve any
-   cursor it hasn't declared expired; answer expired cursors with
+1. Serve each pull from one consistent snapshot (no per-table queries
+   at different points in time).
+2. Issue commit-ordered cursors: no change committed after a cursor's
+   snapshot may ever be invisible to pulls from that cursor.
+3. Retain deletions (tombstones or a change log) long enough to serve
+   any cursor it hasn't declared expired; answer expired cursors with
    `resyncRequired`, never with silently incomplete data.
-4. Apply each push atomically, and reject the push (`conflict`) if any
-   pushed record was modified on the server after the push's cursor.
+4. Apply each push atomically, and reject the whole push (`conflict`)
+   if any pushed record was modified on the server after the push's
+   cursor. The server never merges.
 5. Never return a push cursor without the interleaved foreign changes.
 
-Known-good cursor mechanisms (guidance, not mandate): a global revision
-sequence where the revision is assigned in commit order (e.g. via a
-serialized commit path or advisory lock); a transaction-horizon watermark
-(cursor = oldest possibly-invisible transaction, pull returns everything
-committed before it); an append-only change log with a single writer.
-Wall-clock `last_modified` alone is explicitly non-conforming.
+Known-good cursor mechanisms (guidance, not mandate): a global
+revision sequence assigned in commit order (serialized commit path or
+advisory lock); a transaction-horizon watermark; an append-only change
+log with a single writer. Wall-clock `last_modified` alone is
+explicitly non-conforming.
+
+You normally don't implement any of this by hand: the backend engine
+ships as [`@remelondb/server`](../packages/server) (the protocol over
+a small storage seam), and
+[`@remelondb/server-conformance`](../packages/server-conformance) is
+the executable version of this contract.
 
 ## Client engine notes
 
-- The engine is core code: it reads/writes records through the same
-  compiled-SQL path as everything else, and tombstones + the sync cursor
-  live in ordinary tables (`local_storage` for the cursor and last-synced
-  schema version), per `architecture-layers.md`.
-- Apply classification is upstream's decision tree, kept: remote `created`
-  that exists locally → treat as update (log anomaly); remote `updated`
-  missing locally → create; remote update vs local delete → local delete
-  wins (pushed later); remote delete → always destroys, even over local
-  changes. All overridable per record via `conflictResolver`.
+- The engine is core code: it reads and writes records through the
+  same compiled-SQL path as everything else; tombstones and the cursor
+  live in ordinary tables (`local_storage` for the cursor and
+  last-synced schema version).
+- Applying a pulled changeset follows upstream's decision tree, kept
+  as-is: remote `created` that already exists locally → treat as
+  update (logged anomaly); remote `updated` missing locally → create;
+  remote update vs. local delete → the local delete wins and is pushed
+  later; remote delete → always destroys, even over local changes.
+  All overridable per record via `conflictResolver`.
 - `fetchLocalChanges` strips `_status`/`_changed` at the boundary and
-  snapshots raws; `markLocalChangesAsSynced` keeps upstream's equality gate
-  so writes racing the push stay dirty.
-- The engine exposes the same surface as upstream (`synchronize()`,
-  `hasUnsyncedChanges()`, logging hooks), minus turbo sync (deferred, see
-  architecture doc) and minus `_unsafeBatchPerCollection` (apply batches are
-  chunked internally as an implementation detail rather than API).
+  snapshots raws; `markLocalChangesAsSynced` re-checks equality so a
+  write that raced the push stays dirty and goes out next sync.
+- The surface matches upstream (`synchronize()`,
+  `hasUnsyncedChanges()`, logging hooks), minus turbo sync (deferred)
+  and `_unsafeBatchPerCollection`.
+
+## Trade-offs this design accepts
+
+The fixes above close the *contract* flaws. What remains are deliberate
+trade-offs — know them before building on the sync layer:
+
+- **Last-writer-wins per column.** When two devices edit the same
+  column offline, one value survives and the other is silently
+  replaced. There is no operational merging (no CRDTs, no counters,
+  no list unions) — `conflictResolver` is the escape hatch for tables
+  that need smarter rules.
+- **Merges are per column, invariants often aren't.** If an invariant
+  spans columns (`start < end`, quantity vs. total), a merge can
+  produce a record neither device wrote. The protocol guarantees
+  convergence, not domain validity.
+- **Deletes are blunt.** A remote delete destroys the record even over
+  local unpushed edits; there is no trash-can semantics at the
+  protocol level.
+- **Resync is a full re-download.** Past the server's retention
+  window, the only recovery is pulling everything. That's the price of
+  letting servers prune tombstones.
+- **One cursor, whole database.** No per-table or partial sync in v1
+  (see open questions).
 
 ## Open questions
 
-1. **Sparse updates** (`updated` as `{id, ...changedColumnsOnly}` instead of
-   full records): halves payloads for wide tables, but complicates apply
-   (merge must distinguish "column absent" from "column null") and server
-   storage. Proposal: keep full records in v1; reserve a protocol capability
-   flag so sparse can be added without a breaking change.
-2. **`changedColumns` hint client→server**: would let servers do per-column
-   conflict detection instead of per-record. Proposal: omit in v1; server
-   conflict detection stays per-record (reject and let the client merge),
-   which is simpler and provably convergent.
-3. **Cursor scope**: one cursor for the whole database vs per-table cursors.
-   Per-table enables partial/priority sync but multiplies every invariant.
-   Proposal: single cursor in v1; partial sync is a future protocol
-   extension rather than a v1 complication.
+1. **Sparse updates** (`updated` as changed-columns-only): halves
+   payloads for wide tables but complicates apply and server storage.
+   Keep full records in v1; reserve a capability flag.
+2. **`changedColumns` hint client→server**: would enable per-column
+   server conflict detection. Omit in v1 — per-record reject-and-merge
+   is simpler and provably convergent.
+3. **Cursor scope**: single cursor vs. per-table cursors. Per-table
+   enables partial/priority sync but multiplies every invariant.
+   Single cursor in v1.
