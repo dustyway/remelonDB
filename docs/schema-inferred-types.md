@@ -180,6 +180,12 @@ afternoon of find-and-edit verified by typecheck.
 - Making `Database` generic over its `AppSchema`, so `db.get(tasks)`
   rejects tables outside the schema at compile time and the untyped
   string overload can retire from the public surface.
+- The table-object overload types records as `TypedModel` (record
+  methods included) even when no model class is bound, but unbound
+  collections hand out plain rows at runtime — `record.update()`
+  typechecks and throws. The honest type for the unbound case is the
+  record shape without methods; distinguishing bound from unbound in
+  types likely also needs the schema-generic `Database`.
 - `Q.on` and association typing: checking joined-table columns needs the
   association graph in types; worth it, but a second iteration.
 - `created_at`/`updated_at`: keep the convention (validated number
