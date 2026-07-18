@@ -19,6 +19,7 @@ import {
   table,
   type ColumnDef,
   type ColumnsSpec,
+  type SyncChanges,
   type TableSchema,
 } from '@remelondb/core'
 import { z } from 'zod'
@@ -139,7 +140,13 @@ export function syncSchemas<
       }),
     ]),
   )
-  const changes = z.strictObject(changeSets).partial()
+  // `.partial()` infers every table as possibly-undefined, but parse
+  // output never contains explicit-undefined entries (absent tables are
+  // absent keys), so `SyncChanges` — the type `synchronize` and the
+  // server engine take — is the honest static type.
+  const changes = z
+    .strictObject(changeSets)
+    .partial() as unknown as z.ZodType<SyncChanges>
 
   const migration = z.strictObject({
     from: z.number().int().positive(),
