@@ -41,6 +41,10 @@ export interface SchemaMigrations {
   readonly maxVersion: number
 }
 
+/**
+ * Migration step: a table added in this schema version.
+ * @category Schema
+ */
 export function createTable(spec: {
   name: string
   columns: ColumnsSpec
@@ -51,6 +55,10 @@ export function createTable(spec: {
   }
 }
 
+/**
+ * Migration step: columns added to an existing table in this version.
+ * @category Schema
+ */
 export function addColumns(spec: {
   table: string
   columns: ColumnsSpec
@@ -72,6 +80,21 @@ export function unsafeExecuteSql(sql: string): MigrationStep {
   return { type: 'sql', sql }
 }
 
+/**
+ * Declare how older databases reach the current schema version. A
+ * missing migration path is a refused open, never a silent reset.
+ *
+ * @example
+ * ```ts
+ * const migrations = schemaMigrations({
+ *   migrations: [
+ *     { toVersion: 2, steps: [addColumns({ table: 'tasks',
+ *       columns: { due_at: column.number().optional() } })] },
+ *   ],
+ * })
+ * ```
+ * @category Schema
+ */
 export function schemaMigrations(spec: {
   migrations: readonly Migration[]
 }): SchemaMigrations {

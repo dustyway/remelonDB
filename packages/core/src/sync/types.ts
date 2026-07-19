@@ -6,6 +6,11 @@
  */
 import type { DirtyRaw } from '../rawRecord/index'
 
+/**
+ * Opaque server-issued position in the change stream. Store it, echo
+ * it back; never interpret it.
+ * @category Sync
+ */
 export type Cursor = string
 
 export interface SyncTableChanges {
@@ -14,6 +19,10 @@ export interface SyncTableChanges {
   readonly deleted: readonly string[]
 }
 
+/**
+ * Change sets keyed by table — the payload both sync directions carry.
+ * @category Sync
+ */
 export type SyncChanges = { readonly [table: string]: SyncTableChanges }
 
 /** Schema info sent with a pull after a local migration. */
@@ -29,6 +38,7 @@ export interface SyncPullArgs {
   readonly migration: MigrationSyncChanges | null
 }
 
+/** @category Sync */
 export type SyncPullResult =
   | { readonly changes: SyncChanges; readonly cursor: Cursor }
   /** The server can no longer serve this cursor — full resync required. */
@@ -39,6 +49,7 @@ export interface SyncPushArgs {
   readonly cursor: Cursor
 }
 
+/** @category Sync */
 export type SyncPushResult =
   | {
       /**

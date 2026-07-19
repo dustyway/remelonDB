@@ -46,6 +46,7 @@ export type Unsubscribe = () => void
  * Both flow from Database.get's overloads; C defaults to string so
  * dynamically-obtained collections accept any column.
  */
+/** @category Database & queries */
 export class Collection<M = RawRecord, C extends string = string> {
   readonly cache = new RecordCache()
   private subscribers: Array<(changes: CollectionChangeSet) => void> = []

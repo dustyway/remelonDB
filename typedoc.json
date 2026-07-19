@@ -1,9 +1,29 @@
 {
   "name": "remelonDB API",
   "entryPointStrategy": "packages",
-  "entryPoints": ["packages/*"],
+  "entryPoints": [
+    "packages/*"
+  ],
   "out": "docs-api",
   "includeVersion": true,
-  "validation": { "notDocumented": true },
-  "readme": "README.md"
+  "validation": {
+    "notDocumented": true
+  },
+  "readme": "README.md",
+  "excludeInternal": true,
+  "categorizeByGroup": false,
+  "defaultCategory": "Advanced",
+  "categoryOrder": [
+    "Schema",
+    "Database & queries",
+    "Models",
+    "Sync",
+    "*",
+    "Advanced"
+  ],
+  "navigationLinks": {
+    "Tutorial": "https://github.com/dustyway/remelonDB/blob/main/docs/tutorial.md",
+    "Guides & design": "https://github.com/dustyway/remelonDB/blob/main/docs/README.md",
+    "GitHub": "https://github.com/dustyway/remelonDB"
+  }
 }

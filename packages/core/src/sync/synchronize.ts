@@ -99,10 +99,25 @@ async function migrationInfo(
 const inFlight = new WeakMap<Database, Promise<void>>()
 
 /**
+ * Run one full sync: pull remote changes, apply them (per-column
+ * conflict resolution), push local changes, mark them synced. Wire up
+ * `pullChanges`/`pushChanges` to your transport; shapes are the wire
+ * protocol's (docs/sync-wire.md).
+ *
  * Concurrent calls for the same database coalesce: a call arriving while
  * a sync is running joins it (the runner's options apply). The in-write
- * cursor re-check below stays as the guard against out-of-band writers
+ * cursor re-check stays as the guard against out-of-band writers
  * (another tab or process sharing the database).
+ *
+ * @example
+ * ```ts
+ * await synchronize({
+ *   database: db,
+ *   pullChanges: async (args) => postJson('/sync/pull', args),
+ *   pushChanges: async (args) => postJson('/sync/push', args),
+ * })
+ * ```
+ * @category Sync
  */
 export function synchronize(options: SynchronizeOptions): Promise<void> {
   const running = inFlight.get(options.database)

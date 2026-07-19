@@ -1,3 +1,14 @@
 {
-  "entryPoints": ["src/index.ts"]
+  "extends": [
+    "../../typedoc.base.json"
+  ],
+  "entryPoints": [
+    "src/index.ts"
+  ],
+  "intentionallyNotExported": [
+    "columnTag",
+    "comparisonTag",
+    "DirtyRecordSnapshot",
+    "RecordCache"
+  ]
 }

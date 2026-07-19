@@ -23,6 +23,12 @@ import type {
   Unsubscribe,
 } from './Collection'
 
+/**
+ * A fetchable, observable query — a Collection plus Q clauses. Get one
+ * from `collection.query(...)`; call `fetch()` for a one-shot read or
+ * `observe(cb)` to be called with results on every relevant change.
+ * @category Database & queries
+ */
 export class Query<M = RawRecord> {
   constructor(
     readonly collection: Collection<M>,
