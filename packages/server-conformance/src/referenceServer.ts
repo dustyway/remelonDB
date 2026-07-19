@@ -44,6 +44,11 @@ export interface ReferenceServer {
   gc(floor: number): void
 }
 
+/**
+ * A complete in-memory sync server (engine + memory store) used as the
+ * conformance suite's reference subject; handy as a test double for
+ * client development too.
+ */
 export function createReferenceServer(
   options: ReferenceServerOptions = {},
 ): ReferenceServer {

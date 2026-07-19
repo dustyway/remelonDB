@@ -17,6 +17,12 @@ export interface MemoryStore extends SyncStore<string> {
   gc(floor: number): void
 }
 
+/**
+ * The in-process reference `SyncStore`: complete protocol semantics, no
+ * persistence. Right for demos, tests, and as the model for real
+ * adapters; state lives and dies with the process.
+ * @category Store seam
+ */
 export function createMemoryStore(): MemoryStore {
   // scope -> table -> id -> row state
   const scopes = new Map<string, Map<string, Map<string, Stored>>>()

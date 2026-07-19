@@ -43,6 +43,20 @@ export interface ResolvedOptions {
   readonly persistence: { readonly databaseName: () => string } | false
 }
 
+/**
+ * Register the full driver contract as a vitest suite. Passing it is
+ * what "conforming driver" means; run it against every storage mode the
+ * driver supports.
+ *
+ * @example
+ * ```ts
+ * registerDriverConformance({
+ *   name: 'node (better-sqlite3)',
+ *   createDriver: () => new NodeSqliteDriver(),
+ *   persistence: { databaseName: () => `/tmp/db-${counter++}.db` },
+ * })
+ * ```
+ */
 export function registerDriverConformance(
   options: DriverConformanceOptions,
 ): void {

@@ -14,6 +14,15 @@ import NativeRemelonDriver from './specs/NativeRemelonDriver'
  *
  * `name` is ':memory:', an absolute path, or a bare filename resolved
  * into the app's database directory by the native side.
+ *
+ * @example
+ * ```ts
+ * const db = await Database.open({
+ *   driver: new RnSqliteDriver(),
+ *   schema,
+ *   name: 'app.db',   // resolved into the app's database directory
+ * })
+ * ```
  */
 export class RnSqliteDriver implements SqliteDriver {
   private name: string | null = null
