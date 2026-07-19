@@ -18,6 +18,11 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Deployment environment with a required reviewer: every publish run
+    # pauses for approval in the Actions UI before any step executes.
+    # Pinning this name in each package's npm trusted-publisher config
+    # makes npm reject OIDC claims from any other workflow shape.
+    environment: npm-publish
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
