@@ -15,7 +15,10 @@
     "expo-dev-client": "~57.0.7",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
-    "react-native": "0.86.0"
+    "react-native": "0.86.0",
+    "@remelondb/core": "workspace:*",
+    "@remelondb/driver-rn": "workspace:*",
+    "example-todo-sync": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
