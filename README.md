@@ -143,6 +143,9 @@ watermelondb-upstream/   reference checkout of upstream (gitignored)
 - **[docs/tutorial.md](docs/tutorial.md)** — start here: a flashcard
   app's data layer, end to end
 - **[docs/README.md](docs/README.md)** — index of all documentation
+- **[API reference](https://dustyway.github.io/remelonDB/)** — generated
+  from the source on every push (all packages, grouped by task, with
+  examples)
 - Design decisions: [engine choice](docs/q-dsl-and-one-engine.md) ·
   [architecture layers](docs/architecture-layers.md) ·
   [sync protocol](docs/sync-design.md) ·
