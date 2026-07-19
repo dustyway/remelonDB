@@ -17,6 +17,11 @@ no OTP; provenance attestations are automatic.
 The workflow fails loudly if any package's version disagrees with the
 tag, and skips versions already published — re-running it is safe.
 
+The publish job runs in the `npm-publish` deployment environment, which
+requires an approval in the Actions UI before any step executes; the
+environment name is part of each package's trusted-publisher pin, so
+OIDC claims without it are rejected by npm.
+
 ## Trusted publisher configuration (one-time, per package)
 
 On npmjs.com: package → Settings → Trusted Publisher → GitHub Actions,
@@ -27,7 +32,7 @@ with exactly:
 | Organization or user | `dustyway` |
 | Repository | `remelonDB` |
 | Workflow filename | `release.yml` |
-| Environment name | (empty) |
+| Environment name | `npm-publish` |
 | Allowed actions | `npm publish` |
 
 Requirements baked into the workflow: npm ≥ 11.5.1 (upgraded in-job),
