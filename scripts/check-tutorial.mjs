@@ -16,6 +16,7 @@
 //
 // Run: pnpm build && node scripts/check-tutorial.mjs
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { registerHooks } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -31,7 +32,23 @@ const MODULES = {
     '../packages/server/dist/index.mjs',
     import.meta.url,
   ).href,
+  '@remelondb/zod': new URL(
+    '../packages/zod/dist/index.mjs',
+    import.meta.url,
+  ).href,
+  zod: import.meta.resolve('zod'),
 }
+
+// The zod package's built dist imports '@remelondb/core' at runtime, and
+// in-workspace that specifier resolves to TS source (dev exports point at
+// src/). Redirect every resolution of the mapped modules — whatever the
+// importer — to the built files, not just the tutorial's own imports.
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    const url = MODULES[specifier]
+    return url ? { url, shortCircuit: true } : nextResolve(specifier, context)
+  },
+})
 
 // --- extract ```js blocks (skip ```js fragment) ---
 const markdown = await readFile(
