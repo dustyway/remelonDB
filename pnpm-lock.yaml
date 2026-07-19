@@ -21,17 +21,17 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@24.13.3)(@vitest/browser@3.2.7)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
 
-  examples/todo-sync:
+  examples/todo-sync/backend:
     dependencies:
       '@remelondb/core':
         specifier: workspace:*
-        version: link:../../packages/core
+        version: link:../../../packages/core
       '@remelondb/server':
         specifier: workspace:*
-        version: link:../../packages/server
+        version: link:../../../packages/server
       '@remelondb/zod':
         specifier: workspace:*
-        version: link:../../packages/zod
+        version: link:../../../packages/zod
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -46,42 +46,17 @@ importers:
         specifier: ^5.8.3
         version: 5.9.3
 
-  examples/todo-sync-native:
-    dependencies:
-      expo:
-        specifier: ~57.0.7
-        version: 57.0.7(@babel/core@7.29.7)(@expo/dom-webview@57.0.1)(react-dom@19.2.7(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
-      expo-dev-client:
-        specifier: ~57.0.7
-        version: 57.0.7(expo@57.0.7)(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))
-      expo-status-bar:
-        specifier: ~57.0.1
-        version: 57.0.1(expo@57.0.7)(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)
-      react:
-        specifier: 19.2.3
-        version: 19.2.3
-      react-native:
-        specifier: 0.86.0
-        version: 0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3)
-    devDependencies:
-      '@types/react':
-        specifier: ~19.2.2
-        version: 19.2.17
-      typescript:
-        specifier: ~6.0.3
-        version: 6.0.3
-
-  examples/todo-sync-web:
+  examples/todo-sync/frontend:
     dependencies:
       '@remelondb/core':
         specifier: workspace:*
-        version: link:../../packages/core
+        version: link:../../../packages/core
       '@remelondb/driver-web':
         specifier: workspace:*
-        version: link:../../packages/driver-web
+        version: link:../../../packages/driver-web
       example-todo-sync:
         specifier: workspace:*
-        version: link:../todo-sync
+        version: link:../backend
       react:
         specifier: ^19.2.7
         version: 19.2.7
@@ -107,6 +82,31 @@ importers:
       vite:
         specifier: ^8.1.5
         version: 8.1.5(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
+
+  examples/todo-sync/mobile:
+    dependencies:
+      expo:
+        specifier: ~57.0.7
+        version: 57.0.7(@babel/core@7.29.7)(@expo/dom-webview@57.0.1)(react-dom@19.2.7(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
+      expo-dev-client:
+        specifier: ~57.0.7
+        version: 57.0.7(expo@57.0.7)(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))
+      expo-status-bar:
+        specifier: ~57.0.1
+        version: 57.0.1(expo@57.0.7)(react-native@0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)
+      react:
+        specifier: 19.2.3
+        version: 19.2.3
+      react-native:
+        specifier: 0.86.0
+        version: 0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3)
+    devDependencies:
+      '@types/react':
+        specifier: ~19.2.2
+        version: 19.2.17
+      typescript:
+        specifier: ~6.0.3
+        version: 6.0.3
 
   packages/core: {}
 

@@ -1,6 +1,7 @@
 packages:
   - packages/*
   - examples/*
+  - examples/*/*
 allowBuilds:
   better-sqlite3: true
   # webdriverio pulls these in, but only safaridriver is used (BROWSER=safari)

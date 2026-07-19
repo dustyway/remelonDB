@@ -129,9 +129,11 @@ packages/
   server-conformance/  @remelondb/server-conformance — the wire spec's
                  checklist as a runnable suite + in-memory reference
 examples/
-  todo-sync/     shared schema + ~50-line sync server (see its README)
-  todo-sync-web/ React client; two-window offline-capable sync demo,
-                 e2e-tested in CI
+  todo-sync/     one example, one shared schema, three packages:
+                 backend/ (schema + ~50-line sync server), frontend/
+                 (React web client; two-window offline-capable sync
+                 demo, e2e-tested in CI), mobile/ (React Native
+                 client, in progress)
 docs/            design decisions and reference guides — see docs/README.md
 watermelondb-upstream/   reference checkout of upstream (gitignored)
 ```
