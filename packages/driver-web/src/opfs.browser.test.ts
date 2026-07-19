@@ -71,3 +71,39 @@ describe('OPFS durability across worker restarts', () => {
     worker2.terminate()
   })
 })
+
+describe('multi-tab coordination (Web Locks)', () => {
+  // Two driver instances with their own real Workers contend for the
+  // SAH pool exactly like two tabs do; the Web Locks API is
+  // origin-scoped, so the coordination is also identical.
+  it('fails fast when another holder exists; takeover succeeds and notifies the loser', async () => {
+    const name = `tabs-${Date.now()}.db`
+    let aTakenOver = false
+    const tabA = new WebSqliteDriver({
+      onTakenOver: () => {
+        aTakenOver = true
+      },
+    })
+    await tabA.open(name)
+    await tabA.execute('create table t ("id" primary key, "v")', [])
+    await tabA.execute('insert into t values (?, ?)', ['k', 'from-a'])
+
+    // default: the second holder is refused, the first is untouched
+    const tabB = new WebSqliteDriver()
+    await expect(tabB.open(name)).rejects.toThrow(/open in another tab/)
+    expect(await tabA.query('select "v" from t', [])).toEqual([{ v: 'from-a' }])
+    expect(aTakenOver).toBe(false)
+
+    // takeover: the new holder wins, sees committed data, loser learns
+    const tabC = new WebSqliteDriver({ takeover: true })
+    const { userVersion } = await tabC.open(name)
+    expect(userVersion).toBe(0)
+    expect(await tabC.query('select "v" from t', [])).toEqual([{ v: 'from-a' }])
+    expect(aTakenOver).toBe(true)
+    await expect(tabA.query('select 1 as one', [])).rejects.toThrow(
+      /taken over by another tab/,
+    )
+
+    await tabC.destroy() // unlink so reruns start clean
+  })
+})

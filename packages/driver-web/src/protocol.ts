@@ -10,6 +10,9 @@ import type { SqlValue } from '@remelondb/core'
 export interface Endpoint {
   postMessage(message: unknown): void
   addMessageListener(listener: (message: unknown) => void): void
+  /** Tear down the transport (a real Worker terminates — this is what
+   * releases the SAH pool's file locks). In-process endpoints may omit it. */
+  terminate?(): void
 }
 
 export type StorageKind = 'opfs' | 'memory'

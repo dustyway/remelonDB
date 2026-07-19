@@ -92,6 +92,8 @@ export class SqliteWorkerServer {
         } catch (error) {
           throw new Error(
             `OPFS storage is unavailable here (${String(error)}) — ` +
+              `if this app is open in another tab, that tab holds the ` +
+              `storage (open with { takeover: true } to take it over); ` +
               `pass storage: 'memory' if non-persistent storage is intended`,
           )
         }

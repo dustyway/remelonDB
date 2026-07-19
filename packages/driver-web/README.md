@@ -48,18 +48,37 @@ const db = await Database.open({
 The OPFS SAH-pool VFS acquires **exclusive** sync access handles: one
 connection per database, full stop. A second tab that tries to open the
 same database fails loudly (consistent with the no-silent-downgrade
-rule) — it does not corrupt anything, and it does not silently fall
-back to memory.
+rule) — it does not corrupt anything, does not silently fall back to
+memory, and the error says what is going on: the database is open in
+another tab.
 
-The minimum viable policy needs no routing at all: **single-owner with
-takeover**. One tab holds a Web Lock and owns the database; a second
-tab, instead of hitting the open failure, offers "continue here
-instead?" and steals the lock (`{ steal: true }`). One subtlety:
-stealing the lock does **not** release the OPFS handles — the old tab
-must close its driver first, so the new tab retries `open()` until that
-happens (tab death releases the handles via worker teardown, so the
-retry always converges). Only one tab is active at a time, but the
-handoff is explicit and nothing can race.
+**Single-owner with takeover** is built into the driver. Tabs
+coordinate through a Web Lock (`remelondb:<name>`) held for the
+connection's lifetime:
+
+```ts
+const driver = new WebSqliteDriver({
+  takeover: true,          // take the database from another tab
+  onTakenOver: () => {     // ...and learn when one takes it from us
+    showBanner('This app was opened in another tab.')
+  },
+})
+```
+
+- Default (`takeover` unset): opening a database another tab holds
+  rejects with `'<name>' is open in another tab or window`.
+- `takeover: true`: `open()` steals the lock. The losing driver
+  terminates its worker — which is what releases the pool's handles;
+  in-flight statements there are abandoned, committed data is safe on
+  disk — fires its `onTakenOver` callback, and every later call on it
+  rejects with a clear error. The winning `open()` retries until the
+  handles come free (tab death also releases them via worker teardown,
+  so the retry always converges).
+- Environments without the Web Locks API (Node tests, non-secure
+  contexts) skip coordination entirely and behave as before.
+
+Only one tab is active at a time, but the handoff is explicit and
+nothing can race.
 
 For apps that need every tab live simultaneously, route every tab
 through one connection. Two patterns, in order of preference:
@@ -85,13 +104,13 @@ through one connection. Two patterns, in order of preference:
    Structurally simpler — one owner by construction, no election, no
    handover — but unavailable on Chrome for Android.
 
-None of these ship as helpers yet; the driver deliberately stays a
-single-connection seam. Planned: an `acquireTabOwnership()` helper in
-this package packaging the takeover choreography, and `Database.close()`
-in core (drain the writer queue, then close the driver) so teardown on
-takeover is clean. If you only target desktop browsers and need true
-multi-tab, prefer the SharedWorker; if Android web matters, use the
-lock election.
+Neither routing pattern ships as a helper yet; the driver deliberately
+stays a single-connection seam. The full every-tab-live design — leader
+election, follower driver calls forwarded over the existing `Endpoint`
+protocol, and committed changes broadcast into each tab's record cache —
+is [docs/multi-tab.md](../../docs/multi-tab.md). If you only target
+desktop browsers and need true multi-tab today, prefer the
+SharedWorker; if Android web matters, use the lock election.
 
 ## Layout
 
