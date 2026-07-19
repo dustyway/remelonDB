@@ -69,6 +69,10 @@ local, and recovery. CI runs this on every push.
 ## Files worth reading
 
 - `backend/schema.ts`: the single source of truth, about ten lines.
+- `backend/requests.http`: the wire protocol as clickable requests
+  (JetBrains HTTP client / VS Code REST Client) — every outcome the
+  spec defines, from the happy path to `conflict`, `resyncRequired`,
+  and validation rejections.
 - `backend/server.ts`: the entire backend. `createSyncEngine` +
   `createMemoryStore` behind two `node:http` routes, requests validated
   with the same wire schemas the client validates responses with.
