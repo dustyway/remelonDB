@@ -7,6 +7,9 @@
     <style>
       body { font-family: system-ui, sans-serif; max-width: 32rem; margin: 3rem auto; padding: 0 1rem; }
       #status { color: #666; }
+      .dot { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%; background: #bbb; }
+      [data-sync-status='synced'] .dot { background: #2e7d32; }
+      [data-sync-status='offline'] .dot { background: #c62828; }
       form { display: flex; gap: 0.5rem; margin: 1rem 0; }
       input { flex: 1; padding: 0.4rem; }
       li { cursor: pointer; padding: 0.2rem 0; }

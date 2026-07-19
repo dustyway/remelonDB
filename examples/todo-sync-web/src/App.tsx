@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { Q, type Database } from '@remelondb/core'
 import { TodoModel } from 'example-todo-sync/schema'
-import { runSync } from './sync'
+import { getSyncStatus, runSync, subscribeSyncStatus } from './sync'
 import { useQuery } from './useQuery'
 
 export function App({ db }: { db: Database }) {
@@ -12,6 +12,7 @@ export function App({ db }: { db: Database }) {
     ),
   )
   const [text, setText] = useState('')
+  const syncStatus = useSyncExternalStore(subscribeSyncStatus, getSyncStatus)
 
   useEffect(() => {
     void runSync(db)
@@ -40,8 +41,9 @@ export function App({ db }: { db: Database }) {
   return (
     <>
       <h1>todo-sync</h1>
-      <p id="status">
-        {todos.length} todo{todos.length === 1 ? '' : 's'}
+      <p id="status" data-sync-status={syncStatus}>
+        <span className="dot" /> {todos.length} todo
+        {todos.length === 1 ? '' : 's'} · {syncStatus}
       </p>
       <form onSubmit={add}>
         <input
