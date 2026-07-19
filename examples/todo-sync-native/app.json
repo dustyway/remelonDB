@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "todo-sync",
+    "slug": "todo-sync-native",
+    "version": "0.0.0",
+    "orientation": "portrait",
+    "ios": {
+      "bundleIdentifier": "com.remelondb.example.todosync"
+    },
+    "android": {
+      "package": "com.remelondb.example.todosync"
+    }
+  }
+}
