@@ -25,8 +25,12 @@ protocol. The frontend — your app — installs `@remelondb/core` and one
 driver from npm:
 
 ```sh
-pnpm add @remelondb/core @remelondb/driver-node
+pnpm add @remelondb/core @remelondb/driver-node @remelondb/zod zod
 ```
+
+`@remelondb/zod` is the schema front end this tutorial uses: one Zod
+object per table drives the client table, the record types, and — in
+section 10 — validation of both sync directions.
 
 The backend — wherever your sync endpoints live — installs the sync
 engine (wired up in section 10):
@@ -39,10 +43,9 @@ The engine embeds in your own server and stores data in memory out of
 the box — enough for this tutorial and for development; durable
 storage comes from implementing its small storage seam.
 
-Apps that never sync need only the first line. Two more packages exist
-for later: `@remelondb/server-conformance` proves a custom backend
-store against the protocol contract, and `@remelondb/zod` derives
-tables from shared Zod schemas ([zod-adapter.md](zod-adapter.md)).
+Apps that never sync need only the first line. One more package
+exists for later: `@remelondb/server-conformance` proves a custom
+backend store against the protocol contract.
 
 ## 2. Define the schema
 
@@ -50,43 +53,55 @@ Three tables. Cards carry a `due_at` timestamp that the scheduler
 updates after each review; reviews are append-only facts about what
 happened.
 
-(If your stack already has Zod schemas, `zodTable` from
-[`@remelondb/zod`](zod-adapter.md) derives these exact definitions from
-them — this section shows the underlying builders it produces. The
-[example app](../examples/todo-sync/README.md) demonstrates the
-Zod-first path.)
+Each table is one Zod object — the single source of truth. It becomes
+the client table here, and the same object validates the sync wire in
+section 10.
 
 ```js
-import { appSchema, column as c, table } from '@remelondb/core'
+import { z } from 'zod'
+import { appSchema } from '@remelondb/core'
+import { zodTable } from '@remelondb/zod'
 
-const decks = table('decks', {
-  title: c.string(),
-  created_at: c.number(),
-  updated_at: c.number(),
+const DeckRow = z.object({
+  title: z.string().min(1),
+  created_at: z.number(),
+  updated_at: z.number(),
 })
 
-const cards = table('cards', {
-  deck_id: c.string().indexed(),
-  front: c.string(),
-  back: c.string(),
-  due_at: c.number().indexed(),
-  created_at: c.number(),
-  updated_at: c.number(),
+const CardRow = z.object({
+  deck_id: z.string(),
+  front: z.string(),
+  back: z.string(),
+  due_at: z.number(),
+  created_at: z.number(),
+  updated_at: z.number(),
 })
 
-const reviews = table('reviews', {
-  card_id: c.string().indexed(),
-  rating: c.number(),
-  reviewed_at: c.number(),
+const ReviewRow = z.object({
+  card_id: z.string(),
+  rating: z.number().int().min(0).max(3),
+  reviewed_at: z.number(),
 })
+
+const decks = zodTable('decks', DeckRow)
+const cards = zodTable('cards', CardRow, { indexed: ['deck_id', 'due_at'] })
+const reviews = zodTable('reviews', ReviewRow, { indexed: ['card_id'] })
 
 const schema = appSchema({ version: 1, tables: [decks, cards, reviews] })
 ```
 
+The column vocabulary is `z.string()`, `z.number()`, `z.boolean()`,
+each optionally `.nullable()`. Refinements like `.min(0).max(3)` don't
+change the column type — local writes are not validated (that happens
+at the trust boundary, the sync wire, in section 10). Indexes are a
+database concept Zod has no word for, so they ride in the options bag:
+`deck_id` and `due_at` back the queries this app runs constantly.
 `created_at`/`updated_at` are auto-stamped on create and update because
-they are declared. `.indexed()` on `deck_id` and `due_at` backs the
-queries this app runs constantly. Details: [schema
-reference](reference/schema.md).
+they are declared.
+
+(No Zod in your stack? `zodTable` produces ordinary table definitions;
+writing them by hand with the `table()`/`column` builders is the same
+thing and documented in the [schema reference](reference/schema.md).)
 
 ## 3. Define the models
 
@@ -236,9 +251,11 @@ const deckReviews = await db.get(Review).query(
 
 ## 9. Grow the schema
 
-Suppose version 2 adds a free-text `notes` column to cards. Bump the
-schema version, add the column to the table schema, and describe the
-step in a migration so existing installs upgrade in place:
+Suppose version 2 adds a free-text `notes` column to cards. Add
+`notes: z.string().nullable()` to `CardRow`, bump the schema version,
+and describe the step in a migration so existing installs upgrade in
+place. Migration steps state column deltas directly, so they use the
+column builders:
 
 ```js
 import { schemaMigrations, addColumns, column as c } from '@remelondb/core'
@@ -276,13 +293,26 @@ with the tables to sync and get per-user pull/push handlers back:
 
 ```js
 import { createMemoryStore, createSyncEngine } from '@remelondb/server'
+import { syncSchemas } from '@remelondb/zod'
+
+const wire = syncSchemas({ decks: DeckRow, cards: CardRow, reviews: ReviewRow })
 
 const engine = createSyncEngine({
   store: createMemoryStore(),   // or your database adapter
-  tables: { decks: {}, cards: {}, reviews: {} },
+  tables: {
+    decks: { validate: (row) => wire.rows.decks.safeParse(row).success },
+    cards: { validate: (row) => wire.rows.cards.safeParse(row).success },
+    reviews: { validate: (row) => wire.rows.reviews.safeParse(row).success },
+  },
 })
 const handlers = engine.as('user-1')   // { pull(args), push(args) }
 ```
+
+`syncSchemas` turns the section-2 Zod objects into wire validators:
+strict row schemas (user columns plus `id`, nothing smuggled), and
+envelope schemas for every message. Here the server side uses the row
+schemas to vet incoming rows — a row failing them is rejected by id
+and stays dirty on the client, per the protocol.
 
 The frontend half is `synchronize()` from core. It needs two functions
 that reach those handlers; the engine handles the rest (cursor
@@ -315,13 +345,13 @@ await synchronize({
     const res = await fetch('/sync/pull', {
       method: 'POST', body: JSON.stringify(args),
     })
-    return res.json()   // { changes, cursor }
+    return wire.pullResult.parse(await res.json())
   },
   pushChanges: async (args) => {
     const res = await fetch('/sync/push', {
       method: 'POST', body: JSON.stringify(args),
     })
-    return res.json()   // { cursor, changes }
+    return wire.pushResult.parse(await res.json())
   },
 })
 ```
@@ -344,10 +374,9 @@ What the server must guarantee, and why, is specified in
   [database & observation](reference/database.md): the day-to-day API.
 - [Schema & migrations](reference/schema.md),
   [records](reference/records.md): data shape and lifecycle.
-- [`@remelondb/zod`](zod-adapter.md): if your stack already has Zod
-  schemas, derive tables from them (`zodTable`) instead of writing
-  section 2 by hand, and validate both sync directions with the same
-  objects.
+- [`@remelondb/zod`](zod-adapter.md): the design record for the adapter
+  used throughout — what it accepts, what it rejects and why, and the
+  interop guarantees behind `zodTable` and `syncSchemas`.
 - [Sync design](sync-design.md): the protocol's rationale. The backend
   ships as [`@remelondb/server`](../packages/server); read this before
   backing it with your own `SyncStore` adapter.
