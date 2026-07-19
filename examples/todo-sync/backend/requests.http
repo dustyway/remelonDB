@@ -1,4 +1,5 @@
-# The sync wire protocol, clickable (docs/sync-wire.md is the spec).
+# The sync wire protocol, clickable. docs/sync-tour.md walks this
+# sequence with real responses; docs/sync-wire.md is the spec.
 # Start the server first: pnpm --filter example-todo-sync server
 # Every protocol outcome is an HTTP 200 with the variant in the body;
 # only malformed requests get a 400.
