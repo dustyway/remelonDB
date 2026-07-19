@@ -11,3 +11,4 @@ packages/driver-rn/cpp/vendor/
 dist/
 .idea/
 *.local.md
+docs-api/
