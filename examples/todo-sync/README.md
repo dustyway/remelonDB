@@ -31,7 +31,11 @@ pnpm --filter example-todo-sync-web dev    # terminal 2: web client on :5173
 Open the client twice: one normal window and one **private** window.
 Two tabs in the same profile share one OPFS database (and the driver
 holds a single connection), so a private window or a second browser is
-what plays the part of a second device.
+what plays the part of a second device. A second normal tab gets a
+clear "open in another tab" error; the driver's takeover option and
+the planned every-tab-live design are covered in the
+[driver README](../../packages/driver-web/README.md#multi-tab-usage)
+and [docs/multi-tab.md](../../docs/multi-tab.md).
 
 The script:
 
