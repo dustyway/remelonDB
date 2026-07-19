@@ -6,7 +6,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "build": "pnpm -r build",
-    "check:tutorial": "node scripts/check-tutorial.mjs"
+    "check:tutorial": "node scripts/check-tutorial.mjs",
+    "check:sync-tour": "node scripts/check-sync-tour.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",

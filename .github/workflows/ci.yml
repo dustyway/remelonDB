@@ -21,6 +21,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
       - run: pnpm typecheck
+      # docs/sync-tour.md replayed against the example server — the
+      # tour's captured responses cannot drift from behavior
+      - run: pnpm check:sync-tour
       # The sync protocol's formal model (docs/sync-wire.md): invariants
       # must hold across 25k simulated traces
       - run: npx --yes @informalsystems/quint typecheck docs/sync_model.qnt
