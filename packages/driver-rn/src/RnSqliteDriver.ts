@@ -23,6 +23,7 @@ import NativeRemelonDriver from './specs/NativeRemelonDriver'
  *   name: 'app.db',   // resolved into the app's database directory
  * })
  * ```
+ * @category Driver
  */
 export class RnSqliteDriver implements SqliteDriver {
   private name: string | null = null

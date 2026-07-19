@@ -21,6 +21,7 @@ import type {
  *   name: ':memory:',
  * })
  * ```
+ * @category Driver
  */
 export class NodeSqliteDriver implements SqliteDriver {
   private db: SQLiteDatabase.Database | null = null

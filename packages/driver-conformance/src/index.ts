@@ -56,6 +56,7 @@ export interface ResolvedOptions {
  *   persistence: { databaseName: () => `/tmp/db-${counter++}.db` },
  * })
  * ```
+ * @category Conformance
  */
 export function registerDriverConformance(
   options: DriverConformanceOptions,
