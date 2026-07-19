@@ -1,0 +1,9 @@
+{
+  "name": "remelonDB API",
+  "entryPointStrategy": "packages",
+  "entryPoints": ["packages/*"],
+  "out": "docs-api",
+  "includeVersion": true,
+  "validation": { "notDocumented": true },
+  "readme": "README.md"
+}

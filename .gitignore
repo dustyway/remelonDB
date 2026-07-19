@@ -11,3 +11,4 @@ packages/driver-rn/cpp/vendor/
 dist/
 .idea/
 CLAUDE.local.md
+docs-api/
