@@ -9,7 +9,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { runActs } from './acts.mjs'
 
 const webDir = fileURLToPath(new URL('..', import.meta.url))
-const hubDir = fileURLToPath(new URL('../../todo-sync', import.meta.url))
+const hubDir = fileURLToPath(new URL('../../backend', import.meta.url))
 
 const children = []
 const start = (name, command, args, cwd) => {

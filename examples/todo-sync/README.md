@@ -1,11 +1,12 @@
 # todo-sync
 
-A small offline-first todo list that syncs between browsers. Two
-packages:
+A small offline-first todo list that syncs between devices. Three
+packages, one shared schema:
 
-- `examples/todo-sync` (this directory): the shared schema
-  (`schema.ts`) and a ~50-line sync server (`server.ts`)
-- `examples/todo-sync-web`: a React client
+- `backend/`: the shared schema (`schema.ts`) and a ~50-line sync
+  server (`server.ts`)
+- `frontend/`: a React web client
+- `mobile/`: a React Native client (in progress)
 
 What it demonstrates:
 
@@ -67,19 +68,22 @@ local, and recovery. CI runs this on every push.
 
 ## Files worth reading
 
-- `schema.ts`: the single source of truth, about ten lines.
-- `server.ts`: the entire backend. `createSyncEngine` +
+- `backend/schema.ts`: the single source of truth, about ten lines.
+- `backend/server.ts`: the entire backend. `createSyncEngine` +
   `createMemoryStore` behind two `node:http` routes, requests validated
   with the same wire schemas the client validates responses with.
-- `../todo-sync-web/src/useQuery.ts`: the whole React bridge, twelve
+- `frontend/src/useQuery.ts`: the whole React bridge, twelve
   lines. `observe()` is the reactivity; the hook only pipes emissions
   into state.
-- `../todo-sync-web/src/sync.ts`: `synchronize()` with wire validation
+- `frontend/src/sync.ts`: `synchronize()` with wire validation
   and a small sync-status store the UI's colored dot subscribes to.
-- `../todo-sync-web/vite.config.ts`: the one integration trap. The
+- `frontend/vite.config.ts`: the one integration trap. The
   driver chain must be excluded from Vite's dependency pre-bundling,
   otherwise the driver's worker URL points nowhere and opening the
   database hangs.
+- `mobile/metro.config.js`: the same lesson for React Native — Metro
+  must be taught the workspace root, or workspace-linked packages
+  don't resolve.
 
 ## Copying this into your own project
 
