@@ -62,6 +62,21 @@ const toChanges = (
   return changes
 }
 
+/**
+ * The wire protocol's semantics over a `SyncStore`: cursors, the push
+ * interleave, per-row validation and rejection, scoping. Storage is the
+ * adapter's job; every obligation that can be wrong lives here, once.
+ *
+ * @example
+ * ```ts
+ * const engine = createSyncEngine({
+ *   store: createMemoryStore(),
+ *   tables: { todos: { validate: (row) => Todo.safeParse(row).success } },
+ * })
+ * const handlers = engine.as(userId)   // { pull(args), push(args) }
+ * ```
+ * @category Engine
+ */
 export function createSyncEngine<Scope>(
   options: SyncEngineOptions<Scope>,
 ): { as(scope: Scope): SyncHandlers } {

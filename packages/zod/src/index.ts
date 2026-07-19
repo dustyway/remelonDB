@@ -85,6 +85,13 @@ export interface ZodTableOptions<Shape extends z.ZodRawShape> {
  * what `table(name, { ... })` with hand-written builders produces —
  * usable in `appSchema`, `ModelFor`, and `db.get` — and
  * `InferRecord<typeof t>` equals `z.infer<typeof schema> & { id }`.
+ *
+ * @example
+ * ```ts
+ * const Todo = z.object({ text: z.string().min(1), done: z.boolean() })
+ * const todos = zodTable('todos', Todo, { indexed: ['done'] })
+ * const schema = appSchema({ version: 1, tables: [todos] })
+ * ```
  */
 export function zodTable<Shape extends z.ZodRawShape>(
   name: string,
@@ -118,6 +125,15 @@ export interface SyncSchemasOptions {
  * else, so `_status`/`_changed` (or anything smuggled) fail loudly. The
  * push-result validator enforces the spec's package rule: a cursor and
  * the interleaved changes come together, or both are null.
+ *
+ * @example
+ * ```ts
+ * const wire = syncSchemas({ todos: Todo })
+ * // client: validate what the server returned
+ * const result = wire.pullResult.parse(await response.json())
+ * // server: validate what the client sent
+ * const args = wire.pushArgs.parse(requestBody)
+ * ```
  */
 export function syncSchemas<
   Tables extends Record<string, z.ZodObject<z.ZodRawShape>>,

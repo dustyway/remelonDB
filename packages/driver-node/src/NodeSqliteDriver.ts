@@ -12,6 +12,15 @@ import type {
  * the Promise shape exists to satisfy the seam contract.
  *
  * `name` is a filesystem path, or ':memory:' for a throwaway database.
+ *
+ * @example
+ * ```ts
+ * const db = await Database.open({
+ *   driver: new NodeSqliteDriver(),
+ *   schema,
+ *   name: ':memory:',
+ * })
+ * ```
  */
 export class NodeSqliteDriver implements SqliteDriver {
   private db: SQLiteDatabase.Database | null = null

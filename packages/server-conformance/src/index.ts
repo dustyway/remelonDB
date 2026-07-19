@@ -91,6 +91,24 @@ const accepted = (result: SyncPushResult) => {
   return ok
 }
 
+/**
+ * Register the wire spec's conformance checklist as a vitest suite
+ * against any backend's pull/push handlers. Optional fixtures and
+ * contexts unlock the scoping and validation scenarios; omissions are
+ * reported as skips, not silent passes.
+ *
+ * @example
+ * ```ts
+ * registerServerConformance({
+ *   name: 'my backend',
+ *   makeContext: async () => ({ handlers: engine.as('user-1') }),
+ *   fixtures: {
+ *     todos: { validRow: () => ({ id: newId(), text: 'a', done: false }),
+ *              mutate: (row) => ({ ...row, text: 'changed' }) },
+ *   },
+ * })
+ * ```
+ */
 export function registerServerConformance(
   options: ServerConformanceOptions,
 ): void {
