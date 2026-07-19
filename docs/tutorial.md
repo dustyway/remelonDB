@@ -50,6 +50,12 @@ Three tables. Cards carry a `due_at` timestamp that the scheduler
 updates after each review; reviews are append-only facts about what
 happened.
 
+(If your stack already has Zod schemas, `zodTable` from
+[`@remelondb/zod`](zod-adapter.md) derives these exact definitions from
+them — this section shows the underlying builders it produces. The
+[example app](../examples/todo-sync/README.md) demonstrates the
+Zod-first path.)
+
 ```js
 import { appSchema, column as c, table } from '@remelondb/core'
 
