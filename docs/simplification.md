@@ -39,22 +39,25 @@ every platform. Measured today (non-blank lines, tests included):
 
 ## The cuts
 
-### 1. Replace the C++ TurboModule with an expo-sqlite wrapper
+### 1. Make the default RN driver an expo-sqlite wrapper; the C++ module becomes optional
 
-`RnSqliteDriver` becomes a ~100-line TS wrapper over `expo-sqlite`,
-behind the same `SqliteDriver` interface, proven by the same
-conformance suite. Removes the C++ sources, codegen config, Gradle and
-CocoaPods glue, and the NDK/JDK toolchain from the maintenance surface.
+Done as a split rather than a park: `@remelondb/driver-rn` is a
+~100-line TS wrapper over `expo-sqlite` behind the same `SqliteDriver`
+interface, and the C++ TurboModule moves unchanged to
+`@remelondb/driver-rn-cpp` as an opt-in sibling (pinned SQLite, no expo
+dependency, development build required). Same class name in both, so
+switching is one import change. Separate packages because React Native
+autolinking is per-package: native code anywhere in the default package
+would force native builds on every consumer and break Expo Go.
 
-Gains: apps run in **Expo Go** again (expo-sqlite ships inside it);
-native build breakage stops being this project's problem. Costs: the
-bundled SQLite version is expo's choice, not a pin (the conformance
-suite catches semantic drift); performance relative to the C++ module
-is unmeasured until the swap is benchmarked. The npm package keeps its
-name; only the internals change.
+Gains: apps run in **Expo Go** by default (expo-sqlite ships inside
+it); the C++ toolchain leaves the default path. Costs: the C++ code
+stays in the repo, compile-verified by the existing android CI job and
+maintained to stay green rather than actively developed — so this cut
+reduces default-path complexity and coupling, not line count. The 50%
+target rests on the remaining cuts.
 
-Park insurance: excellent. The driver interface is ~7 methods and the
-suite is executable proof.
+No ledger entry: nothing leaves the repo.
 
 ### 2. Remove the in-memory matcher and the simple observer
 
