@@ -40,6 +40,7 @@ type RequestPayload = WorkerRequest extends infer R
     : never
   : never
 
+/** @category Driver */
 export interface WebSqliteDriverOptions {
   /**
    * 'opfs' (default): persistent, via the OPFS SyncAccessHandle pool.
@@ -66,6 +67,7 @@ export interface WebSqliteDriverOptions {
  * SqliteDriver for browsers: SQLite-WASM running in a dedicated Worker
  * (OPFS sync-access handles are worker-only), reached via postMessage RPC.
  * See docs/reference/driver.md for why the seam is async.
+ * @category Driver
  */
 export class WebSqliteDriver implements SqliteDriver {
   private endpoint: Endpoint | null = null

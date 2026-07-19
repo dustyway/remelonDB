@@ -43,6 +43,7 @@ type ColumnFor<T> = T extends z.ZodNullable<infer Inner>
     ? never
     : ColumnDef<ColumnForInner<T>, false>
 
+/** @category Adapter */
 export type ColumnsFor<Shape extends z.ZodRawShape> = {
   [K in keyof Shape & string]: ColumnFor<Shape[K]>
 }
@@ -75,6 +76,7 @@ const columnFor = (key: string, field: z.ZodType): ColumnDef => {
   return nullable ? base.optional() : base
 }
 
+/** @category Adapter */
 export interface ZodTableOptions<Shape extends z.ZodRawShape> {
   /** Columns to index (Zod has no such concept). */
   readonly indexed?: readonly (keyof Shape & string)[]
@@ -92,6 +94,7 @@ export interface ZodTableOptions<Shape extends z.ZodRawShape> {
  * const todos = zodTable('todos', Todo, { indexed: ['done'] })
  * const schema = appSchema({ version: 1, tables: [todos] })
  * ```
+ * @category Adapter
  */
 export function zodTable<Shape extends z.ZodRawShape>(
   name: string,
@@ -114,6 +117,7 @@ export function zodTable<Shape extends z.ZodRawShape>(
 
 // ---- syncSchemas ----
 
+/** @category Adapter */
 export interface SyncSchemasOptions {
   /** Record id schema (default: non-empty string, per the wire spec). */
   readonly id?: z.ZodType<string>
@@ -134,6 +138,7 @@ export interface SyncSchemasOptions {
  * // server: validate what the client sent
  * const args = wire.pushArgs.parse(requestBody)
  * ```
+ * @category Adapter
  */
 export function syncSchemas<
   Tables extends Record<string, z.ZodObject<z.ZodRawShape>>,

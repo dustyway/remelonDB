@@ -48,6 +48,7 @@ export interface ReferenceServer {
  * A complete in-memory sync server (engine + memory store) used as the
  * conformance suite's reference subject; handy as a test double for
  * client development too.
+ * @category Conformance
  */
 export function createReferenceServer(
   options: ReferenceServerOptions = {},

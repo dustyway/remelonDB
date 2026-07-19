@@ -108,6 +108,7 @@ const accepted = (result: SyncPushResult) => {
  *   },
  * })
  * ```
+ * @category Conformance
  */
 export function registerServerConformance(
   options: ServerConformanceOptions,
