@@ -52,6 +52,7 @@ export interface ModelClass<M extends Model = Model> {
  * A Model whose fields are inferred from a table definition: the Model
  * behaviors plus mutable properties for every schema column (writes still
  * only work inside update()). `id` comes from Model and stays readonly.
+ * @category Models
  */
 export type TypedModel<T extends TableSchema<ColumnsSpec>> = Model &
   Omit<InferRecord<T>, 'id'>
@@ -67,13 +68,18 @@ export interface TypedModelClass<T extends TableSchema<ColumnsSpec>> {
  * The typed model base-class factory (docs/schema-inferred-types.md):
  *
  *   const tasks = table('tasks', { name: column.string(), ... })
- *   class Task extends ModelFor(tasks) {
- *     static override associations = { ... } satisfies AssociationsMap
- *   }
- *
  * Field types come from the table definition; there is nothing to
  * declare and nothing that can drift. (A plain generic class cannot type
  * its instance fields from a type parameter, hence the factory.)
+ *
+ * @example
+ * ```ts
+ * class Task extends ModelFor(tasks) {
+ *   static override associations = { ... } satisfies AssociationsMap
+ * }
+ * const task = await db.get(Task).create({ name: 'hello' })
+ * ```
+ * @category Models
  */
 export function ModelFor<T extends TableSchema<ColumnsSpec>>(
   schema: T,
@@ -85,13 +91,21 @@ export function ModelFor<T extends TableSchema<ColumnsSpec>>(
   return Bound as unknown as TypedModelClass<T>
 }
 
-/** The Q column names legal for a model class (used by Database.get). */
+/**
+ * The Q column names legal for a model class (used by Database.get).
+ * @category Models
+ */
 export type ColumnsOf<MC> = MC extends { readonly schema: infer T }
   ? T extends TableSchema<ColumnsSpec>
     ? ColumnName<T>
     : string
   : string
 
+/**
+ * Base record behavior: identity, update builders, deletion, per-record
+ * observation. Subclass via `ModelFor(table)`.
+ * @category Models
+ */
 export class Model {
   static readonly table: string = ''
   static readonly associations?: AssociationsMap

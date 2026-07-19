@@ -12,6 +12,7 @@ import type { RawRecord } from '../rawRecord/index'
 import { isChangesEmpty, stripInternal, tombstoneIds } from './helpers'
 import type { SyncChanges, SyncTableChanges } from './types'
 
+/** @internal Pre-push snapshot used to detect mid-push writes. */
 export interface DirtyRecordSnapshot {
   /** The live cached instance. */
   readonly record: RawRecord

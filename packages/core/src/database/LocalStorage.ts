@@ -6,6 +6,7 @@
  */
 import type { SqliteDriver } from '../driver/SqliteDriver'
 
+/** @category Database & queries */
 export class LocalStorage {
   constructor(private readonly driver: SqliteDriver) {}
 

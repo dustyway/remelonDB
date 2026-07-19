@@ -65,6 +65,22 @@ interface DatabaseSubscriber {
   readonly handler: (changes: DatabaseChangeSet) => void
 }
 
+/**
+ * The database: owns the driver, the typed collections, the FIFO
+ * write queue, and change notification. One instance per database file.
+ *
+ * @example
+ * ```ts
+ * const db = await Database.open({
+ *   driver: new NodeSqliteDriver(),   // or WebSqliteDriver / RnSqliteDriver
+ *   schema,
+ *   modelClasses: [Task],
+ *   name: 'app.db',
+ * })
+ * await db.write(() => db.get(Task).create({ name: 'hello' }))
+ * ```
+ * @category Database & queries
+ */
 export class Database {
   readonly localStorage: LocalStorage
   readonly associations: readonly QueryAssociation[]

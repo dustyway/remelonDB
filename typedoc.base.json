@@ -1,0 +1,12 @@
+{
+  "categorizeByGroup": false,
+  "defaultCategory": "Advanced",
+  "categoryOrder": [
+    "Schema",
+    "Database & queries",
+    "Models",
+    "Sync",
+    "*",
+    "Advanced"
+  ]
+}

@@ -15,7 +15,9 @@ export type Value = SqlValue
 export type NonNullValue = string | number | boolean
 
 /** Runtime tags proving a value came from a Q builder, not user data. */
+/** @internal Phantom brand for column descriptions. */
 export const columnTag: unique symbol = Symbol('Q.column')
+/** @internal Phantom brand for comparisons. */
 export const comparisonTag: unique symbol = Symbol('Q.comparison')
 
 /** Right-hand side referring to another column, from `Q.column()`. */

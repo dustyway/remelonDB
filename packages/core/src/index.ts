@@ -6,6 +6,22 @@ export type {
   SqliteDriver,
 } from './driver/SqliteDriver'
 
+/**
+ * The query DSL. Clauses are plain serializable data (that is what makes
+ * queries observable and sync-friendly); `collection.query(...)` accepts
+ * them and checks column names against the table definition.
+ *
+ * @example
+ * ```ts
+ * db.get(Task).query(
+ *   Q.where('is_done', false),
+ *   Q.where('position', Q.gt(3)),
+ *   Q.sortBy('position', Q.desc),
+ *   Q.take(20),
+ * )
+ * ```
+ * @category Database & queries
+ */
 export * as Q from './query/Q'
 
 export { appSchema, column, table } from './schema/index'
