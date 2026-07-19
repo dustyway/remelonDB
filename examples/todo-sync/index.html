@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>todo-sync</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 32rem; margin: 3rem auto; padding: 0 1rem; }
+      #status { color: #666; }
+      li.done { text-decoration: line-through; color: #999; }
+    </style>
+  </head>
+  <body>
+    <h1>todo-sync</h1>
+    <p id="status">opening database…</p>
+    <ul id="list"></ul>
+    <script type="module" src="/main.ts"></script>
+  </body>
+</html>
