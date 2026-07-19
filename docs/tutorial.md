@@ -191,7 +191,10 @@ const unsubscribe = db.get(Card).query(
 
 The callback fires immediately with the current count and again
 whenever the count changes. `query(...).observe(cb)` does the same for
-the full result list. Call the returned function to unsubscribe.
+the full result list, re-emitting when membership, order, or the
+content of listed records changes — an edit arriving via sync repaints
+a sorted list like a local one does. Call the returned function to
+unsubscribe.
 
 ## 8. Record a review
 
@@ -328,10 +331,17 @@ What the server must guarantee, and why, is specified in
 
 ## Where next
 
+- [The example app](../examples/todo-sync/README.md): everything above
+  running in a browser — two windows syncing through a ~50-line server,
+  offline writes catching up on reconnect, and a 12-line React bridge.
 - [Queries](reference/queries.md), [models](reference/models.md),
   [database & observation](reference/database.md): the day-to-day API.
 - [Schema & migrations](reference/schema.md),
   [records](reference/records.md): data shape and lifecycle.
+- [`@remelondb/zod`](zod-adapter.md): if your stack already has Zod
+  schemas, derive tables from them (`zodTable`) instead of writing
+  section 2 by hand, and validate both sync directions with the same
+  objects.
 - [Sync design](sync-design.md): the protocol's rationale. The backend
   ships as [`@remelondb/server`](../packages/server); read this before
   backing it with your own `SyncStore` adapter.
