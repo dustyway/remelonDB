@@ -9,6 +9,9 @@
     },
     "android": {
       "package": "com.remelondb.example.todosync"
-    }
+    },
+    "plugins": [
+      "expo-sqlite"
+    ]
   }
 }

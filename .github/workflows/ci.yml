@@ -219,7 +219,7 @@ jobs:
           java-version: 17
       - run: pnpm install --frozen-lockfile
       - name: Fetch SQLite amalgamation
-        run: node packages/driver-rn/scripts/fetch-sqlite.mjs
+        run: node packages/driver-rn-cpp/scripts/fetch-sqlite.mjs
       - name: Pack workspace packages (rewriting workspace deps to tarballs)
         run: |
           mkdir -p /tmp/packed
@@ -227,19 +227,19 @@ jobs:
           CORE_TGZ=$(ls /tmp/packed/*core*.tgz)
           node -e "
             const fs = require('fs')
-            const path = 'packages/driver-rn/package.json'
+            const path = 'packages/driver-rn-cpp/package.json'
             const pkg = JSON.parse(fs.readFileSync(path, 'utf8'))
             pkg.dependencies['@remelondb/core'] = 'file:' + process.argv[1]
             fs.writeFileSync(path, JSON.stringify(pkg, null, 2))
           " "$CORE_TGZ"
-          pnpm --filter @remelondb/driver-rn pack --pack-destination /tmp/packed
+          pnpm --filter @remelondb/driver-rn-cpp pack --pack-destination /tmp/packed
       - name: Create RN 0.86 test app
         run: |
           cd /tmp
           npx @react-native-community/cli@latest init WmHarness --version 0.86.0 --pm npm --skip-install --install-pods false
           cd WmHarness
           npm install
-          npm install /tmp/packed/*core*.tgz /tmp/packed/*driver-rn*.tgz
+          npm install /tmp/packed/*core*.tgz /tmp/packed/*driver-rn-cpp*.tgz
       - name: Build Android (debug)
         run: |
           cd /tmp/WmHarness/android
