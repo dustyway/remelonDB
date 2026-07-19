@@ -13,7 +13,13 @@ const hubDir = fileURLToPath(new URL('../../todo-sync', import.meta.url))
 
 const children = []
 const start = (name, command, args, cwd) => {
-  const child = spawn(command, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
+  // detached: each child leads its own process group, so teardown can
+  // kill the whole tree — npx alone would die and leave vite/tsx behind
+  const child = spawn(command, args, {
+    cwd,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    detached: true,
+  })
   child.output = ''
   child.stdout.on('data', (d) => (child.output += d))
   child.stderr.on('data', (d) => (child.output += d))
@@ -28,12 +34,23 @@ const start = (name, command, args, cwd) => {
   return child
 }
 
+const killGroup = (child, signal) => {
+  try {
+    process.kill(-child.pid, signal)
+  } catch {
+    // group already gone
+  }
+}
+
 const stopAll = async () => {
   for (const child of children) {
     child.expectedExit = true
-    child.kill('SIGTERM')
+    killGroup(child, 'SIGTERM')
   }
   await sleep(500)
+  for (const child of children) {
+    killGroup(child, 'SIGKILL')
+  }
 }
 
 const up = async (url) => {
@@ -86,6 +103,12 @@ try {
 
   await runActs('http://localhost:5199/')
   console.log('e2e: all acts passed')
+} catch (error) {
+  console.error(error)
+  process.exitCode = 1
 } finally {
   await stopAll()
+  // surviving pipe handles from the child trees must not keep us alive
+  // (this hung CI for 14 minutes once — exit explicitly)
+  process.exit(process.exitCode ?? 0)
 }
