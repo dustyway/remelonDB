@@ -7,6 +7,45 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Which areas did this push actually touch? Expensive jobs below gate
+  # on these outputs, so a docs-only change costs minutes, not an NDK
+  # build and three browser matrices. The `test` job always runs.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      cpp: ${{ steps.filter.outputs.cpp }}
+      web: ${{ steps.filter.outputs.web }}
+      examples: ${{ steps.filter.outputs.examples }}
+      packages: ${{ steps.filter.outputs.packages }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@6852f92c20ea7fd3b0c25de3b5112db3a98da050 # v3
+        id: filter
+        with:
+          filters: |
+            cpp:
+              - 'packages/driver-rn-cpp/**'
+              - '.github/workflows/ci.yml'
+            web:
+              - 'packages/driver-web/**'
+              - 'packages/core/**'
+              - 'packages/driver-conformance/**'
+              - 'pnpm-lock.yaml'
+              - '.github/workflows/ci.yml'
+            examples:
+              - 'examples/**'
+              - 'packages/**'
+              - 'pnpm-lock.yaml'
+              - '.github/workflows/ci.yml'
+            packages:
+              - 'packages/**'
+              - 'scripts/**'
+              - 'docs/tutorial.md'
+              - 'pnpm-lock.yaml'
+              - '.github/workflows/ci.yml'
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -33,6 +72,8 @@ jobs:
   # published artifacts (dist exports, workspace-dep rewriting) work for
   # consumers with no TS toolchain, not just inside the monorepo.
   pack-consume:
+    needs: changes
+    if: needs.changes.outputs.packages == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -107,6 +148,8 @@ jobs:
   # create/edit propagation both directions, offline writes staying
   # local, recovery pushing the backlog.
   example-e2e:
+    needs: changes
+    if: needs.changes.outputs.examples == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -128,6 +171,8 @@ jobs:
   # real Worker, real OPFS SAH-pool storage, durability across worker
   # termination.
   web-browser:
+    needs: changes
+    if: needs.changes.outputs.web == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -148,6 +193,8 @@ jobs:
   # doesn't ship the OPFS sync-access-handle APIs at all ("Missing
   # required OPFS APIs"), and safaridriver only exists here.
   web-browser-webkit-safari:
+    needs: changes
+    if: needs.changes.outputs.web == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: macos-latest
     timeout-minutes: 30
     steps:
@@ -205,6 +252,8 @@ jobs:
   # RN app — the device-verification items reachable without hardware:
   # codegen, cxx-module autolinking glue, prefab JSI linkage, the compile.
   android-driver:
+    needs: changes
+    if: needs.changes.outputs.cpp == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
