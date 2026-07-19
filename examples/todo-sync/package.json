@@ -3,21 +3,21 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
     "server": "tsx server.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@remelondb/core": "workspace:*",
-    "@remelondb/driver-web": "workspace:*",
     "@remelondb/server": "workspace:*",
     "@remelondb/zod": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "typescript": "^5.8.3",
-    "vite": "^8.1.5",
     "tsx": "^4.20.0",
     "@types/node": "^24.0.0"
+  },
+  "exports": {
+    "./schema": "./schema.ts"
   }
 }
