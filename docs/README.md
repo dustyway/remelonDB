@@ -34,6 +34,7 @@ they track the code and are updated with it.
 | [reference/database.md](reference/database.md) | `Database.open`, the writer queue, CRUD, the batch contract, both observation strategies, change buses, local storage. |
 | [reference/models.md](reference/models.md) | The Model layer: declare-field accessors (no decorators), update builders, identity, relations, per-record observation. |
 | [reference/queries.md](reference/queries.md) | The Q DSL: every operator with its SQL and semantics, joins, LIKE escaping, unsafe escape hatches, compilation, the in-memory matcher and its gate. |
+| [sync-tour.md](sync-tour.md) | The wire protocol in eight real requests and responses — the hands-on companion to the spec, with a clickable .http version in the example. |
 | [reference/sync.md](reference/sync.md) | Using `synchronize`: wire shapes, conflict semantics, resync, migration pulls, testing a backend. |
 | [reference/schema.md](reference/schema.md) | `appSchema`/`table()`/column builders, inferred record types, standard columns, reserved names, DDL output, migrations and the no-silent-reset contract. |
 | [reference/records.md](reference/records.md) | `RawRecord`, the `sanitizedRaw` trust boundary and its coercion rules, sync fields (`_status`/`_changed`), ids. |
