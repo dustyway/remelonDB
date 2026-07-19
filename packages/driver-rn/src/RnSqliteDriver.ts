@@ -4,72 +4,100 @@ import type {
   SqlArgs,
   SqliteDriver,
 } from '@remelondb/core'
-import NativeRemelonDriver from './specs/NativeRemelonDriver'
+import * as SQLite from 'expo-sqlite'
 
 /**
- * SqliteDriver over the NativeRemelonDriver C++ TurboModule.
- * Everything resolves synchronously underneath (in-process SQLite on the
- * JS thread); the Promise shape satisfies the seam contract — core never
- * depends on same-tick resolution.
+ * SqliteDriver over expo-sqlite: a thin adapter mapping the seam's seven
+ * methods onto its async API. expo-sqlite owns the native SQLite build —
+ * and ships inside Expo Go, so apps using this driver need no custom
+ * native build. The previous in-repo C++ TurboModule is parked
+ * (docs/parked.md, tag `parked/driver-rn-cpp`) and revivable behind the
+ * same interface.
  *
- * `name` is ':memory:', an absolute path, or a bare filename resolved
- * into the app's database directory by the native side.
+ * `name` is ':memory:' or a database filename managed by expo-sqlite.
  *
  * @example
  * ```ts
  * const db = await Database.open({
  *   driver: new RnSqliteDriver(),
  *   schema,
- *   name: 'app.db',   // resolved into the app's database directory
+ *   name: 'app.db',
  * })
  * ```
  * @category Driver
  */
 export class RnSqliteDriver implements SqliteDriver {
+  private db: SQLite.SQLiteDatabase | null = null
   private name: string | null = null
 
-  private get openName(): string {
-    if (this.name === null) {
+  private get openDb(): SQLite.SQLiteDatabase {
+    if (this.db === null) {
       throw new Error('RnSqliteDriver: database is not open')
     }
-    return this.name
+    return this.db
   }
 
   async open(name: string): Promise<{ userVersion: number }> {
-    if (this.name !== null) {
+    if (this.db !== null) {
       throw new Error('RnSqliteDriver: database is already open')
     }
-    const userVersion = NativeRemelonDriver.openDatabase(name)
+    const db = await SQLite.openDatabaseAsync(name)
+    await db.execAsync('pragma journal_mode = WAL')
+    const row = await db.getFirstAsync<{ user_version: number }>(
+      'pragma user_version',
+    )
+    this.db = db
     this.name = name
-    return { userVersion }
+    return { userVersion: row?.user_version ?? 0 }
   }
 
   async close(): Promise<void> {
-    NativeRemelonDriver.close(this.openName)
+    await this.openDb.closeAsync()
+    this.db = null
     this.name = null
   }
 
   async query(sql: string, args: SqlArgs): Promise<Row[]> {
-    return NativeRemelonDriver.query(this.openName, sql, args) as Row[]
+    return this.openDb.getAllAsync<Row>(sql, args as SQLite.SQLiteBindValue[])
   }
 
   async execute(sql: string, args: SqlArgs): Promise<void> {
-    NativeRemelonDriver.execute(this.openName, sql, args)
+    await this.openDb.runAsync(sql, args as SQLite.SQLiteBindValue[])
   }
 
   async executeBatch(statements: readonly BatchStatement[]): Promise<void> {
-    NativeRemelonDriver.executeBatch(this.openName, statements)
+    const db = this.openDb
+    await db.withTransactionAsync(async () => {
+      for (const [sql, argSets] of statements) {
+        const statement = await db.prepareAsync(sql)
+        try {
+          for (const args of argSets) {
+            await statement.executeAsync(args as SQLite.SQLiteBindValue[])
+          }
+        } finally {
+          await statement.finalizeAsync()
+        }
+      }
+    })
   }
 
   async setUserVersion(version: number): Promise<void> {
-    NativeRemelonDriver.setUserVersion(this.openName, version)
+    if (!Number.isInteger(version) || version < 0) {
+      throw new Error(`RnSqliteDriver: invalid user_version ${version}`)
+    }
+    await this.openDb.execAsync(`pragma user_version = ${version}`)
   }
 
   async destroy(): Promise<void> {
+    const db = this.db
     const name = this.name
+    this.db = null
     this.name = null
-    if (name !== null) {
-      NativeRemelonDriver.destroy(name)
+    if (db !== null) {
+      await db.closeAsync()
+    }
+    if (name !== null && name !== ':memory:') {
+      await SQLite.deleteDatabaseAsync(name)
     }
   }
 }

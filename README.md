@@ -116,8 +116,11 @@ packages/
     src/sync/         the sync engine (pull/push, conflict resolution)
   driver-node/   @remelondb/driver-node — better-sqlite3 driver
                  + conformance & integration suites on real SQLite
-  driver-rn/     @remelondb/driver-rn — React Native driver:
-                 pure C++ TurboModule + bundled SQLite (see its README)
+  driver-rn/     @remelondb/driver-rn — React Native driver: thin
+                 adapter over expo-sqlite (runs in Expo Go)
+  driver-rn-cpp/ @remelondb/driver-rn-cpp — optional RN driver:
+                 pure C++ TurboModule + bundled, pinned SQLite
+                 (dev builds only; see its README)
   driver-web/    @remelondb/driver-web — browser driver:
                  SQLite-WASM + OPFS in a Worker (see its README)
   zod/           @remelondb/zod — shared Zod schemas as the source of
