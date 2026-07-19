@@ -278,6 +278,33 @@ describe('Database core', () => {
       unsubscribe()
     })
 
+    it('reloading observer: content edits of members re-emit; no-op writes do not', async () => {
+      await db.write(() =>
+        db.get('tasks').create({ id: 't1', name: 'a', is_done: false }),
+      )
+      const emissions: string[][] = []
+      const unsubscribe = db
+        .get('tasks')
+        .query(Q.sortBy('position', Q.desc))
+        .observe((records) =>
+          emissions.push(records.map((r) => `${r.id}:${String(r['name'])}`)),
+        )
+      await flush()
+      expect(emissions).toEqual([['t1:a']])
+
+      // same membership, same order — only content changed
+      await db.write(() => db.get('tasks').update('t1', { name: 'b' }))
+      await flush()
+      expect(emissions).toEqual([['t1:a'], ['t1:b']])
+
+      // a write changing nothing visible → refetch happens, emission doesn't
+      await db.write(() => db.get('tasks').update('t1', { name: 'b' }))
+      await flush()
+      expect(emissions).toHaveLength(2)
+
+      unsubscribe()
+    })
+
     it('join queries reload when the joined table changes', async () => {
       await db.write(async () => {
         await db.get('projects').create({ id: 'p1', name: 'proj' })

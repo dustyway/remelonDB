@@ -6,8 +6,12 @@
  *   in memory via the matcher on each collection change — no re-query.
  *   Emits on membership changes only.
  * - reloading: everything else re-fetches when any of the query's tables
- *   change, and emits when the result list actually differs (record
- *   identity — the cache guarantees stable instances).
+ *   change, and emits when the result list actually differs — by
+ *   membership, order, or the content of visible columns. Identity alone
+ *   can't detect content edits (the cache mutates raws in place, so a
+ *   refetch returns the same instances), which is why each emission keeps
+ *   a column snapshot to compare against. Bookkeeping changes
+ *   (_status/_changed, e.g. sync marking records synced) don't count.
  */
 import { encodeQuery } from '../query/encodeQuery'
 import type { QueryDescription } from '../query/ast'
@@ -18,9 +22,6 @@ import type {
   CollectionChangeSet,
   Unsubscribe,
 } from './Collection'
-
-const identicalArrays = (a: readonly unknown[], b: readonly unknown[]): boolean =>
-  a.length === b.length && a.every((value, index) => value === b[index])
 
 export class Query<M = RawRecord> {
   constructor(
@@ -165,9 +166,23 @@ export class Query<M = RawRecord> {
   private observeReloading(
     subscriber: (records: readonly RawRecord[]) => void,
   ): Unsubscribe {
+    const columns = ['id', ...Object.keys(this.collection.schema.columns)]
     let unsubscribed = false
-    let previous: RawRecord[] | null = null
+    let previous: { raw: RawRecord; content: RawRecord }[] | null = null
     let generation = 0
+
+    const differs = (records: readonly RawRecord[]): boolean => {
+      if (previous === null || previous.length !== records.length) {
+        return true
+      }
+      return records.some((raw, index) => {
+        const before = previous![index]!
+        return (
+          before.raw !== raw ||
+          columns.some((name) => before.content[name] !== raw[name])
+        )
+      })
+    }
 
     const refetch = () => {
       const current = ++generation
@@ -175,10 +190,10 @@ export class Query<M = RawRecord> {
         if (unsubscribed || current !== generation) {
           return
         }
-        if (previous !== null && identicalArrays(previous, records)) {
+        if (!differs(records)) {
           return
         }
-        previous = records
+        previous = records.map((raw) => ({ raw, content: { ...raw } }))
         subscriber([...records])
       })
     }
