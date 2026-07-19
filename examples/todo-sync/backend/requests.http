@@ -1,0 +1,133 @@
+# The sync wire protocol, clickable (docs/sync-wire.md is the spec).
+# Start the server first: pnpm --filter example-todo-sync server
+# Every protocol outcome is an HTTP 200 with the variant in the body;
+# only malformed requests get a 400.
+
+### First pull: a fresh client (cursor null) gets everything + a cursor
+POST http://localhost:8787/sync/pull
+content-type: application/json
+
+{
+  "cursor": null,
+  "schemaVersion": 1,
+  "migration": null
+}
+
+### Push a created todo (use the cursor from the pull above)
+# Response is shaped like a pull: your new cursor plus any foreign
+# changes committed since your cursor — the "push responds like a pull"
+# rule that kills the echo problem.
+POST http://localhost:8787/sync/push
+content-type: application/json
+
+{
+  "cursor": "0",
+  "changes": {
+    "todos": {
+      "created": [
+        { "id": "h1", "text": "created over http", "done": false, "created_at": 1753000000000 }
+      ],
+      "updated": [],
+      "deleted": []
+    }
+  }
+}
+
+### Pull again from scratch: the todo comes back in `updated`
+# Pull deltas are upserts — clients treat an unknown id in `updated`
+# as a create; the created/updated split only matters on push.
+POST http://localhost:8787/sync/pull
+content-type: application/json
+
+{
+  "cursor": null,
+  "schemaVersion": 1,
+  "migration": null
+}
+
+### Push an update: toggle done (bump the cursor to your latest)
+POST http://localhost:8787/sync/push
+content-type: application/json
+
+{
+  "cursor": "1",
+  "changes": {
+    "todos": {
+      "created": [],
+      "updated": [
+        { "id": "h1", "text": "created over http", "done": true, "created_at": 1753000000000 }
+      ],
+      "deleted": []
+    }
+  }
+}
+
+### Push with a stale cursor → { "conflict": true }
+# The server refuses the fast path; the client's move is pull-then-retry.
+POST http://localhost:8787/sync/push
+content-type: application/json
+
+{
+  "cursor": "0",
+  "changes": {
+    "todos": {
+      "created": [],
+      "updated": [
+        { "id": "h1", "text": "stale write", "done": false, "created_at": 1753000000000 }
+      ],
+      "deleted": []
+    }
+  }
+}
+
+### Push a delete (tombstone)
+POST http://localhost:8787/sync/push
+content-type: application/json
+
+{
+  "cursor": "2",
+  "changes": {
+    "todos": {
+      "created": [],
+      "updated": [],
+      "deleted": ["h1"]
+    }
+  }
+}
+
+### Pull with an unknown/expired cursor → { "resyncRequired": true }
+# Not an error: the lawful answer for a cursor the server can't serve.
+POST http://localhost:8787/sync/pull
+content-type: application/json
+
+{
+  "cursor": "999999",
+  "schemaVersion": 1,
+  "migration": null
+}
+
+### Invalid row (empty text) → HTTP 400 naming the exact path
+# The wire schemas (schema.ts → syncSchemas) validate at the door.
+POST http://localhost:8787/sync/push
+content-type: application/json
+
+{
+  "cursor": "3",
+  "changes": {
+    "todos": {
+      "created": [
+        { "id": "bad1", "text": "", "done": false, "created_at": 1 }
+      ],
+      "updated": [],
+      "deleted": []
+    }
+  }
+}
+
+### Malformed body → HTTP 400 listing every problem
+POST http://localhost:8787/sync/push
+content-type: application/json
+
+{
+  "nonsense": true
+}
