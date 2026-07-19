@@ -99,6 +99,28 @@ jobs:
           EOF
           node main.mjs
 
+  # The example app's story end to end in real Chromium: two isolated
+  # browser contexts (separate OPFS each) against the real sync server —
+  # create/edit propagation both directions, offline writes staying
+  # local, recovery pushing the backlog.
+  example-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter example-todo-sync typecheck
+      - run: pnpm --filter example-todo-sync-web typecheck
+      - run: pnpm --filter example-todo-sync-web exec playwright install --with-deps chromium
+      - run: pnpm --filter example-todo-sync-web e2e
+
   # The web driver's full conformance suite in real Chromium and Firefox:
   # real Worker, real OPFS SAH-pool storage, durability across worker
   # termination.
