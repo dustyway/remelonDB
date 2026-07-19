@@ -1,8 +1,11 @@
 # A tour of the sync wire protocol
 
 The protocol in eight requests against the example server, with real
-responses. [sync-wire.md](sync-wire.md) is the normative spec this
-tour walks through;
+responses — and provably real: `scripts/check-sync-tour.mjs` extracts
+every request/response pair below and replays them against the example
+server in CI, so this page cannot drift from behavior.
+[sync-wire.md](sync-wire.md) is the normative spec this tour walks
+through;
 [`examples/todo-sync/backend/requests.http`](../examples/todo-sync/backend/requests.http)
 is the same sequence as clickable requests. To follow along:
 
@@ -14,6 +17,10 @@ Two rules frame everything below. Every protocol outcome is an HTTP
 200 with the variant in the body; only a malformed request is a 400.
 And the cursor is an opaque string the server mints: clients store it
 and echo it back, never interpret it.
+
+Each stop shows the request body sent to `/sync/pull` or `/sync/push`
+(pulls carry `schemaVersion`, pushes carry `changes`), then the
+response.
 
 ## 1. A fresh client pulls
 
@@ -58,6 +65,10 @@ server ever heard of it. That is the offline-first contract.
 Same request as stop 1, different world:
 
 ```json
+{ "cursor": null, "schemaVersion": 1, "migration": null }
+```
+
+```json
 { "changes": { "todos": { "created": [],
     "updated": [ { "text": "created over http", "done": false, "created_at": 1753000000000, "id": "h1" } ],
     "deleted": [] } }, "cursor": "1" }
@@ -70,14 +81,35 @@ where the server uses it for validation and conflict handling.
 
 ## 4. Push an update
 
-Toggling `done` with the current cursor (`"1"`) returns
-`{ "cursor": "2", ... }` — the same shape as stop 2. Rows on the wire
-are always complete records, not field patches; per-column conflict
-merging is the client engine's job, done before pushing.
+Toggling `done`, with the current cursor:
+
+```json
+{ "cursor": "1",
+  "changes": { "todos": {
+    "created": [],
+    "updated": [ { "id": "h1", "text": "created over http", "done": true, "created_at": 1753000000000 } ],
+    "deleted": [] } } }
+```
+
+```json
+{ "cursor": "2", "changes": { "todos": { "created": [], "updated": [], "deleted": [] } } }
+```
+
+Rows on the wire are always complete records, not field patches;
+per-column conflict merging is the client engine's job, done before
+pushing.
 
 ## 5. Push with a stale cursor
 
-Replaying that update with `cursor: "0"`:
+Replaying that update as if the client had never advanced:
+
+```json
+{ "cursor": "0",
+  "changes": { "todos": {
+    "created": [],
+    "updated": [ { "id": "h1", "text": "stale write", "done": false, "created_at": 1753000000000 } ],
+    "deleted": [] } } }
+```
 
 ```json
 { "conflict": true }
@@ -89,8 +121,20 @@ then push again. `synchronize()` does this loop automatically.
 
 ## 6. Delete travels as a tombstone
 
-Pushing `"deleted": ["h1"]` advances the cursor; a client pulling from
-its last position receives:
+```json
+{ "cursor": "2",
+  "changes": { "todos": { "created": [], "updated": [], "deleted": ["h1"] } } }
+```
+
+```json
+{ "cursor": "3", "changes": { "todos": { "created": [], "updated": [], "deleted": [] } } }
+```
+
+A client that last pulled at cursor `"2"` now receives the deletion:
+
+```json
+{ "cursor": "2", "schemaVersion": 1, "migration": null }
+```
 
 ```json
 { "changes": { "todos": { "created": [], "updated": [], "deleted": ["h1"] } }, "cursor": "3" }
@@ -119,10 +163,19 @@ survive the resync and are pushed afterwards.
 
 An invalid row (empty `text` where the schema demands `min(1)`) is the
 one case that breaks the 200 rule, because the request itself is
-malformed:
+malformed. Sending this:
 
 ```json
-{ "error": "[ { \"code\": \"too_small\", \"path\": [\"changes\", \"todos\", \"created\", 0, \"text\"], ... } ]"   // HTTP 400
+{ "cursor": "3",
+  "changes": { "todos": {
+    "created": [ { "id": "bad1", "text": "", "done": false, "created_at": 1 } ],
+    "updated": [], "deleted": [] } } }
+```
+
+returns HTTP 400 with the exact path of the problem:
+
+```json fragment
+{ "error": "[ { \"code\": \"too_small\", \"path\": [\"changes\", \"todos\", \"created\", 0, \"text\"], ... } ]" }
 ```
 
 The example server validates with the same Zod objects the client
