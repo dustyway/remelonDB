@@ -1,6 +1,6 @@
 {
   "name": "@remelondb/core",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -24,7 +24,7 @@
     "zod": "^4.4.3"
   },
   "license": "MIT",
-  "description": "remelonDB core: reactive offline-first database over a pluggable SQLite driver \u2014 queries as data, schema/migrations, observation, sync engine",
+  "description": "remelonDB core: reactive offline-first database over a pluggable SQLite driver — queries as data, schema/migrations, observation, sync engine",
   "keywords": [
     "remelondb",
     "watermelondb",
