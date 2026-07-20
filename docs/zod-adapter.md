@@ -1,7 +1,7 @@
 # @remelondb/zod: shared schemas as the single source of truth
 
-Status: implemented (packages/zod). Second step of the plan begun
-in [schema-inferred-types.md](schema-inferred-types.md): that doc made
+Status: implemented (packages/zod). Companion to
+[schema-inferred-types.md](schema-inferred-types.md): that doc makes
 the table literal the source of truth *inside* a client; this one lets a
 shared Zod schema be the source of truth *across* a whole stack (server
 database, wire validation, client database).
@@ -10,8 +10,8 @@ database, wire validation, client database).
 
 The consumer this is designed against runs Drizzle + Postgres on the
 server, Zod schemas in a shared workspace package, and remelonDB on the
-client. Today those are three definitions of the same records. The
-target chain is one:
+client. Without the adapter those are three definitions of the same
+records. The target chain is one:
 
 ```
 Drizzle schema (server truth)

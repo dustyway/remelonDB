@@ -12,7 +12,7 @@ Written with a duplicated schema — a runtime definition plus
 hand-declared model fields — nothing checks that the two agree:
 
 ```ts
-// the pre-0.0.4 API
+// with a hand-duplicated schema
 class Task extends Model {
   static override readonly table = 'tasks'
   declare name: string      // hand-written duplicate of the schema
@@ -40,8 +40,8 @@ dynamic and internal access — see section 3).
   literal.
 - **A surface change only**: the schema module's runtime output
   (`TableSchema`, `AppSchema`), the DDL compiler, migrations, and the
-  query AST are byte-identical to the pre-design runtime — the change
-  is input syntax plus a phantom type layer.
+  query AST are untouched by the type layer — it is input syntax plus
+  phantom types over the same runtime objects.
 - **Mechanically derivable**: a Zod object converts into the identical
   `TableSchema` via `zodTable` ([zod-adapter.md](zod-adapter.md)),
   pinned by a deep-equality test.
@@ -56,9 +56,9 @@ system stands on:
   sanitizes every local write, and this design types them at compile
   time. Validation effort belongs at the trust boundaries — the sync
   wire — where the Zod adapter puts it.
-- **No change to the wire or storage format.** Everything at runtime is
-  byte-identical to the previous API, which is what keeps this a
-  refactor rather than a data-format event.
+- **No change to the wire or storage format.** The type layer exists
+  only at compile time; nothing about stored or synced data depends
+  on it.
 
 ## Design
 
@@ -111,7 +111,7 @@ const collection = db.get(tasks)  // typed records, checked Q columns
 `db.get` takes the table object (or a model class: `db.get(Task)`), so
 the unchecked cast from failure mode 3 is never necessary. Two honest
 limits: the string overload exists for dynamic and internal access, so
-the old cast form remains *expressible*; and `Database` is not generic
+that cast remains *expressible*; and `Database` is not generic
 over its schema, so a table object outside this database's schema fails
 at runtime (with a clear error), not at compile time. Both close with
 the schema-generic `Database` under open questions. Bound vs unbound
