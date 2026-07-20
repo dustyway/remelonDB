@@ -142,6 +142,12 @@ docs/            design decisions and reference guides — see docs/README.md
 watermelondb-upstream/   reference checkout of upstream (gitignored)
 ```
 
+Each package sits on a boundary an npm package can't paper over: the
+drivers carry their platform dependency, the C++ module needs its own
+package for React Native autolinking, and the server runs on the other
+side of the wire. Everything else ships as a core or server subpath
+(`/conformance`, `/zod`) with its extra dependency as an optional peer.
+
 ## Documentation
 
 - **[docs/tutorial.md](docs/tutorial.md)** — start here: a flashcard
