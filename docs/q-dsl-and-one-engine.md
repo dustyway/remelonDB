@@ -26,6 +26,6 @@ With one engine:
 
 The DSL provides the portability; the single engine provides the truth. Each makes the other's promise real.
 
-## The one bounded exception
+## No in-memory exception
 
-Even "pure SQLite" WatermelonDB keeps a tiny in-memory matcher (`encodeMatcher`, ~60 lines) so observers of *simple* queries can be updated without re-querying the database. It is gated (no joins, no sorting, no raw SQL) and must match SQLite semantics exactly. The principle is not "never evaluate a condition in JS"; it is "have exactly one *authoritative* engine, and keep any in-memory shortcut small, gated, and conformance-tested against it."
+Upstream WatermelonDB keeps a tiny in-memory matcher so observers of *simple* queries can be updated without re-querying the database — a second engine that must replicate SQLite semantics exactly (null handling, storage-class ordering, ASCII-only LIKE folding) and be conformance-tested against it. remelonDB has no such shortcut: observers re-query SQLite on relevant change, so "one engine" holds without exception and the matcher/SQL agreement obligation does not exist. The distinctive semantics that agreement suite pinned live on as plain SQL cases in the driver conformance corpus.

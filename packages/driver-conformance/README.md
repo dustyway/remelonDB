@@ -36,10 +36,8 @@ Options:
 - **Contract suite**: the driver method obligations (open/close lifecycle,
   execute, atomic batch with rollback, `user_version`, error surfaces).
 - **Query corpus**: the full query-semantics corpus compiled to SQL and run
-  against the driver.
-- **Matcher corpus**: the same corpus through the in-memory observation
-  matcher and through SQL, asserting identical results (the "one
-  authoritative engine" rule as an executable invariant).
+  against the driver — nulls, joins, LIKE folding, storage-class ordering
+  (the "one authoritative engine" rule as an executable invariant).
 - **Schema suite**: DDL setup and migrations.
 - **Records suite**: the sanitization round-trip.
 

@@ -55,8 +55,7 @@ Booleans are real `true`/`false` on the JS side and `0`/`1` in SQLite:
   would reject raw booleans anyway; the convention is seam-wide).
 - **read**: rows come back with `0`/`1`; `sanitizedRaw` restores booleans
   for `boolean`-typed columns.
-- **compare**: the query compiler binds booleans as-is (driver converts);
-  the in-memory matcher normalizes both sides to `0`/`1`.
+- **compare**: the query compiler binds booleans as-is (driver converts).
 
 The round-trip identity — `sanitizedRaw(read(write(raw))) === raw` — is
 pinned by `rawRecordConformance.test.ts`.

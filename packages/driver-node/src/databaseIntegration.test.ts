@@ -223,7 +223,7 @@ describe('Database core', () => {
   describe('observation', () => {
     const flush = () => new Promise((resolve) => setTimeout(resolve, 10))
 
-    it('simple observer: membership updates without re-querying', async () => {
+    it('flat queries: membership and content changes emit, others do not', async () => {
       const emissions: RawRecord[][] = []
       const unsubscribe = db
         .get('tasks')
@@ -236,24 +236,33 @@ describe('Database core', () => {
       const t1 = await db.write(() =>
         db.get('tasks').create({ id: 't1', is_done: false }),
       )
-      expect(emissions).toHaveLength(2) // synchronous: no re-query needed
+      await flush()
+      expect(emissions).toHaveLength(2)
       expect(emissions[1]).toEqual([t1])
 
-      // non-matching create → no emission
+      // non-matching create → refetch happens, emission doesn't
       await db.write(() => db.get('tasks').create({ id: 't2', is_done: true }))
+      await flush()
       expect(emissions).toHaveLength(2)
+
+      // content edit of a member → emission (same membership)
+      await db.write(() => db.get('tasks').update('t1', { name: 'renamed' }))
+      await flush()
+      expect(emissions).toHaveLength(3)
 
       // update out of membership → emission
       await db.write(() => db.get('tasks').update('t1', { is_done: true }))
-      expect(emissions).toHaveLength(3)
-      expect(emissions[2]).toEqual([])
+      await flush()
+      expect(emissions).toHaveLength(4)
+      expect(emissions[3]).toEqual([])
 
       unsubscribe()
       await db.write(() => db.get('tasks').create({ id: 't3', is_done: false }))
-      expect(emissions).toHaveLength(3)
+      await flush()
+      expect(emissions).toHaveLength(4)
     })
 
-    it('reloading observer: sorted queries re-fetch on relevant changes only', async () => {
+    it('sorted queries re-fetch on relevant changes only', async () => {
       const emissions: string[][] = []
       const unsubscribe = db
         .get('tasks')
@@ -278,7 +287,7 @@ describe('Database core', () => {
       unsubscribe()
     })
 
-    it('reloading observer: content edits of members re-emit; no-op writes do not', async () => {
+    it('content edits of members re-emit; no-op writes do not', async () => {
       await db.write(() =>
         db.get('tasks').create({ id: 't1', name: 'a', is_done: false }),
       )
