@@ -31,7 +31,9 @@
     "sqlite",
     "offline-first",
     "database",
-    "sync"
+    "sync",
+    "zod",
+    "validation"
   ],
   "repository": {
     "type": "git",
