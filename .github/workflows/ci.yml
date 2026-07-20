@@ -3,8 +3,11 @@ name: CI
 on:
   push:
     branches: [main]
-  pull_request:
   workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # Which areas did this push actually touch? Expensive jobs below gate
@@ -196,7 +199,9 @@ jobs:
     needs: changes
     if: needs.changes.outputs.web == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: macos-latest
-    timeout-minutes: 30
+    # healthy runs finish well under 5 minutes; a hung Safari session
+    # otherwise burns the full timeout at the 10x macOS multiplier
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -207,6 +212,10 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/ms-playwright
+          key: playwright-webkit-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
       - run: pnpm --filter @remelondb/driver-web exec playwright install webkit
       - run: BROWSER=webkit pnpm --filter @remelondb/driver-web test:browser
       # Probe safaridriver directly first: enable it, create + delete a
