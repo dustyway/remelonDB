@@ -9,7 +9,7 @@ import {
   type SyncPullResult,
   type SyncPushArgs,
   type SyncPushResult,
-} from '@remelondb/core'
+} from '../index'
 import { syncSchemas, zodTable } from './index'
 
 const Task = z.object({

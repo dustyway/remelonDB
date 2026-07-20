@@ -35,9 +35,6 @@ importers:
       '@remelondb/server':
         specifier: workspace:*
         version: link:../../../packages/server
-      '@remelondb/zod':
-        specifier: workspace:*
-        version: link:../../../packages/zod
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -131,6 +128,9 @@ importers:
       vitest:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@24.13.3)(@vitest/browser@3.2.7)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   packages/driver-node:
     dependencies:
@@ -211,19 +211,6 @@ importers:
       vitest:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@24.13.3)(@vitest/browser@3.2.7)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
-
-  packages/zod:
-    dependencies:
-      '@remelondb/core':
-        specifier: workspace:*
-        version: link:../core
-    devDependencies:
-      vitest:
-        specifier: ^3.2.4
-        version: 3.2.7(@types/node@24.13.3)(@vitest/browser@3.2.7)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
 
 packages:
 

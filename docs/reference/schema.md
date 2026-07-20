@@ -25,7 +25,7 @@ const schema = appSchema({ version: 1, tables: [tasks] })
   backfill defaults.
 - Tables can also be **derived from a shared Zod object** instead of
   written by hand — `zodTable('tasks', TaskSchema)` in
-  [`@remelondb/zod`](../../packages/zod/README.md) produces the identical
+  [`@remelondb/core/zod`](../zod-adapter.md) produces the identical
   `TableSchema`, with the record types guaranteed to match `z.infer`
   ([zod-adapter.md](../zod-adapter.md)).
 - **`.optional()`**: the column may be `null`. Non-optional columns are

@@ -23,7 +23,7 @@ Because every driver is real SQLite and passes the same
 conformance suite (`@remelondb/core/conformance`),
 code written against core behaves identically on all of them.
 
-Companions: [`@remelondb/zod`](https://www.npmjs.com/package/@remelondb/zod)
+Companions: the `@remelondb/core/zod` subpath
 derives tables and sync wire validators from shared Zod schemas;
 [`@remelondb/server`](https://www.npmjs.com/package/@remelondb/server)
 implements the sync backend over a storage seam, proven by

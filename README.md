@@ -62,7 +62,7 @@ implemented once above an eight-method storage seam. It ships with an
 in-memory store for development and tests; for durable storage you
 implement the seam over your database and prove the adapter with the
 `@remelondb/server/conformance` suite, the wire contract as a runnable
-suite. [`@remelondb/zod`](packages/zod)
+suite. The `@remelondb/core/zod` subpath
 derives tables and wire validators from shared Zod schemas.
 
 A taste of the API — the same code on every platform, swapping only
@@ -115,6 +115,9 @@ packages/
     src/sync/         the sync engine (pull/push, conflict resolution)
     src/conformance/  the driver contract as a runnable suite
                       (import '@remelondb/core/conformance')
+    src/zod/          shared Zod schemas as the source of truth:
+                      zodTable + sync wire validators
+                      (import '@remelondb/core/zod')
   driver-node/   @remelondb/driver-node — better-sqlite3 driver
                  + conformance & integration suites on real SQLite
   driver-rn/     @remelondb/driver-rn — React Native driver: thin
@@ -124,8 +127,6 @@ packages/
                  (dev builds only; see its README)
   driver-web/    @remelondb/driver-web — browser driver:
                  SQLite-WASM + OPFS in a Worker (see its README)
-  zod/           @remelondb/zod — shared Zod schemas as the source of
-                 truth: zodTable + sync wire validators
   server/        @remelondb/server — embeddable sync backend engine:
                  protocol semantics over a storage seam; in-memory
                  store included, bring a store adapter for persistence;

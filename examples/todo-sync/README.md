@@ -96,7 +96,7 @@ Inside this repository the example depends on the workspace sources
 own project, depend on the published packages instead:
 
 ```sh
-npm install @remelondb/core @remelondb/driver-web @remelondb/server @remelondb/zod zod
+npm install @remelondb/core @remelondb/driver-web @remelondb/server zod
 ```
 
 The published packages ship compiled JavaScript with type

@@ -68,13 +68,19 @@ per relevant change instead of an in-memory membership check. At the
 data sizes this library targets that is not a measured problem; if it
 becomes one, the matcher and its corpus are in git history.
 
-### 3. Fold packaging: nine packages to seven
+### 3. Fold packaging: nine packages to six
 
 Done. `driver-conformance` is the `@remelondb/core/conformance`
-subpath; `server-conformance` is `@remelondb/server/conformance`. Both
-are dev-facing: `vitest` is an optional peer dependency, needed only
-when the subpath is imported. Publishing, README, and API-reference
-surface shrink accordingly. Trivially reversible.
+subpath; `server-conformance` is `@remelondb/server/conformance`; the
+Zod adapter is `@remelondb/core/zod`. Each subpath's extra dependency
+(`vitest`, `zod`) is an optional peer, needed only when that subpath is
+imported. Publishing, README, and API-reference surface shrink
+accordingly. Trivially reversible.
+
+The remaining six packages each sit on a dependency or deployment
+boundary an npm package can't paper over: every driver carries its own
+platform dependency (and the C++ module must be a package for RN
+autolinking), and the server runs on the other side of the wire.
 
 ## Not cut
 
