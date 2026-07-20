@@ -28,8 +28,8 @@ rebuilds everything on two principles:
 2. **One engine: SQLite everywhere.** Native (bundled sqlite3 via a C++
    TurboModule), web (SQLite-WASM + OPFS in a Worker), Node (better-sqlite3).
    Query semantics are inherited from SQLite rather than re-implemented per
-   platform. The one bounded exception (a tiny in-memory matcher for
-   observers) is conformance-tested against real SQLite query-for-query.
+   platform — observation re-queries SQLite too, so there is no second
+   engine anywhere.
 
 The portability seam is a dumb, ~7-method **`SqliteDriver`**
 (execute SQL, atomically batch, report `user_version`). Everything above it
@@ -110,7 +110,6 @@ packages/
     src/query/        query AST, Q builders, Q → SQL compiler
     src/schema/       appSchema/table/column builders, migrations, DDL compiler
     src/rawRecord/    sanitizedRaw, dirty tracking
-    src/observation/  the in-memory matcher
     src/database/     Database, Collection, Query, WorkQueue, RecordCache
     src/model/        the Model layer (schema-generated accessors)
     src/sync/         the sync engine (pull/push, conflict resolution)
@@ -184,10 +183,9 @@ pnpm build          # tsdown: dist/ (ESM + .d.ts) for every package
 
 Testing philosophy: pure layers get exact-output unit tests in `core`;
 everything with semantics gets a **conformance test** in `driver-node` that
-runs against real SQLite. The matcher conformance suite runs one query corpus
-through both engines (compiled SQL and the in-memory matcher) and asserts
-identical results; that's the "one authoritative engine" rule as an
-executable invariant.
+runs against real SQLite. One query corpus pins the compiled SQL's
+semantics on every driver; that's the "one authoritative engine" rule as
+an executable invariant.
 
 ## License and credits
 

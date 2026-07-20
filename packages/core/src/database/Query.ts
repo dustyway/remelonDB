@@ -1,27 +1,17 @@
 /**
  * A Query pairs a Collection with a QueryDescription and offers fetch and
- * the two observation strategies (docs/architecture-layers.md, decision 6):
- *
- * - simple: flat single-table queries (canEncodeMatcher) re-check membership
- *   in memory via the matcher on each collection change — no re-query.
- *   Emits on membership changes only.
- * - reloading: everything else re-fetches when any of the query's tables
- *   change, and emits when the result list actually differs — by
- *   membership, order, or the content of visible columns. Identity alone
- *   can't detect content edits (the cache mutates raws in place, so a
- *   refetch returns the same instances), which is why each emission keeps
- *   a column snapshot to compare against. Bookkeeping changes
- *   (_status/_changed, e.g. sync marking records synced) don't count.
+ * one observation strategy (docs/architecture-layers.md, decision 6):
+ * re-fetch when any of the query's tables change, emit when the result
+ * list actually differs — by membership, order, or the content of visible
+ * columns. Identity alone can't detect content edits (the cache mutates
+ * raws in place, so a refetch returns the same instances), which is why
+ * each emission keeps a column snapshot to compare against. Bookkeeping
+ * changes (_status/_changed, e.g. sync marking records synced) don't count.
  */
 import { encodeQuery } from '../query/encodeQuery'
 import type { QueryDescription } from '../query/ast'
-import { canEncodeMatcher, encodeMatcher } from '../observation/encodeMatcher'
 import type { RawRecord } from '../rawRecord/index'
-import type {
-  Collection,
-  CollectionChangeSet,
-  Unsubscribe,
-} from './Collection'
+import type { Collection, Unsubscribe } from './Collection'
 
 /**
  * A fetchable, observable query — a Collection plus Q clauses. Get one
@@ -80,98 +70,6 @@ export class Query<M = RawRecord> {
    * inside are the canonical cached instances.
    */
   observe(subscriber: (records: M[]) => void): Unsubscribe {
-    const emit = (raws: readonly RawRecord[]) =>
-      subscriber(raws.map((raw) => this.collection._recordFor(raw)))
-    return canEncodeMatcher(this.description)
-      ? this.observeSimple(emit)
-      : this.observeReloading(emit)
-  }
-
-  /** Observe the result count. Emits initially and whenever it changes. */
-  observeCount(subscriber: (count: number) => void): Unsubscribe {
-    let unsubscribed = false
-    let previous: number | null = null
-    let generation = 0
-
-    const refetch = () => {
-      const current = ++generation
-      void this.fetchCount().then((count) => {
-        if (unsubscribed || current !== generation || count === previous) {
-          return
-        }
-        previous = count
-        subscriber(count)
-      })
-    }
-
-    const unsubscribe = this.collection.database.onChange(this.allTables, refetch)
-    refetch()
-    return () => {
-      unsubscribed = true
-      unsubscribe()
-    }
-  }
-
-  private observeSimple(
-    subscriber: (records: readonly RawRecord[]) => void,
-  ): Unsubscribe {
-    const matcher = encodeMatcher(this.description)
-    let unsubscribed = false
-    let records: RawRecord[] | null = null // null until the initial fetch
-    let buffered: CollectionChangeSet[] = []
-
-    const processChangeSet = (changes: CollectionChangeSet): boolean => {
-      let changed = false
-      for (const { record, type } of changes) {
-        const index = records!.indexOf(record)
-        const belongs = type !== 'destroyed' && matcher(record)
-        if (index >= 0 && !belongs) {
-          records!.splice(index, 1)
-          changed = true
-        } else if (index < 0 && belongs) {
-          records!.push(record)
-          changed = true
-        }
-      }
-      return changed
-    }
-
-    // Subscribe before the initial fetch and buffer changes so nothing
-    // committed during the fetch is missed.
-    const unsubscribe = this.collection.onChange((changes) => {
-      if (unsubscribed) {
-        return
-      }
-      if (records === null) {
-        buffered.push(changes)
-        return
-      }
-      if (processChangeSet(changes)) {
-        subscriber([...records!])
-      }
-    })
-
-    void this.fetchRaws().then((initial) => {
-      if (unsubscribed) {
-        return
-      }
-      records = initial
-      for (const changes of buffered) {
-        processChangeSet(changes)
-      }
-      buffered = []
-      subscriber([...records])
-    })
-
-    return () => {
-      unsubscribed = true
-      unsubscribe()
-    }
-  }
-
-  private observeReloading(
-    subscriber: (records: readonly RawRecord[]) => void,
-  ): Unsubscribe {
     const columns = ['id', ...Object.keys(this.collection.schema.columns)]
     let unsubscribed = false
     let previous: { raw: RawRecord; content: RawRecord }[] | null = null
@@ -200,7 +98,7 @@ export class Query<M = RawRecord> {
           return
         }
         previous = records.map((raw) => ({ raw, content: { ...raw } }))
-        subscriber([...records])
+        subscriber(records.map((raw) => this.collection._recordFor(raw)))
       })
     }
 
@@ -211,4 +109,30 @@ export class Query<M = RawRecord> {
       unsubscribe()
     }
   }
+
+  /** Observe the result count. Emits initially and whenever it changes. */
+  observeCount(subscriber: (count: number) => void): Unsubscribe {
+    let unsubscribed = false
+    let previous: number | null = null
+    let generation = 0
+
+    const refetch = () => {
+      const current = ++generation
+      void this.fetchCount().then((count) => {
+        if (unsubscribed || current !== generation || count === previous) {
+          return
+        }
+        previous = count
+        subscriber(count)
+      })
+    }
+
+    const unsubscribe = this.collection.database.onChange(this.allTables, refetch)
+    refetch()
+    return () => {
+      unsubscribed = true
+      unsubscribe()
+    }
+  }
+
 }

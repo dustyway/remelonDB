@@ -52,9 +52,6 @@ export type { RawRecord, DirtyRaw, SyncStatus } from './rawRecord/index'
 
 export { randomId } from './utils/randomId'
 
-export { canEncodeMatcher, encodeMatcher } from './observation/encodeMatcher'
-export type { Matcher, EncodeMatcherOptions } from './observation/encodeMatcher'
-
 export { Database } from './database/Database'
 export type { DatabaseOptions, DatabaseChangeSet } from './database/Database'
 export { Collection } from './database/Collection'

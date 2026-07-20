@@ -75,7 +75,7 @@ migration range silently falls back to destroy-and-recreate** (index.js:191).
 - Loki-compat semantics contort the operator set: weak equality (`1==true`),
   `weakGt` (JS null ordering), null-in-`oneOf` forbidden, `IS`/`IS NOT` for eq.
   Exists only so SQLite/Loki/JS-matcher agree; with Loki gone, most simplifies
-  to native SQLite semantics (but the JS matcher must still match SQLite).
+  to native SQLite semantics.
 - `Q.sanitizeLikeString` is lossy (replaces all non-alphanumerics with `_`)
   instead of using an `ESCAPE` clause.
 - `_status != 'deleted'` filtering is bolted on by rewriting the description

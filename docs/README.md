@@ -14,7 +14,7 @@ they track the code and are updated with it.
 
 | Doc | Decision |
 | --- | --- |
-| [q-dsl-and-one-engine.md](q-dsl-and-one-engine.md) | Queries are serializable data; SQLite is the single query engine on every platform. The in-memory matcher is the one bounded exception and must be conformance-tested against SQLite. |
+| [q-dsl-and-one-engine.md](q-dsl-and-one-engine.md) | Queries are serializable data; SQLite is the single query engine on every platform, without exception — observers re-query rather than re-match in JS. |
 | [architecture-layers.md](architecture-layers.md) | The portability seam is a ~7-method `SqliteDriver` (dumb SQL executor), not an ORM-flavored adapter. Async at the seam. Record caching owned by JS only. Tombstones/local storage are core features, not driver methods. RN driver is a C++ TurboModule. |
 | [sync-design.md](sync-design.md) | Generic reimplementation of WatermelonDB's sync protocol with two contract-level fixes: an opaque commit-ordered cursor (kills the lost-write race) and push-responds-like-a-pull (kills the push echo). |
 | [sync-wire.md](sync-wire.md) | The normative wire contract: exact JSON shapes, backend obligations as testable MUSTs, client guarantees, canonical HTTP binding, and a conformance checklist for server implementations. |
@@ -31,9 +31,9 @@ they track the code and are updated with it.
 
 | Doc | Covers |
 | --- | --- |
-| [reference/database.md](reference/database.md) | `Database.open`, the writer queue, CRUD, the batch contract, both observation strategies, change buses, local storage. |
+| [reference/database.md](reference/database.md) | `Database.open`, the writer queue, CRUD, the batch contract, observation, change buses, local storage. |
 | [reference/models.md](reference/models.md) | The Model layer: declare-field accessors (no decorators), update builders, identity, relations, per-record observation. |
-| [reference/queries.md](reference/queries.md) | The Q DSL: every operator with its SQL and semantics, joins, LIKE escaping, unsafe escape hatches, compilation, the in-memory matcher and its gate. |
+| [reference/queries.md](reference/queries.md) | The Q DSL: every operator with its SQL and semantics, joins, LIKE escaping, unsafe escape hatches, compilation. |
 | [sync-tour.md](sync-tour.md) | The wire protocol in eight real requests and responses — the hands-on companion to the spec, with a clickable .http version in the example. |
 | [reference/sync.md](reference/sync.md) | Using `synchronize`: wire shapes, conflict semantics, resync, migration pulls, testing a backend. |
 | [reference/schema.md](reference/schema.md) | `appSchema`/`table()`/column builders, inferred record types, standard columns, reserved names, DDL output, migrations and the no-silent-reset contract. |
@@ -49,8 +49,7 @@ they track the code and are updated with it.
   and are validated at construction; **values** always cross the seam as `?`
   placeholders. Nothing user-controlled is ever interpolated into SQL text.
 - **Deleted records** (`_status = 'deleted'`) are tombstones kept for sync.
-  Both query paths hide them by default (`filterDeleted` flag on
-  `encodeQuery` and `encodeMatcher`).
+  Queries hide them by default (`filterDeleted` flag on `encodeQuery`).
 - APIs prefixed **`unsafe`** bypass a guarantee the rest of the system
   maintains (usually: SQL injection safety or engine-portability). They exist
   as escape hatches, not conveniences.

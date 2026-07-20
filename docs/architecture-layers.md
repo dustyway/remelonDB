@@ -26,7 +26,6 @@ on every platform.
 │  • schema DDL + migration-step compiler                     │
 │  • RecordCache (identity map — sole owner of caching)       │
 │  • writer/reader queue, change-notification bus             │
-│  • in-memory matcher (gated, conformance-tested vs SQLite)  │
 │  • sync engine (rev-cursor protocol)                        │
 │  • tombstones + local storage = ordinary SQL over the driver│
 ├──────────────────── SqliteDriver seam ──────────────────────┤
@@ -120,8 +119,7 @@ trivially sync-capable.
 **3. The Q→SQL compiler is one pure function, tested by conformance.** Same
 compiler output runs on all three drivers. A Node conformance suite runs the
 same query corpus against better-sqlite3 (and later the WASM driver) and
-asserts identical results; the in-memory matcher is tested against those same
-SQLite results, not against its own reimplementation of the rules. Semantics
+asserts identical results. Semantics
 simplifications now that Loki is gone: LEFT JOIN always (no inner-join
 heuristic), `LIKE` escaping via `ESCAPE` clause (not lossy character
 replacement), drop `unsafeLokiExpr`/`lokiTransform`, keep `IS`/`IS NOT` null
@@ -144,11 +142,13 @@ with order-sensitive callbacks. We keep only the callback bus +
 `SharedSubscribable`-style multicast; `observe()` returns a minimal
 Observable-compatible object for ecosystem interop without the dependency.
 
-**6. Keep the two-strategy observation with the same gate.** Flat
-single-table queries → in-memory matcher; joins/sort/take/skip → re-query on
-relevant table change. Upstream's `observeWithColumns` race machinery and the
-knowingly-buggy count throttle are not carried over; with a single async seam
-the observer state machine is written once, simply.
+**6. One observation strategy.** Every observed query re-fetches when a
+relevant table changes and emits when the result list differs — by
+membership, order, or visible content. No in-memory matcher, so SQLite is
+the only engine even for observation. Upstream's simple/reloading split,
+`observeWithColumns` race machinery, and the knowingly-buggy count throttle
+are not carried over; with a single async seam the observer state machine
+is written once, simply.
 
 **7. Batch commit gets a real failure contract.** Upstream clears records'
 prepared state before the adapter call and has a `TODO: What if this fails?`.

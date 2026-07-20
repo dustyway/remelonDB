@@ -1,7 +1,7 @@
 # Simplification (design)
 
-Status: in progress — the RN driver split is done; the matcher removal
-and the packaging fold are pending. This page records what gets cut
+Status: in progress — the RN driver split and the matcher removal are
+done; the packaging fold is pending. This page records what gets cut
 and what replaces it.
 
 ## Goal
@@ -56,10 +56,11 @@ reduces default-path complexity and coupling, not line count.
 
 ### 2. Remove the in-memory matcher and the simple observer
 
-One observation strategy remains: re-fetch on relevant change, emit
-when membership, order, or visible content differs. Removes the
-matcher, its gate (`canEncodeMatcher`), the matcher-vs-SQLite corpus,
-and the simple/reloading split in `Query`.
+Done. One observation strategy remains: re-fetch on relevant change,
+emit when membership, order, or visible content differs. Removed the
+matcher, its gate (`canEncodeMatcher`), the matcher-vs-SQLite corpus
+(its distinctive engine-semantics cases moved into the SQL query
+corpus), and the simple/reloading split in `Query`.
 
 Gains: "SQLite is the only query engine" becomes true without
 exception; the class of matcher/SQL disagreement bugs disappears; flat

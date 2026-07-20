@@ -87,25 +87,17 @@ const unsub = db.get(Task)
 const unsub2 = db.get(Task).query().observeCount((n) => setBadge(n))
 ```
 
-Two strategies, chosen automatically per query:
-
-| | Simple | Reloading |
-| --- | --- | --- |
-| Applies to | flat single-table queries (`canEncodeMatcher`) | joins, sortBy, take/skip, raw SQL |
-| Mechanism | in-memory matcher re-checks membership per change — no re-query | re-fetch when any of the query's tables change |
-| Emits | initial results, then on **membership changes** | initial results, then when the result list differs — membership, order, or visible-column content |
+One strategy for every query: re-fetch when any of the query's tables
+change, emit the initial results and then whenever the result list
+differs — by membership, order, or visible-column content.
 
 Notes that follow from the design:
 
-- Simple observers emit on membership only: a content change that doesn't
-  affect membership doesn't re-emit the list — observe individual records
-  for that (`model.observe`, models.md). Reloading observers do re-emit
-  when a listed record's visible columns change (a synced remote edit
-  repaints a sorted list); bookkeeping-only changes (`_status`/`_changed`,
-  e.g. a push marking records synced) never re-emit.
-- The simple observer subscribes before its initial fetch and buffers
-  changes, so commits racing the first fetch aren't lost.
-- Reloading observers discard stale in-flight results (generation counter)
+- A listed record's visible-column change re-emits the list (a synced
+  remote edit repaints a sorted list); bookkeeping-only changes
+  (`_status`/`_changed`, e.g. a push marking records synced) never
+  re-emit.
+- Observers discard stale in-flight results (generation counter)
   and re-emit only when the fetched list actually differs.
 - `observeCount` re-queries `count(*)` on relevant changes and emits only
   when the number changed. No throttling (upstream's was knowingly buggy);

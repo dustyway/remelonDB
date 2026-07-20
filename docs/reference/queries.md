@@ -1,9 +1,8 @@
 # Queries reference
 
-A query is built as pure data (a `QueryDescription`), compiled to
-parameterized SQL by `encodeQuery`, and — when simple enough — compiled to an
-in-memory predicate by `encodeMatcher`. This document is the reference for
-all three, and for the semantics they share.
+A query is built as pure data (a `QueryDescription`) and compiled to
+parameterized SQL by `encodeQuery`. This document is the reference for
+both, and for the semantics of the compiled SQL.
 
 In an app you build queries through a collection and fetch/observe them
 ([database.md](database.md)); the compiler runs under the hood:
@@ -56,14 +55,12 @@ compare two columns of the same row/table.
 
 The `is`/`is not` and text-above-numbers rules are SQLite's own semantics,
 adopted deliberately: there is no second engine to compromise with, and the
-in-memory matcher replicates exactly these rules (conformance-tested).
+driver conformance corpus pins them on every platform.
 
 ## LIKE and `escapeLike`
 
 - `like` is **case-insensitive for ASCII letters only** — SQLite does not
-  case-fold non-ASCII (`'å' LIKE 'Å%'` does not match). The matcher
-  replicates this precisely (per-character `[aA]` classes, not a naive
-  case-insensitive regex).
+  case-fold non-ASCII (`'å' LIKE 'Å%'` does not match).
 - Patterns always compile with `escape '\'`. To match user input literally
   inside a pattern, escape it:
 
@@ -121,11 +118,10 @@ Join semantics — deliberate and worth knowing:
 - `Q.unsafeSqlExpr('length("name") > 3')` — a raw SQL fragment inside WHERE.
 - `Q.unsafeSqlQuery('select * from tasks where …', [args])` — replaces the
   entire compiled query (values are still bound). Can only be combined with
-  join declarations; cannot be counted or matched in memory.
+  join declarations; cannot be counted.
 
 Both bypass injection safety for whatever you interpolate yourself — hence
-the names. Neither is usable by the in-memory matcher, so queries using them
-always observe via re-query.
+the names.
 
 ## Compilation: `encodeQuery`
 
@@ -142,27 +138,8 @@ encodeQuery(
 - Output is deterministic and fully parameterized; the only strings
   interpolated into SQL are identifiers already validated by the builders.
 
-## The in-memory matcher
-
-```ts
-import { canEncodeMatcher, encodeMatcher } from '@remelondb/core'
-
-if (canEncodeMatcher(description)) {
-  const matcher = encodeMatcher(description) // (raw: RawRecord) => boolean
-  const stillMatches = matcher(record)
-}
-```
-
-Observers of simple queries can re-check membership on a change without
-hitting the database. The gate (`canEncodeMatcher`) admits only **flat
-single-table queries**: no joins, no `sortBy`, no `take`/`skip`, no raw SQL
-anywhere in the tree (nested `unsafeSqlExpr` is detected recursively).
-`encodeMatcher` throws on anything the gate rejects; callers fall back to
-re-querying.
-
-The matcher replicates SQLite's semantics exactly — IS-equality with 0/1
-boolean normalization on both sides, storage-class ordering, ASCII-only LIKE
-folding, the `NOT IN ()` edge case — and the agreement is pinned by
-`matcherConformance.test.ts`, which runs one query corpus through compiled
-SQL *and* the matcher and asserts identical results. If you extend either
-side, extend the corpus.
+SQLite is the only engine that evaluates a query — observation re-queries
+it rather than re-matching in JS ([database.md](database.md)). The
+semantics above (IS-equality, storage-class ordering, ASCII-only LIKE
+folding, the `NOT IN ()` edge case) are pinned by the driver conformance
+query corpus; if you extend the compiler, extend the corpus.

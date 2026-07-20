@@ -1,9 +1,9 @@
 /**
  * The executable driver contract (docs/reference/driver.md): every
  * SqliteDriver implementation runs this one suite — the driver method
- * obligations, the full query-semantics corpus, matcher/SQL agreement,
- * schema DDL and migrations, and the sanitization round-trip. One corpus,
- * every platform; passing it is what "conforming driver" means.
+ * obligations, the full query-semantics corpus, schema DDL and
+ * migrations, and the sanitization round-trip. One corpus, every
+ * platform; passing it is what "conforming driver" means.
  *
  * Usage (in a driver package's vitest file):
  *
@@ -17,7 +17,6 @@ import { describe } from 'vitest'
 import type { SqliteDriver } from '@remelondb/core'
 import { contractSuite } from './contract'
 import { queryCorpusSuite } from './queryCorpus'
-import { matcherCorpusSuite } from './matcherCorpus'
 import { schemaSuite } from './schemaSuite'
 import { recordsSuite } from './recordsSuite'
 
@@ -69,7 +68,6 @@ export function registerDriverConformance(
   describe(`SqliteDriver conformance: ${resolved.name}`, () => {
     contractSuite(resolved)
     queryCorpusSuite(resolved)
-    matcherCorpusSuite(resolved)
     schemaSuite(resolved)
     recordsSuite(resolved)
   })

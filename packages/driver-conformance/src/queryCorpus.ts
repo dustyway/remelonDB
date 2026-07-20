@@ -123,6 +123,47 @@ export function queryCorpusSuite(options: ResolvedOptions): void {
       ).toEqual(['t3', 't5'])
     })
 
+    it('notIn with an empty list matches everything, even null', async () => {
+      expect(
+        await taskIds([Q.where('project_id', Q.notIn([])), Q.sortBy('position')]),
+      ).toEqual(['t1', 't2', 't3', 't4', 't5'])
+    })
+
+    it('between is inclusive', async () => {
+      expect(
+        await taskIds([Q.where('position', Q.between(2, 4)), Q.sortBy('position')]),
+      ).toEqual(['t2', 't3', 't4'])
+    })
+
+    it('comparisons follow sqlite storage-class ordering (text above numbers)', async () => {
+      expect(
+        await taskIds([Q.where('name', Q.gt(999)), Q.sortBy('position')]),
+      ).toEqual(['t1', 't2', 't3', 't4', 't5'])
+      expect(await taskIds([Q.where('position', Q.gt(''))])).toEqual([])
+    })
+
+    it('like is case-insensitive for ascii letters only', async () => {
+      await driver.execute('insert into tasks values (?, ?, ?, ?, ?, ?, ?, ?)', [
+        't7', 'Ålpha', 7, false, null, 0, 0, 'synced',
+      ])
+      expect(await taskIds([Q.where('name', Q.like('ORPHAN'))])).toEqual(['t4'])
+      expect(await taskIds([Q.where('name', Q.like('_rphan'))])).toEqual(['t4'])
+      expect(await taskIds([Q.where('name', Q.like('å%'))])).toEqual([])
+      expect(await taskIds([Q.where('name', Q.like('Å%'))])).toEqual(['t7'])
+    })
+
+    it('nested and/or', async () => {
+      expect(
+        await taskIds([
+          Q.or(
+            Q.and(Q.where('is_done', true), Q.where('position', Q.lte(1))),
+            Q.where('project_id', null),
+          ),
+          Q.sortBy('position'),
+        ]),
+      ).toEqual(['t1', 't4'])
+    })
+
     it('escapeLike makes wildcards literal', async () => {
       expect(
         await taskIds([Q.where('name', Q.like('%100%%')), Q.sortBy('position')]),

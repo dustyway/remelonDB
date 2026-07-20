@@ -100,9 +100,9 @@ state on the next `open`.
 
 The suite is the real contract: driver method obligations (lifecycle,
 round-trip, batch atomicity and rollback, user_version, error surfaces,
-persistence when supported), the full query-semantics corpus, the
-matcher/SQL agreement corpus, schema DDL + migrations, and the
-sanitization round-trip. Both existing drivers run it verbatim.
+persistence when supported), the full query-semantics corpus, schema
+DDL + migrations, and the sanitization round-trip. Both existing
+drivers run it verbatim.
 
 ## Existing drivers
 
