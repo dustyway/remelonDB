@@ -14,7 +14,7 @@
  *   })
  */
 import { describe } from 'vitest'
-import type { SqliteDriver } from '@remelondb/core'
+import type { SqliteDriver } from '../index'
 import { contractSuite } from './contract'
 import { queryCorpusSuite } from './queryCorpus'
 import { schemaSuite } from './schemaSuite'

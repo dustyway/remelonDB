@@ -60,9 +60,9 @@ library you embed in your own Node backend: it hands you plain
 semantic — cursors, conflict detection, per-record rejection —
 implemented once above an eight-method storage seam. It ships with an
 in-memory store for development and tests; for durable storage you
-implement the seam over your database and prove the adapter with
-[`@remelondb/server-conformance`](packages/server-conformance), the
-wire contract as a runnable suite. [`@remelondb/zod`](packages/zod)
+implement the seam over your database and prove the adapter with the
+`@remelondb/server/conformance` suite, the wire contract as a runnable
+suite. [`@remelondb/zod`](packages/zod)
 derives tables and wire validators from shared Zod schemas.
 
 A taste of the API — the same code on every platform, swapping only
@@ -113,6 +113,8 @@ packages/
     src/database/     Database, Collection, Query, WorkQueue, RecordCache
     src/model/        the Model layer (schema-generated accessors)
     src/sync/         the sync engine (pull/push, conflict resolution)
+    src/conformance/  the driver contract as a runnable suite
+                      (import '@remelondb/core/conformance')
   driver-node/   @remelondb/driver-node — better-sqlite3 driver
                  + conformance & integration suites on real SQLite
   driver-rn/     @remelondb/driver-rn — React Native driver: thin
@@ -126,10 +128,9 @@ packages/
                  truth: zodTable + sync wire validators
   server/        @remelondb/server — embeddable sync backend engine:
                  protocol semantics over a storage seam; in-memory
-                 store included, bring a store adapter for persistence
-                 (docs/server-design.md)
-  server-conformance/  @remelondb/server-conformance — the wire spec's
-                 checklist as a runnable suite + in-memory reference
+                 store included, bring a store adapter for persistence;
+                 the wire spec's checklist ships as a runnable suite at
+                 '@remelondb/server/conformance' (docs/server-design.md)
 examples/
   todo-sync/     one example, one shared schema, three packages:
                  backend/ (schema + ~50-line sync server), frontend/

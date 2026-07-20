@@ -9,7 +9,7 @@ import {
   column as c,
   table,
   type SqliteDriver,
-} from '@remelondb/core'
+} from '../index'
 import type { ResolvedOptions } from './index'
 
 const tasksTable = table('tasks', {

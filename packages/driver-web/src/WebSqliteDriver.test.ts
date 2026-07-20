@@ -1,7 +1,7 @@
 /**
  * Web-driver-specific behavior. The full driver contract, query corpus,
  * matcher agreement, schema and record suites run via conformance.test.ts
- * (@remelondb/driver-conformance) against the same in-process
+ * (@remelondb/core/conformance) against the same in-process
  * real-sqlite-wasm setup.
  */
 import { describe, expect, it } from 'vitest'

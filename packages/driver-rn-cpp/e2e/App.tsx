@@ -14,7 +14,7 @@ import {
   Q,
 } from '@remelondb/core'
 import { RnSqliteDriver } from '@remelondb/driver-rn'
-import { registerDriverConformance } from '@remelondb/driver-conformance'
+import { registerDriverConformance } from '@remelondb/core/conformance'
 import { runRegisteredSuites } from './vitest-shim'
 
 type Result = { name: string; ok: boolean; detail?: string }

@@ -26,7 +26,7 @@ const db = await Database.open({
 ## Role in the project
 
 This is also remelonDB's reference driver: the full driver
-[conformance suite](https://www.npmjs.com/package/@remelondb/driver-conformance)
+conformance suite (`@remelondb/core/conformance`)
 and the core integration suites (database, models, sync) run against it on
 real SQLite in ordinary vitest, so most semantics are pinned down here before
 the web and React Native drivers re-verify them.

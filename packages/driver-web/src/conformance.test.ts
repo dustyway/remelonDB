@@ -1,4 +1,4 @@
-import { registerDriverConformance } from '@remelondb/driver-conformance'
+import { registerDriverConformance } from '@remelondb/core/conformance'
 import { createInProcessDriver } from './testing'
 
 registerDriverConformance({

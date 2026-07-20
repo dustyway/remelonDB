@@ -35,14 +35,13 @@ node -e "
   fs.writeFileSync(p, JSON.stringify(pkg, null, 2))
 " "$CORE_TGZ"
 pnpm --filter @remelondb/driver-rn pack --pack-destination /tmp/packed
-pnpm --filter @remelondb/driver-conformance pack --pack-destination /tmp/packed
 git checkout packages/driver-rn/package.json
 
 # scaffold the app
 cd /tmp
 npx @react-native-community/cli@latest init WmHarness --version 0.86.0 --pm npm --skip-install --install-pods false
 cd WmHarness && npm install
-npm install /tmp/packed/*core*.tgz /tmp/packed/*driver-rn*.tgz /tmp/packed/*driver-conformance*.tgz
+npm install /tmp/packed/*core*.tgz /tmp/packed/*driver-rn*.tgz
 
 # drop in the test app (from the repo checkout)
 cp <repo>/packages/driver-rn/e2e/{App.tsx,vitest-shim.ts,metro.config.js} .

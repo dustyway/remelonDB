@@ -24,8 +24,9 @@ WatermelonDB on modern RN).
 > Support on iOS), WAL, typed roundtrip, atomic batch rollback,
 > JS-catchable native errors, `user_version` across reopen, `destroy`
 > incl. sidecars, a full `Database` end-to-end over core, **and the
-> complete driver-conformance suite (50/50 on both platforms, the same
-> tests the Node driver passes)**, plus a reload-teardown cycle (iOS).
+> complete driver conformance suite (`@remelondb/core/conformance`, the
+> same tests the Node driver passes, green on both platforms)**, plus a
+> reload-teardown cycle (iOS).
 > Open items at the bottom.
 
 ## Requirements

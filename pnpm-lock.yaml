@@ -126,13 +126,7 @@ importers:
         specifier: ~6.0.3
         version: 6.0.3
 
-  packages/core: {}
-
-  packages/driver-conformance:
-    dependencies:
-      '@remelondb/core':
-        specifier: workspace:*
-        version: link:../core
+  packages/core:
     devDependencies:
       vitest:
         specifier: ^3.2.4
@@ -147,9 +141,6 @@ importers:
         specifier: ^12.2.0
         version: 12.11.1
     devDependencies:
-      '@remelondb/driver-conformance':
-        specifier: workspace:*
-        version: link:../driver-conformance
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
@@ -201,9 +192,6 @@ importers:
         specifier: 3.53.0-build1
         version: 3.53.0-build1
     devDependencies:
-      '@remelondb/driver-conformance':
-        specifier: workspace:*
-        version: link:../driver-conformance
       '@vitest/browser':
         specifier: ^3.2.7
         version: 3.2.7(playwright@1.61.1)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))(vitest@3.2.7)(webdriverio@9.29.1)
@@ -215,19 +203,6 @@ importers:
         version: 9.29.1
 
   packages/server:
-    dependencies:
-      '@remelondb/core':
-        specifier: workspace:*
-        version: link:../core
-    devDependencies:
-      '@remelondb/server-conformance':
-        specifier: workspace:*
-        version: link:../server-conformance
-      vitest:
-        specifier: ^3.2.4
-        version: 3.2.7(@types/node@24.13.3)(@vitest/browser@3.2.7)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
-
-  packages/server-conformance:
     dependencies:
       '@remelondb/core':
         specifier: workspace:*

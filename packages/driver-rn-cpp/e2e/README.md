@@ -1,15 +1,15 @@
 # On-device e2e: smoke + conformance
 
 Drop-in files for a scratch RN app that runs the driver's runtime smoke
-suite plus the full `@remelondb/driver-conformance` suite
-(the same 50 tests the Node driver passes) on a device or emulator,
+suite plus the full `@remelondb/core/conformance` suite
+(the same tests the Node driver passes) on a device or emulator,
 reporting to the screen and to logcat.
 
 ## Build the harness
 
-Same recipe as CI's `android-driver` job: pack `core`, `driver-rn`, and
-`driver-conformance` as tarballs (rewriting `workspace:*` deps to the
-tarball paths), `npx @react-native-community/cli init WmHarness
+Same recipe as CI's `android-driver` job: pack `core` and `driver-rn`
+as tarballs (rewriting `workspace:*` deps to the tarball paths — the
+conformance suite ships inside core), `npx @react-native-community/cli init WmHarness
 --version 0.86.0`, install the tarballs, then copy these four files over
 the app's own:
 

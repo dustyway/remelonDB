@@ -3,7 +3,19 @@
   "version": "0.0.7",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./conformance": "./src/conformance/index.ts"
+  },
+  "peerDependencies": {
+    "vitest": ">=3"
+  },
+  "peerDependenciesMeta": {
+    "vitest": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4"
   },
   "license": "MIT",
   "description": "remelonDB core: reactive offline-first database over a pluggable SQLite driver \u2014 queries as data, schema/migrations, observation, sync engine",
@@ -33,6 +45,11 @@
         "types": "./dist/index.d.mts",
         "import": "./dist/index.mjs",
         "default": "./dist/index.mjs"
+      },
+      "./conformance": {
+        "types": "./dist/conformance/index.d.mts",
+        "import": "./dist/conformance/index.mjs",
+        "default": "./dist/conformance/index.mjs"
       }
     },
     "access": "public"

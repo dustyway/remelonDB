@@ -20,14 +20,14 @@ platform:
 | React Native | [`@remelondb/driver-rn`](https://www.npmjs.com/package/@remelondb/driver-rn) (C++ TurboModule, bundled SQLite) |
 
 Because every driver is real SQLite and passes the same
-[conformance suite](https://www.npmjs.com/package/@remelondb/driver-conformance),
+conformance suite (`@remelondb/core/conformance`),
 code written against core behaves identically on all of them.
 
 Companions: [`@remelondb/zod`](https://www.npmjs.com/package/@remelondb/zod)
 derives tables and sync wire validators from shared Zod schemas;
 [`@remelondb/server`](https://www.npmjs.com/package/@remelondb/server)
 implements the sync backend over a storage seam, proven by
-[`@remelondb/server-conformance`](https://www.npmjs.com/package/@remelondb/server-conformance).
+its `@remelondb/server/conformance` suite.
 
 ## Example
 

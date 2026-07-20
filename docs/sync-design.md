@@ -177,8 +177,7 @@ explicitly non-conforming.
 
 You normally don't implement any of this by hand: the backend engine
 ships as [`@remelondb/server`](../packages/server) (the protocol over
-a small storage seam), and
-[`@remelondb/server-conformance`](../packages/server-conformance) is
+a small storage seam), and its `@remelondb/server/conformance` suite is
 the executable version of this contract.
 
 ## Client engine notes
