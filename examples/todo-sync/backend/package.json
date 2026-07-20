@@ -9,7 +9,6 @@
   "dependencies": {
     "@remelondb/core": "workspace:*",
     "@remelondb/server": "workspace:*",
-    "@remelondb/zod": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {

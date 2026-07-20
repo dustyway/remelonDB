@@ -22,7 +22,7 @@ import {
   type SyncChanges,
   type SyncPushResult,
   type TableSchema,
-} from '@remelondb/core'
+} from '../index'
 import { z } from 'zod'
 
 // ---- zodTable ----

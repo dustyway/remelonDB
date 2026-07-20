@@ -32,8 +32,8 @@ const MODULES = {
     '../packages/server/dist/index.mjs',
     import.meta.url,
   ).href,
-  '@remelondb/zod': new URL(
-    '../packages/zod/dist/index.mjs',
+  '@remelondb/core/zod': new URL(
+    '../packages/core/dist/zod/index.mjs',
     import.meta.url,
   ).href,
   zod: import.meta.resolve('zod'),

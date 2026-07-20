@@ -4,12 +4,14 @@
   ],
   "entryPoints": [
     "src/index.ts",
-    "src/conformance/index.ts"
+    "src/conformance/index.ts",
+    "src/zod/index.ts"
   ],
   "intentionallyNotExported": [
     "columnTag",
     "comparisonTag",
     "DirtyRecordSnapshot",
-    "RecordCache"
+    "RecordCache",
+    "ColumnFor"
   ]
 }

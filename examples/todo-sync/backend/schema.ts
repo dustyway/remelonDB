@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { appSchema, ModelFor, type InferRecord } from '@remelondb/core'
-import { syncSchemas, zodTable } from '@remelondb/zod'
+import { syncSchemas, zodTable } from '@remelondb/core/zod'
 
 // One Zod object is the single source of truth. Everything below —
 // the client table, the record types, the model class, and the sync

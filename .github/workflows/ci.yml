@@ -97,7 +97,6 @@ jobs:
           pnpm -r --filter './packages/*' pack --pack-destination /tmp/tarballs
           CORE=$(ls /tmp/tarballs/remelondb-core-*.tgz)
           NODE_DRV=$(ls /tmp/tarballs/remelondb-driver-node-*.tgz)
-          ZOD=$(ls /tmp/tarballs/remelondb-zod-*.tgz)
           SERVER=$(ls /tmp/tarballs/remelondb-server-*.tgz)
           cd /tmp/consume
           node -e "
@@ -106,18 +105,17 @@ jobs:
               dependencies: {
                 '@remelondb/core': 'file:' + process.argv[1],
                 '@remelondb/driver-node': 'file:' + process.argv[2],
-                '@remelondb/zod': 'file:' + process.argv[3],
-                '@remelondb/server': 'file:' + process.argv[4],
+                '@remelondb/server': 'file:' + process.argv[3],
                 'zod': '^4.0.0',
               },
               overrides: { '@remelondb/core': 'file:' + process.argv[1] },
             }, null, 2))
-          " "$CORE" "$NODE_DRV" "$ZOD" "$SERVER"
+          " "$CORE" "$NODE_DRV" "$SERVER"
           npm install
           cat > main.mjs <<'EOF'
           import { appSchema, column as c, table, Database, ModelFor, Q } from '@remelondb/core'
           import { NodeSqliteDriver } from '@remelondb/driver-node'
-          import { zodTable, syncSchemas } from '@remelondb/zod'
+          import { zodTable, syncSchemas } from '@remelondb/core/zod'
           import { createSyncEngine, createMemoryStore } from '@remelondb/server'
           import { z } from 'zod'
 

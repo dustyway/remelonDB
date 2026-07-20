@@ -25,10 +25,10 @@ protocol. The frontend — your app — installs `@remelondb/core` and one
 driver from npm:
 
 ```sh
-pnpm add @remelondb/core @remelondb/driver-node @remelondb/zod zod
+pnpm add @remelondb/core @remelondb/driver-node zod
 ```
 
-`@remelondb/zod` is the schema front end this tutorial uses: one Zod
+`@remelondb/core/zod` is the schema front end this tutorial uses: one Zod
 object per table drives the client table, the record types, and — in
 section 10 — validation of both sync directions.
 
@@ -60,7 +60,7 @@ section 10.
 ```js
 import { z } from 'zod'
 import { appSchema } from '@remelondb/core'
-import { zodTable } from '@remelondb/zod'
+import { zodTable } from '@remelondb/core/zod'
 
 const DeckRow = z.object({
   title: z.string().min(1),
@@ -293,7 +293,7 @@ with the tables to sync and get per-user pull/push handlers back:
 
 ```js
 import { createMemoryStore, createSyncEngine } from '@remelondb/server'
-import { syncSchemas } from '@remelondb/zod'
+import { syncSchemas } from '@remelondb/core/zod'
 
 const wire = syncSchemas({ decks: DeckRow, cards: CardRow, reviews: ReviewRow })
 
@@ -374,7 +374,7 @@ What the server must guarantee, and why, is specified in
   [database & observation](reference/database.md): the day-to-day API.
 - [Schema & migrations](reference/schema.md),
   [records](reference/records.md): data shape and lifecycle.
-- [`@remelondb/zod`](zod-adapter.md): the design record for the adapter
+- [`@remelondb/core/zod`](zod-adapter.md): the design record for the adapter
   used throughout — what it accepts, what it rejects and why, and the
   interop guarantees behind `zodTable` and `syncSchemas`.
 - [Sync design](sync-design.md): the protocol's rationale. The backend

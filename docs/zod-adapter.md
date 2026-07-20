@@ -1,6 +1,6 @@
-# @remelondb/zod: shared schemas as the single source of truth
+# @remelondb/core/zod: shared schemas as the single source of truth
 
-Status: implemented (packages/zod). Companion to
+Status: implemented (packages/core/src/zod). Companion to
 [schema-inferred-types.md](schema-inferred-types.md): that doc makes
 the table literal the source of truth *inside* a client; this one lets a
 shared Zod schema be the source of truth *across* a whole stack (server
@@ -31,11 +31,12 @@ exactly like a form submission, and must be validated like one.
 
 ## Design
 
-A new package, `@remelondb/zod`. Peer dependencies: `@remelondb/core`
-and `zod` (^4 — the target consumer is on Zod 4, and 4's stable
-introspection is what the implementation should build on). Core itself
-gains nothing: no new options, no runtime changes. Everything composes
-through existing surfaces.
+The `@remelondb/core/zod` subpath, with `zod` as an optional peer
+dependency (^4 — the target consumer is on Zod 4, and 4's stable
+introspection is what the implementation builds on). Core's main entry
+gains nothing: no new options, no runtime changes, and no `zod` import
+unless the subpath is used. Everything composes through existing
+surfaces.
 
 ### 1. `zodTable`: a table definition from a Zod object
 
@@ -50,7 +51,7 @@ export const Card = z.object({
 })
 
 // client
-import { zodTable } from '@remelondb/zod'
+import { zodTable } from '@remelondb/core/zod'
 export const cards = zodTable('cards', Card, { indexed: ['deck_id', 'due_at'] })
 // cards is a plain TableSchema — usable in appSchema, ModelFor, db.get
 ```
@@ -87,7 +88,7 @@ The adapter builds Zod schemas for the sync protocol's wire types
 the same per-table objects:
 
 ```ts
-import { syncSchemas } from '@remelondb/zod'
+import { syncSchemas } from '@remelondb/core/zod'
 
 const sync = syncSchemas({ cards: Card, decks: Deck, reviews: Review })
 // sync.pullResult  — parses { changes, cursor } | { resyncRequired: true }
