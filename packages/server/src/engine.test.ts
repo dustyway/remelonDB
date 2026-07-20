@@ -1,4 +1,4 @@
-import { registerServerConformance } from '@remelondb/server-conformance'
+import { registerServerConformance } from './conformance/index'
 import { createMemoryStore, createSyncEngine } from './index'
 
 // The engine over the memory store must pass the full backend contract;

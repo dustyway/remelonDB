@@ -34,7 +34,6 @@ jobs:
             web:
               - 'packages/driver-web/**'
               - 'packages/core/**'
-              - 'packages/driver-conformance/**'
               - 'pnpm-lock.yaml'
               - '.github/workflows/ci.yml'
             examples:
@@ -99,9 +98,7 @@ jobs:
           CORE=$(ls /tmp/tarballs/remelondb-core-*.tgz)
           NODE_DRV=$(ls /tmp/tarballs/remelondb-driver-node-*.tgz)
           ZOD=$(ls /tmp/tarballs/remelondb-zod-*.tgz)
-          SERVER=$(ls /tmp/tarballs/remelondb-server-*.tgz | grep -v conformance)
-          # server-conformance is not consumed here: importing it needs a
-          # vitest harness (peer), which a plain-Node consumer lacks
+          SERVER=$(ls /tmp/tarballs/remelondb-server-*.tgz)
           cd /tmp/consume
           node -e "
             require('fs').writeFileSync('package.json', JSON.stringify({

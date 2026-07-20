@@ -9,7 +9,7 @@
  * so one pool owner per origin — the documented single-connection model).
  */
 import { describe, expect, it } from 'vitest'
-import { registerDriverConformance } from '@remelondb/driver-conformance'
+import { registerDriverConformance } from '@remelondb/core/conformance'
 import type { Endpoint } from './protocol'
 import { WebSqliteDriver } from './WebSqliteDriver'
 

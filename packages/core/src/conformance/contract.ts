@@ -1,6 +1,6 @@
 /** Driver method obligations: lifecycle, round-trip, batch atomicity. */
 import { afterEach, describe, expect, it } from 'vitest'
-import type { SqliteDriver } from '@remelondb/core'
+import type { SqliteDriver } from '../index'
 import type { ResolvedOptions } from './index'
 
 export function contractSuite(options: ResolvedOptions): void {

@@ -33,5 +33,5 @@ two export the same class name, so switching is one import change.
 Choose it when you need a specific SQLite version or want zero
 dependencies between remelonDB and Expo.
 
-Both drivers are proven by the same `driver-conformance` suite; which
+Both drivers are proven by the same `@remelondb/core/conformance` suite; which
 one an app injects into `Database.open` is the whole difference.

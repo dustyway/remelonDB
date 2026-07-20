@@ -43,9 +43,9 @@ The engine embeds in your own server and stores data in memory out of
 the box — enough for this tutorial and for development; durable
 storage comes from implementing its small storage seam.
 
-Apps that never sync need only the first line. One more package
-exists for later: `@remelondb/server-conformance` proves a custom
-backend store against the protocol contract.
+Apps that never sync need only the first line. For later:
+`@remelondb/server/conformance` proves a custom backend store against
+the protocol contract.
 
 ## 2. Define the schema
 
@@ -359,8 +359,8 @@ await synchronize({
 Changesets are per-table `created`/`updated`/`deleted` groups; the
 cursor is an opaque string the server defines. The memory store is
 real enough to develop against; for a persistent backend you implement
-the `SyncStore` seam and prove it with
-[`@remelondb/server-conformance`](../packages/server-conformance).
+the `SyncStore` seam and prove it with the
+[`@remelondb/server/conformance`](../packages/server) suite.
 What the server must guarantee, and why, is specified in
 [sync-design.md](sync-design.md); the client-side details are in the
 [sync reference](reference/sync.md).

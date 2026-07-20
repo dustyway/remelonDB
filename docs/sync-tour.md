@@ -191,4 +191,4 @@ client and retry later.
 - [reference/sync.md](reference/sync.md): wiring `synchronize()` into
   an app.
 - [server-design.md](server-design.md): implementing a backend on the
-  `SyncStore` seam, proven with `@remelondb/server-conformance`.
+  `SyncStore` seam, proven with `@remelondb/server/conformance`.

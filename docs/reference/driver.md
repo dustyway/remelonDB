@@ -88,7 +88,7 @@ state on the next `open`.
 3. Prepared-statement caching is a driver-internal concern (keyed by SQL
    text) — invisible at the seam.
 4. Run the shared conformance suite against it —
-   `@remelondb/driver-conformance`:
+   `@remelondb/core/conformance`:
 
    ```ts
    registerDriverConformance({

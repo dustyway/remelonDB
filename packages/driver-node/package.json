@@ -11,8 +11,7 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^24.0.0",
-    "@remelondb/driver-conformance": "workspace:*"
+    "@types/node": "^24.0.0"
   },
   "license": "MIT",
   "description": "remelonDB SqliteDriver for Node (better-sqlite3)",

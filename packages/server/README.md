@@ -31,8 +31,7 @@ two obligations an adapter must earn (the memory store gets them for
 free by being single-threaded): snapshot-consistent transactions, and
 per-scope serialization of pushes so revisions commit in order.
 
-Prove an adapter with
-[`@remelondb/server-conformance`](../server-conformance): run the suite
+Prove an adapter with the `@remelondb/server/conformance` suite: run it
 against `engine.as(...)` over your store — this package's own test does
 exactly that with the memory store.
 

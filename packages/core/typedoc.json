@@ -3,7 +3,8 @@
     "../../typedoc.base.json"
   ],
   "entryPoints": [
-    "src/index.ts"
+    "src/index.ts",
+    "src/conformance/index.ts"
   ],
   "intentionallyNotExported": [
     "columnTag",

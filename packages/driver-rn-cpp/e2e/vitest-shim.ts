@@ -1,5 +1,5 @@
 /**
- * Minimal vitest replacement so the driver-conformance suite can run
+ * Minimal vitest replacement so the driver conformance suite can run
  * inside the RN app (Metro aliases 'vitest' here). Implements only what
  * the suite uses: describe/it/it.each, before/after hooks, and the
  * expect matchers toBe/toEqual/toHaveLength/toBeNull/not/rejects.toThrow.

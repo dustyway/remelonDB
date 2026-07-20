@@ -1,7 +1,6 @@
 # Simplification (design)
 
-Status: in progress — the RN driver split and the matcher removal are
-done; the packaging fold is pending. This page records what gets cut
+Status: done — all three cuts have landed. This page records what gets cut
 and what replaces it.
 
 ## Goal
@@ -71,8 +70,10 @@ becomes one, the matcher and its corpus are in git history.
 
 ### 3. Fold packaging: nine packages to seven
 
-`driver-conformance` becomes a dev-only subpath of core;
-`server-conformance` of server. Publishing, README, and API-reference
+Done. `driver-conformance` is the `@remelondb/core/conformance`
+subpath; `server-conformance` is `@remelondb/server/conformance`. Both
+are dev-facing: `vitest` is an optional peer dependency, needed only
+when the subpath is imported. Publishing, README, and API-reference
 surface shrink accordingly. Trivially reversible.
 
 ## Not cut
