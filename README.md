@@ -52,7 +52,8 @@ end-to-end; every package README checklist is fully ticked.
 
 The sync protocol has a normative wire contract
 ([docs/sync-wire.md](docs/sync-wire.md)) and a formal Quint model
-checked in CI ([docs/sync_model.qnt](docs/sync_model.qnt)) — and both
+checked in CI ([docs/sync_model.qnt](docs/sync_model.qnt), explained
+in [docs/formal-model.md](docs/formal-model.md)) — and both
 halves ship. The client engine lives in core. The backend half,
 [`@remelondb/server`](packages/server), is not a hosted service but a
 library you embed in your own Node backend: it hands you plain
