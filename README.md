@@ -152,6 +152,13 @@ side of the wire. Everything else ships as a core or server subpath
 
 - **[docs/tutorial.md](docs/tutorial.md)** — start here: a flashcard
   app's data layer, end to end
+- **[examples/todo-sync](examples/todo-sync)** — then see it whole: a
+  complete synced todo app (shared schema, ~50-line backend, web
+  client); its two-window offline sync demo is e2e-tested in CI
+- **[docs/sync-basics.md](docs/sync-basics.md)** — sync in plain
+  language: who wins when two devices edit, and how to change it
+- **[docs/sync-tour.md](docs/sync-tour.md)** — the sync protocol in
+  eight real requests and responses, replayed by CI on every push
 - **[docs/README.md](docs/README.md)** — index of all documentation
 - **[API reference](https://dustyway.github.io/remelonDB/)** — generated
   from the source on every push (all packages, grouped by task, with

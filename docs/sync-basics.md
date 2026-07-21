@@ -46,7 +46,9 @@ them.
 
 What happens on Friday: A cannot just push — its cursor is from
 Monday, and the server rejects pushes based on stale history
-(`conflict: true`). A must pull first, so A *sees* B's "Buy oat milk"
+(`conflict: true`; what that exchange looks like on the wire is
+[sync-tour.md §5](sync-tour.md#5-push-with-a-stale-cursor)). A must
+pull first, so A *sees* B's "Buy oat milk"
 before anything is overwritten. A then merges: the name column is
 locally changed on A, so A's value goes on top. A pushes, and both
 devices converge on **"Buy milk"** — the edit that was made *first*
