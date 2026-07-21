@@ -8,11 +8,13 @@ no OTP; provenance attestations are automatic.
 
 ## Cutting a release
 
-1. Bump every `package.json` (root + `packages/*`) to the new version,
-   commit as `chore(release): vX.Y.Z`.
-2. `git tag -s vX.Y.Z && git push && git push origin vX.Y.Z`.
-3. Watch the Release workflow; then create the GitHub Release entry for
-   the tag (notes, no tarball attachments — npm is the distribution).
+1. Write the release notes as `docs/releases/vX.Y.Z.md`.
+2. Bump every `package.json` (root + `packages/*`) to the new version,
+   commit it together with the notes as `chore(release): vX.Y.Z`.
+3. `git tag -s vX.Y.Z && git push && git push origin vX.Y.Z`.
+4. Watch the Release workflow: after publishing it creates the GitHub
+   Release entry from the notes file (no tarball attachments — npm is
+   the distribution).
 
 Release tags must be **signed**: a repository ruleset rejects unsigned
 `v*` tags and forbids deleting or moving them once pushed. The

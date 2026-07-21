@@ -12,7 +12,7 @@ on:
 
 permissions:
   id-token: write # OIDC token for npm trusted publishing
-  contents: read
+  contents: write # create the GitHub Release entry for the tag
 
 jobs:
   publish:
@@ -60,3 +60,14 @@ jobs:
             npm publish "$t"
           done
           exit $FAIL
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "release $GITHUB_REF_NAME already exists — skipping"
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --title "$GITHUB_REF_NAME" \
+              --notes-file "docs/releases/$GITHUB_REF_NAME.md"
+          fi
