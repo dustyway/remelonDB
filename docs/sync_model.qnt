@@ -27,8 +27,7 @@
 //   - tombstone GC with a floor; replacement sync (resyncRequired)
 //
 // Simplifications: one synced user, fixed row ids, a push batch shares
-// one revision, no id recycling, full-rejection pushes not modeled
-// (a push with every record rejected writes nothing).
+// one revision (the wire contract: pushes are atomic).
 //
 // Check:    quint typecheck docs/sync_model.qnt
 // Simulate: quint run docs/sync_model.qnt --invariant=allInvariants \
@@ -71,7 +70,6 @@ module sync_model {
     nondet v = oneOf(VALS)
     all {
       cRows.get(c).get(id).status == "none",
-      not(sRows.get(id).present), // no id recycling in the model
       cRows' = cRows.setBy(c, m => m.set(id, { value: v, status: "created" })),
       cursor' = cursor,
       sRows' = sRows, sRev' = sRev, gcFloor' = gcFloor,
@@ -176,30 +174,38 @@ module sync_model {
       else l
     })
 
-  // response received; server may have rejected a strict subset
+  // response received; server may have rejected any subset, up to the
+  // whole push. A fully-rejected push commits nothing, so it MUST NOT
+  // mint a revision — its fast-path response identifies the current
+  // snapshot instead.
   action pushAccepted = {
     nondet c = oneOf(CLIENTS)
     nondet rejected = oneOf(dirty(c).powerset())
     all {
       pushGuard(c),
-      rejected != dirty(c), // all-rejected pushes write nothing: not modeled
       sRows' = serverAfterPush(c, dirty(c).exclude(rejected)),
-      sRev' = sRev + 1,
+      sRev' = if (rejected == dirty(c)) sRev else sRev + 1,
       cRows' = cRows.set(c, clientAfterPush(c, dirty(c).exclude(rejected))),
-      cursor' =
-        if (PUSH_MODE == "naive") cursor.set(c, sRev + 1)
-        else if (fullPathOk(c)) cursor.set(c, sRev + 1)
-        else cursor, // degraded response: cursor null, keep the old one
+      cursor' = {
+        val snapshot = if (rejected == dirty(c)) sRev else sRev + 1
+        if (PUSH_MODE == "naive") cursor.set(c, snapshot)
+        else if (fullPathOk(c)) cursor.set(c, snapshot)
+        else cursor // degraded response: cursor null, keep the old one
+      },
       gcFloor' = gcFloor,
     }
   }
 
-  // response lost: server applied everything, client unchanged -> retry
+  // response lost: server applied what it accepted, client unchanged ->
+  // retry (idempotent upserts absorb the replay). A fully-rejected lost
+  // push changes nothing on either side, so it is excluded as a stutter.
   action pushLost = {
     nondet c = oneOf(CLIENTS)
+    nondet rejected = oneOf(dirty(c).powerset())
     all {
       pushGuard(c),
-      sRows' = serverAfterPush(c, dirty(c)),
+      rejected != dirty(c),
+      sRows' = serverAfterPush(c, dirty(c).exclude(rejected)),
       sRev' = sRev + 1,
       cRows' = cRows,
       cursor' = cursor,
