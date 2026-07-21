@@ -45,6 +45,9 @@ jobs:
               - 'packages/**'
               - 'scripts/**'
               - 'docs/tutorial.md'
+              - 'docs/sync-tour.md'
+              - 'docs/sync_model.qnt'
+              - 'examples/todo-sync/backend/**'
               - 'pnpm-lock.yaml'
               - '.github/workflows/ci.yml'
 
