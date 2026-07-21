@@ -32,6 +32,8 @@
 // Check:    quint typecheck docs/sync_model.qnt
 // Simulate: quint run docs/sync_model.qnt --invariant=allInvariants \
 //             --max-samples=25000 --max-steps=60
+// Verify:   quint verify docs/sync_model.qnt --invariant=allInvariants \
+//             --max-steps=5   (exhaustive to depth 5; needs a JVM)
 module sync_model {
   pure val CLIENTS = Set("a", "b")
   pure val IDS = Set("r1", "r2")

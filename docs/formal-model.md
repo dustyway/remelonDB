@@ -104,10 +104,10 @@ the server must degrade the response (cursor null) instead. This
 obligation is now a MUST in the wire spec. It is the concrete payoff
 of the modeling effort: a bug found before any implementation had it.
 
-## What CI runs
+## How it is checked
 
-Two commands on every push
-([ci.yml](../.github/workflows/ci.yml)):
+CI runs two commands on every push that touches packages or the
+executable docs ([ci.yml](../.github/workflows/ci.yml)):
 
 ```sh
 quint typecheck docs/sync_model.qnt
@@ -116,23 +116,37 @@ quint run docs/sync_model.qnt --invariant=allInvariants \
 ```
 
 `quint run` is **random simulation**: 25,000 traces of up to 60 steps
-each, invariants checked at every step. Green means no violation was
-found in that search.
+each, invariants checked at every step — deep but sampled.
+
+Separately, `quint verify` does **bounded model checking** (Apalache
+over an SMT solver): it covers *every* possible trace up to a given
+depth, exhaustively. Its cost grows steeply with depth (minutes to
+hours), so it is not a CI check: it runs offline, deliberately, when
+the model changes — the command is in the model's header. The two
+checks are complements: simulation reaches deep interleavings by
+luck, bounded checking rules out shallow ones by construction. The
+bounds are only meaningful because known bugs are caught at them: the
+naive-mode canary (a 4-step trace) fails `verify` at depth 5 in about
+30 seconds.
 
 ## Honest limits
 
-- **Simulation is not proof.** Random search can miss a violation
-  that needs a longer or rarer trace. The naive-mode canary — a known
-  bug the search finds in seconds — is evidence the search is
-  effective at this model's scale, not a guarantee of exhaustiveness.
-  (Quint supports bounded model checking via `quint verify` for
-  stronger claims; the CI budget currently buys simulation.)
+- **The checking is bounded.** Exhaustive coverage stops at the
+  deepest completed `verify` bound; beyond it, random simulation can
+  miss a violation that needs a longer or rarer trace. The canaries —
+  known bugs the checks find fast — are evidence the search is
+  effective at this model's scale, not a guarantee of unbounded
+  correctness.
 - **The model is not the implementation.** It verifies the *protocol
-  design* — the contract in sync-wire.md. That the TypeScript engine
-  implements the contract is a separate obligation, carried by the
-  sync integration tests and the server conformance suite. The wire
-  spec is the bridge between the two; a bug can still live in code
-  the model never sees.
+  design* — the contract in [sync-wire.md](sync-wire.md). That the
+  code implements the contract is carried by the spec's other
+  executable verifications: the server conformance suite
+  (`@remelondb/server/conformance` — one scenario per item of the wire
+  spec's checklist), the client sync integration tests in driver-node,
+  and the [sync tour](sync-tour.md), whose captured request/response
+  pairs CI replays against the example server. The wire spec is the
+  bridge between all of them; a bug can still live in code the model
+  never sees.
 - **The simplifications are real.** One synced user, a fixed set of
   row ids, and a push batch sharing one revision (which is the wire
   contract, not a shortcut). They are listed in the model's header
@@ -141,7 +155,7 @@ found in that search.
 ## Try it yourself
 
 ```sh
-npx @informalsystems/quint run docs/sync_model.qnt \
+npx @informalsystems/quint@0.32.0 run docs/sync_model.qnt \
   --invariant=allInvariants --max-samples=25000 --max-steps=60
 ```
 

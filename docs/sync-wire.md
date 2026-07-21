@@ -2,10 +2,15 @@
 
 Normative contract between `synchronize()` and a backend, as implemented
 in `@remelondb/core` (`src/sync/`). Rationale and design history live in
-[sync-design.md](sync-design.md); a formal model with checked
-invariants lives in [sync_model.qnt](sync_model.qnt) (run in CI). This
-document is what a server is built and tested against. MUST/SHOULD/MAY
-are used in the RFC sense.
+[sync-design.md](sync-design.md). This document is what a server is
+built and tested against; MUST/SHOULD/MAY are used in the RFC sense.
+
+The contract is verified three ways, all in CI: a formal model of the
+protocol design ([sync_model.qnt](sync_model.qnt), explained in
+[formal-model.md](formal-model.md)), the server conformance suite
+(`@remelondb/server/conformance` — the checklist in §7 as runnable
+scenarios), and the [sync tour](sync-tour.md), whose request/response
+pairs replay against the example server.
 
 The protocol is transport-agnostic: `synchronize()` calls injected
 `pullChanges`/`pushChanges` functions and sees only the JSON values
