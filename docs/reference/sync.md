@@ -93,7 +93,9 @@ apply/mark commits hold the writer queue briefly.
 - **Per-column, client-wins**: the merged record is the server version
   with the locally-changed columns (`_changed`) laid on top; it stays
   dirty so the merge is pushed back. Override per record with
-  `conflictResolver(table, local, remote, resolved)`.
+  `conflictResolver(table, local, remote, resolved)` — recipes for
+  common policies (newest edit wins, discarding stale offline edits)
+  are in [sync-basics.md](../sync-basics.md).
 - **Remote delete beats local edits**; **local delete beats remote
   edits** (the tombstone is pushed next).
 - **Equality gate**: a record modified while the push was in flight is
