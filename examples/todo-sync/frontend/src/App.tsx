@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { Q, type Database } from '@remelondb/core'
 import { TodoModel } from 'example-todo-sync/schema'
+import { useQuery } from 'example-todo-sync/client'
 import { getSyncStatus, runSync, subscribeSyncStatus } from './sync'
-import { useQuery } from './useQuery'
 
 export function App({ db }: { db: Database }) {
   const todos = useQuery(

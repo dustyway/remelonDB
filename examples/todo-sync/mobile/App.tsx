@@ -10,11 +10,11 @@ import {
 } from 'react-native'
 import { Q, type Database } from '@remelondb/core'
 import { TodoModel } from 'example-todo-sync/schema'
+import { useQuery } from 'example-todo-sync/client'
 import { TodoItem } from './components/TodoItem'
 import { openDb } from './src/db'
 import { getSyncStatus, runSync, subscribeSyncStatus } from './src/sync'
 import { theme } from './theme'
-import { useQuery } from './src/useQuery'
 
 // Hermes has no top-level await, so the database opens behind a state
 // gate instead of the web client's awaited module import.

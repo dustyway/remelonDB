@@ -11,12 +11,18 @@
     "@remelondb/server": "workspace:*",
     "zod": "^4.4.3"
   },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
   "devDependencies": {
     "typescript": "^5.8.3",
     "tsx": "^4.20.0",
-    "@types/node": "^24.0.0"
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.17",
+    "react": "^19.2.7"
   },
   "exports": {
-    "./schema": "./schema.ts"
+    "./schema": "./schema.ts",
+    "./client": "./client.ts"
   }
 }
