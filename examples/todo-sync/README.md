@@ -17,12 +17,15 @@ What it demonstrates:
   and the sync loop (`createSync`) live in `backend/client.ts`; the
   web and native apps differ only in their base URL and their styling
   (CSS vs `StyleSheet`).
-- Local-first writes. Every create, toggle, and delete lands in the
-  device's own SQLite database first (OPFS on web, expo-sqlite on
+- Local-first writes. Every create, edit, toggle, and delete lands in
+  the device's own SQLite database first (OPFS on web, expo-sqlite on
   native); the UI updates through an observed query; sync runs in the
   background, deletes travelling as tombstones.
 - Offline work. Cut the connection and keep going; changes push when it
   returns.
+- Conflicts, visibly. Concurrent changes to different fields of one
+  todo merge field by field; a same-field race resolves through
+  pull-and-retry, and both UIs surface a brief note while it happens.
 
 ## Run it
 
@@ -34,7 +37,18 @@ pnpm --filter example-todo-sync server     # terminal 1: sync server on :8787
 pnpm --filter example-todo-sync-web dev    # terminal 2: web client on :5173
 ```
 
-Open the client twice: one normal window and one **private** window.
+For the mobile client (a development build, not Expo Go — the SQLite
+driver is native code):
+
+```sh
+pnpm --filter example-todo-sync-native android   # build + launch on an emulator or device
+```
+
+Android emulators reach the local server automatically (`10.0.2.2`);
+a physical device needs `EXPO_PUBLIC_SYNC_URL` pointing at a server it
+can reach (see "Deploying the demo").
+
+Open the web client twice: one normal window and one **private** window.
 Two tabs in the same profile share one OPFS database (and the driver
 holds a single connection), so a private window or a second browser is
 what plays the part of a second device. A second normal tab gets a
@@ -49,13 +63,19 @@ The script:
    seconds.
 2. Click a todo to toggle it done. The strike-through follows in the
    other window.
-3. Delete a todo (confirm the dialog). It disappears from the other
+3. Edit a todo's text (Edit button on web, long-press on the phone).
+   The new text follows too.
+4. Delete a todo (confirm the dialog). It disappears from the other
    window too — deletes travel as tombstones, not as absence.
-4. Go offline in one window (devtools network panel). Its dot turns
+5. Go offline in one window (devtools network panel). Its dot turns
    red; keep adding and toggling. The other window sees none of it.
-5. Go online again. The backlog pushes and both windows converge.
+6. Go online again. The backlog pushes and both windows converge. For
+   the conflict showpiece: while offline, edit a todo's text in one
+   window and toggle the same todo in the other — on reconnect both
+   changes survive in one row, and a same-field race shows the brief
+   "push conflict" note while the losing side re-pulls and retries.
 
-Stopping the server also works for step 4, with one caveat: state lives
+Stopping the server also works for step 5, with one caveat: state lives
 in memory (`createMemoryStore`), so a restart loses it. Clients then
 receive `resyncRequired` on their next pull and re-pull from scratch.
 Unpushed local changes survive that and are pushed afterwards; todos
@@ -69,14 +89,16 @@ pnpm --filter example-todo-sync-web e2e
 ```
 
 boots both processes and replays the story in headless Chromium as
-seven steps: two isolated browser contexts (each with its own OPFS),
+eight steps: two isolated browser contexts (each with its own OPFS),
 create and toggle propagation in both directions, an outage in which
 offline writes stay local, recovery, a same-row race in which the
 losing push receives `conflict` and re-pulls (the winning push is held
 at the network layer until the other client commits, so the conflict
-is deterministic, not timing luck), and a server restart after which
-both clients receive `resyncRequired`, re-pull from scratch, and only
-unpushed local writes survive. CI runs this on every push.
+is deterministic, not timing luck), a server restart after which both
+clients receive `resyncRequired`, re-pull from scratch, and only
+unpushed local writes survive, and a field-level merge in which an
+offline text edit and a remote toggle of the same todo both survive
+the reunion. CI runs this on every push.
 
 ## Files worth reading
 
