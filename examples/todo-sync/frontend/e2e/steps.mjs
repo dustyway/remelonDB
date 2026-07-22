@@ -104,6 +104,7 @@ export async function runSteps(url, hooks = {}) {
   )
   releasePush()
   await conflictLogged
+  await a.page.waitForSelector('#note:has-text("conflict")', { timeout: 20000 })
   await retryLanded // without this, FIRST stays dirty into step 7 and survives the wipe
   await a.page.waitForSelector(`li.done:has-text("${FIRST}")`, { timeout: 20000 })
   await b.page.waitForSelector(`li.done:has-text("${FIRST}")`, { timeout: 20000 })
@@ -138,6 +139,28 @@ export async function runSteps(url, hooks = {}) {
     await onlySurvivor(b)
     console.log('step 7: restart wipes the store; clients resync, unpushed writes survive')
   }
+
+  // Step 8: field-level merge — an offline text edit and a remote done
+  // toggle to the same todo both survive the reunion, because only the
+  // locally-changed fields override what the pull brings in.
+  const MERGE = `merge target ${suffix}`
+  const EDITED = `merge target edited ${suffix}`
+  await addTodo(a, MERGE)
+  await b.page.waitForSelector(`li:has-text("${MERGE}")`, { timeout: 20000 })
+  await a.context.route('**/sync/**', (route) => route.abort())
+  await a.page
+    .locator(`li:has-text("${MERGE}")`)
+    .getByRole('button', { name: 'Edit' })
+    .click()
+  await a.page.fill('input[aria-label="Edit todo"]', EDITED)
+  await a.page.press('input[aria-label="Edit todo"]', 'Enter')
+  await a.page.waitForSelector(`li:has-text("${EDITED}")`, { timeout: 5000 })
+  await b.page.click(`li:has-text("${MERGE}")`)
+  await b.page.waitForSelector(`li.done:has-text("${MERGE}")`, { timeout: 5000 })
+  await a.context.unroute('**/sync/**')
+  await a.page.waitForSelector(`li.done:has-text("${EDITED}")`, { timeout: 20000 })
+  await b.page.waitForSelector(`li.done:has-text("${EDITED}")`, { timeout: 20000 })
+  console.log('step 8: offline text edit and remote toggle merge field by field')
 
   // Aborted /sync fetches during the outage are the point, not a defect.
   const expected = (m) => /sync\/(pull|push)|Failed to load resource|ERR_FAILED/.test(m)

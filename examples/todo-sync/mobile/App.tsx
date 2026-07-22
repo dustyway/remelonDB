@@ -13,7 +13,12 @@ import { TodoModel } from 'example-todo-sync/schema'
 import { useQuery } from 'example-todo-sync/client'
 import { TodoItem } from './components/TodoItem'
 import { openDb } from './src/db'
-import { getSyncStatus, runSync, subscribeSyncStatus } from './src/sync'
+import {
+  getSyncNote,
+  getSyncStatus,
+  runSync,
+  subscribeSyncStatus,
+} from './src/sync'
 import { theme } from './theme'
 
 // Hermes has no top-level await, so the database opens behind a state
@@ -46,6 +51,7 @@ function Todos({ db }: { db: Database }) {
   )
   const [text, setText] = useState('')
   const syncStatus = useSyncExternalStore(subscribeSyncStatus, getSyncStatus)
+  const syncNote = useSyncExternalStore(subscribeSyncStatus, getSyncNote)
 
   useEffect(() => {
     void runSync(db)
@@ -75,6 +81,11 @@ function Todos({ db }: { db: Database }) {
     void runSync(db)
   }
 
+  const edit = async (todo: TodoModel, newText: string) => {
+    await db.write(() => db.get(TodoModel).update(todo.id, { text: newText }))
+    void runSync(db)
+  }
+
   return (
     <>
       <Text style={styles.title}>todo-sync</Text>
@@ -82,6 +93,7 @@ function Todos({ db }: { db: Database }) {
         <Text style={{ color: dotColors[syncStatus] }}>{'● '}</Text>
         {todos.length} todo{todos.length === 1 ? '' : 's'} · {syncStatus}
       </Text>
+      {syncNote && <Text style={styles.note}>{syncNote}</Text>}
       <View style={styles.row}>
         <TextInput
           style={styles.input}
@@ -103,6 +115,7 @@ function Todos({ db }: { db: Database }) {
             todo={item}
             onToggle={() => void toggle(item)}
             onDelete={() => void remove(item)}
+            onEdit={(newText) => void edit(item, newText)}
           />
         )}
       />
@@ -119,6 +132,7 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 28, fontWeight: '600' },
   status: { color: theme.colorGrey, marginVertical: 8 },
+  note: { color: theme.colorCerulean, marginBottom: 8, fontSize: 13 },
   row: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   input: {
     flex: 1,

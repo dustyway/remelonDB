@@ -24,11 +24,27 @@ export type SyncStatus = 'syncing' | 'synced' | 'offline'
 // failures from protocol errors.
 export function createSync(base: string) {
   let status: SyncStatus = 'syncing'
+  let note: string | null = null
+  let noteTimer: ReturnType<typeof setTimeout> | undefined
   const listeners = new Set<() => void>()
+  const notify = (): void => {
+    for (const listener of listeners) listener()
+  }
   const setStatus = (next: SyncStatus): void => {
     if (status === next) return
     status = next
-    for (const listener of listeners) listener()
+    notify()
+  }
+  // conflicts and resyncs are the interesting moments of a sync demo —
+  // hold the latest one on screen briefly
+  const setNote = (next: string): void => {
+    note = next
+    clearTimeout(noteTimer)
+    noteTimer = setTimeout(() => {
+      note = null
+      notify()
+    }, 6000)
+    notify()
   }
 
   const post = async (path: string, body: unknown): Promise<unknown> => {
@@ -43,6 +59,7 @@ export function createSync(base: string) {
 
   return {
     getSyncStatus: (): SyncStatus => status,
+    getSyncNote: (): string | null => note,
     subscribeSyncStatus: (listener: () => void): (() => void) => {
       listeners.add(listener)
       return () => {
@@ -54,8 +71,13 @@ export function createSync(base: string) {
         await synchronize({
           database: db,
           // sync lifecycle in the console (conflict retries, resyncs) —
-          // the e2e acts assert on these lines
-          log: (message) => console.log(message),
+          // the e2e steps assert on these lines
+          log: (message) => {
+            console.log(message)
+            if (/conflict|resync/.test(message)) {
+              setNote(message.replace(/^sync: /, ''))
+            }
+          },
           pullChanges: async (args) =>
             wire.pullResult.parse(await post('pull', args)),
           pushChanges: async (args) =>

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { Q, type Database } from '@remelondb/core'
 import { TodoModel } from 'example-todo-sync/schema'
 import { useQuery } from 'example-todo-sync/client'
-import { getSyncStatus, runSync, subscribeSyncStatus } from './sync'
+import { getSyncNote, getSyncStatus, runSync, subscribeSyncStatus } from './sync'
 
 export function App({ db }: { db: Database }) {
   const todos = useQuery(
@@ -12,7 +12,11 @@ export function App({ db }: { db: Database }) {
     ),
   )
   const [text, setText] = useState('')
+  const [editing, setEditing] = useState<{ id: string; text: string } | null>(
+    null,
+  )
   const syncStatus = useSyncExternalStore(subscribeSyncStatus, getSyncStatus)
+  const syncNote = useSyncExternalStore(subscribeSyncStatus, getSyncNote)
 
   useEffect(() => {
     void runSync(db)
@@ -43,6 +47,16 @@ export function App({ db }: { db: Database }) {
     void runSync(db)
   }
 
+  const commitEdit = async () => {
+    if (!editing) return
+    const { id, text: draft } = editing
+    setEditing(null)
+    const trimmed = draft.trim()
+    if (!trimmed) return
+    await db.write(() => db.get(TodoModel).update(id, { text: trimmed }))
+    void runSync(db)
+  }
+
   return (
     <>
       <h1>todo-sync</h1>
@@ -50,6 +64,7 @@ export function App({ db }: { db: Database }) {
         <span className="dot" /> {todos.length} todo
         {todos.length === 1 ? '' : 's'} · {syncStatus}
       </p>
+      {syncNote && <p id="note">{syncNote}</p>}
       <form onSubmit={add}>
         <input
           value={text}
@@ -66,7 +81,33 @@ export function App({ db }: { db: Database }) {
             className={todo.done ? 'done' : ''}
             onClick={() => void toggle(todo)}
           >
-            <span>{todo.text}</span>
+            {editing?.id === todo.id ? (
+              <input
+                aria-label="Edit todo"
+                value={editing.text}
+                autoFocus
+                onClick={(event) => event.stopPropagation()}
+                onChange={(event) =>
+                  setEditing({ id: todo.id, text: event.target.value })
+                }
+                onBlur={() => void commitEdit()}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') void commitEdit()
+                  if (event.key === 'Escape') setEditing(null)
+                }}
+              />
+            ) : (
+              <span>{todo.text}</span>
+            )}
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation()
+                setEditing({ id: todo.id, text: todo.text })
+              }}
+            >
+              Edit
+            </button>
             <button
               type="button"
               onClick={(event) => {

@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import {
   Alert,
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native'
@@ -13,9 +15,18 @@ type Props = {
   todo: TodoModel
   onToggle: () => void
   onDelete: () => void
+  onEdit: (text: string) => void
 }
 
-export function TodoItem({ todo, onToggle, onDelete }: Props) {
+export function TodoItem({ todo, onToggle, onDelete, onEdit }: Props) {
+  const [draft, setDraft] = useState<string | null>(null)
+
+  const commitEdit = () => {
+    const trimmed = draft?.trim()
+    setDraft(null)
+    if (trimmed && trimmed !== todo.text) onEdit(trimmed)
+  }
+
   const confirmDelete = () => {
     Alert.alert(
       `Are you sure you want to delete ${todo.text}?`,
@@ -29,11 +40,26 @@ export function TodoItem({ todo, onToggle, onDelete }: Props) {
 
   return (
     <View style={styles.itemContainer}>
-      <Pressable style={styles.text} onPress={onToggle}>
-        <Text style={[styles.itemText, todo.done && styles.done]}>
-          {todo.text}
-        </Text>
-      </Pressable>
+      {draft === null ? (
+        <Pressable
+          style={styles.text}
+          onPress={onToggle}
+          onLongPress={() => setDraft(todo.text)}
+        >
+          <Text style={[styles.itemText, todo.done && styles.done]}>
+            {todo.text}
+          </Text>
+        </Pressable>
+      ) : (
+        <TextInput
+          style={[styles.text, styles.editInput]}
+          value={draft}
+          onChangeText={setDraft}
+          autoFocus
+          onSubmitEditing={commitEdit}
+          onBlur={() => setDraft(null)}
+        />
+      )}
       <TouchableOpacity
         onPress={confirmDelete}
         style={styles.button}
@@ -58,6 +84,15 @@ const styles = StyleSheet.create({
   },
   text: { flex: 1 },
   itemText: { fontSize: 18, fontWeight: '200' },
+  editInput: {
+    fontSize: 18,
+    fontWeight: '200',
+    borderWidth: 1,
+    borderColor: theme.colorCerulean,
+    borderRadius: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
   done: { textDecorationLine: 'line-through', color: theme.colorGrey },
   button: {
     backgroundColor: theme.colorBlack,

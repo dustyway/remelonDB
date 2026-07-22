@@ -7,6 +7,7 @@
     <style>
       body { font-family: system-ui, sans-serif; max-width: 32rem; margin: 3rem auto; padding: 0 1rem; }
       #status { color: #888; }
+      #note { color: #1a759f; font-size: 0.875rem; }
       .dot { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%; background: #bbb; }
       [data-sync-status='synced'] .dot { background: #2e7d32; }
       [data-sync-status='offline'] .dot { background: #c62828; }
@@ -14,7 +15,9 @@
       input { flex: 1; padding: 0.5rem; font: inherit; border: 1px solid #1a759f; border-radius: 6px; }
       button { padding: 0.5rem 1rem; border: none; border-radius: 6px; background: #000; color: #fff; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; }
       ul { list-style: none; margin: 0; padding: 0; }
-      li { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; cursor: pointer; padding: 1rem 0.5rem; border-bottom: 1px solid #1a759f; font-size: 1.125rem; font-weight: 200; }
+      li { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; padding: 1rem 0.5rem; border-bottom: 1px solid #1a759f; font-size: 1.125rem; font-weight: 200; }
+      li > span, li > input { flex: 1; }
+      li > input { padding: 0.25rem 0.5rem; }
       li.done span { text-decoration: line-through; color: #888; }
     </style>
   </head>
