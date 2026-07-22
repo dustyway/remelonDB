@@ -3,19 +3,24 @@
 A small offline-first todo list that syncs between devices. Three
 packages, one shared schema:
 
-- `backend/`: the shared schema (`schema.ts`) and a ~50-line sync
-  server (`server.ts`)
+- `backend/`: the shared schema (`schema.ts`), the client code both
+  UIs reuse (`client.ts`), and a ~50-line sync server (`server.ts`)
 - `frontend/`: a React web client
-- `mobile/`: a React Native client (in progress)
+- `mobile/`: a React Native client (Expo)
 
 What it demonstrates:
 
 - One schema definition drives everything. The Zod object in
   `schema.ts` produces the client table, the record types, the model
   class, and the wire validators both sides use.
-- Local-first writes. Every change lands in the browser's own SQLite
-  database (OPFS) first; the UI updates through an observed query; sync
-  runs in the background.
+- Client code shared across platforms. The React bridge (`useQuery`)
+  and the sync loop (`createSync`) live in `backend/client.ts`; the
+  web and native apps differ only in their base URL and their styling
+  (CSS vs `StyleSheet`).
+- Local-first writes. Every create, toggle, and delete lands in the
+  device's own SQLite database first (OPFS on web, expo-sqlite on
+  native); the UI updates through an observed query; sync runs in the
+  background, deletes travelling as tombstones.
 - Offline work. Cut the connection and keep going; changes push when it
   returns.
 
@@ -44,11 +49,13 @@ The script:
    seconds.
 2. Click a todo to toggle it done. The strike-through follows in the
    other window.
-3. Go offline in one window (devtools network panel). Its dot turns
+3. Delete a todo (confirm the dialog). It disappears from the other
+   window too — deletes travel as tombstones, not as absence.
+4. Go offline in one window (devtools network panel). Its dot turns
    red; keep adding and toggling. The other window sees none of it.
-4. Go online again. The backlog pushes and both windows converge.
+5. Go online again. The backlog pushes and both windows converge.
 
-Stopping the server also works for act 3, with one caveat: state lives
+Stopping the server also works for step 4, with one caveat: state lives
 in memory (`createMemoryStore`), so a restart loses it. Clients then
 receive `resyncRequired` on their next pull and re-pull from scratch.
 Unpushed local changes survive that and are pushed afterwards; todos
@@ -61,10 +68,15 @@ lost them.
 pnpm --filter example-todo-sync-web e2e
 ```
 
-boots both processes and replays the script in headless Chromium: two
-isolated browser contexts (each with its own OPFS), create and toggle
-propagation in both directions, an outage in which offline writes stay
-local, and recovery. CI runs this on every push.
+boots both processes and replays the story in headless Chromium as
+seven steps: two isolated browser contexts (each with its own OPFS),
+create and toggle propagation in both directions, an outage in which
+offline writes stay local, recovery, a same-row race in which the
+losing push receives `conflict` and re-pulls (the winning push is held
+at the network layer until the other client commits, so the conflict
+is deterministic, not timing luck), and a server restart after which
+both clients receive `resyncRequired`, re-pull from scratch, and only
+unpushed local writes survive. CI runs this on every push.
 
 ## Files worth reading
 
@@ -76,11 +88,17 @@ local, and recovery. CI runs this on every push.
 - `backend/server.ts`: the entire backend. `createSyncEngine` +
   `createMemoryStore` behind two `node:http` routes, requests validated
   with the same wire schemas the client validates responses with.
-- `frontend/src/useQuery.ts`: the whole React bridge, twelve
-  lines. `observe()` is the reactivity; the hook only pipes emissions
-  into state.
-- `frontend/src/sync.ts`: `synchronize()` with wire validation
-  and a small sync-status store the UI's colored dot subscribes to.
+- `backend/client.ts`: everything the two UIs share. The React bridge
+  (`useQuery`, twelve lines — `observe()` is the reactivity, the hook
+  only pipes emissions into state) and `createSync`: `synchronize()`
+  with wire validation and a small sync-status store the UI's colored
+  dot subscribes to. Each app's own `sync.ts` supplies only its base
+  URL.
+- `frontend/e2e/steps.mjs`: the story as executable steps, including the
+  deterministic conflict and the resync after a server wipe.
+- `backend/serve.ts` and `Dockerfile`: a deployment of the demo as one
+  container — the same sync routes plus static serving of the built
+  web client.
 - `frontend/vite.config.ts`: the one integration trap. The
   driver chain must be excluded from Vite's dependency pre-bundling,
   otherwise the driver's worker URL points nowhere and opening the
@@ -88,6 +106,40 @@ local, and recovery. CI runs this on every push.
 - `mobile/metro.config.js`: the same lesson for React Native — Metro
   must be taught the workspace root, or workspace-linked packages
   don't resolve.
+
+## What it does not demonstrate
+
+The gaps are as deliberate as the coverage; each has a better home:
+
+- **Migrations.** The schema has never moved past version 1, so the
+  `schemaVersion`/`migration` fields ride along unused on every pull.
+- **Scoping.** The server runs `engine.as('everyone')`: one shared
+  list, no accounts. Per-user scopes are an engine feature this demo's
+  no-auth design does not reach.
+- **Custom conflict resolution.** `synchronize()` accepts a
+  `conflictResolver`; the example uses the default.
+- **Rejection handling in the UI.** The server validates every pushed
+  row at the door, but the app never sends an invalid row, so nothing
+  in the UI reacts to a rejection. `backend/requests.http` and
+  [docs/sync-tour.md](../../docs/sync-tour.md) show the wire responses.
+- **Protocol edge cases** (partial lost pushes, id reuse, full
+  rejection) are specified in [docs/sync-wire.md](../../docs/sync-wire.md)
+  and verified by the formal model and the conformance suites, not by
+  this app.
+
+## Deploying the demo
+
+```sh
+docker build -f examples/todo-sync/Dockerfile -t todo-sync .   # repo root
+docker run -p 8787:8787 todo-sync
+```
+
+`backend/serve.ts` serves the built web client and the sync routes
+from one process; put any TLS-terminating reverse proxy in front. The
+memory store means one shared world-writable list that resets on
+restart — acceptable for a demo, nothing more. For a device build of
+the mobile app, set `EXPO_PUBLIC_SYNC_URL` (a `.env.local` in
+`mobile/` works) to point it at the deployed server.
 
 ## Copying this into your own project
 
