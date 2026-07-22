@@ -60,6 +60,15 @@ export function TodoItem({ todo, onToggle, onDelete, onEdit }: Props) {
           onBlur={() => setDraft(null)}
         />
       )}
+      {draft === null && (
+        <TouchableOpacity
+          onPress={() => setDraft(todo.text)}
+          style={styles.button}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.buttonText}>Edit</Text>
+        </TouchableOpacity>
+      )}
       <TouchableOpacity
         onPress={confirmDelete}
         style={styles.button}
@@ -75,6 +84,7 @@ const styles = StyleSheet.create({
   itemContainer: {
     paddingVertical: 16,
     paddingHorizontal: 8,
+    gap: 8,
     // borderColor, not borderBottomColor: per-side border colors render black on Android in RN 0.86
     borderColor: theme.colorCerulean,
     borderBottomWidth: 1,

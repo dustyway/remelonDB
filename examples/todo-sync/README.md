@@ -63,8 +63,8 @@ The script:
    seconds.
 2. Click a todo to toggle it done. The strike-through follows in the
    other window.
-3. Edit a todo's text (Edit button on web, long-press on the phone).
-   The new text follows too.
+3. Edit a todo's text (Edit button on either platform; long-press also
+   works on the phone). The new text follows too.
 4. Delete a todo (confirm the dialog). It disappears from the other
    window too — deletes travel as tombstones, not as absence.
 5. Go offline in one window (devtools network panel). Its dot turns
