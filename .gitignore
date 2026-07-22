@@ -13,3 +13,4 @@ dist/
 *.local.md
 docs-api/
 _apalache-out/
+.env*

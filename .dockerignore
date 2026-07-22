@@ -1,0 +1,12 @@
+.git
+node_modules
+**/node_modules
+**/dist
+**/.expo
+examples/todo-sync/mobile/android
+tmp
+learning
+watermelondb-upstream
+docs-api
+*.local.md
+**/.env*

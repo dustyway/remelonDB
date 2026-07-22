@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "server": "tsx server.ts",
+    "serve": "tsx serve.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
