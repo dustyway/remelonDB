@@ -10,8 +10,10 @@ import {
 } from 'react-native'
 import { Q, type Database } from '@remelondb/core'
 import { TodoModel } from 'example-todo-sync/schema'
+import { TodoItem } from './components/TodoItem'
 import { openDb } from './src/db'
 import { getSyncStatus, runSync, subscribeSyncStatus } from './src/sync'
+import { theme } from './theme'
 import { useQuery } from './src/useQuery'
 
 // Hermes has no top-level await, so the database opens behind a state
@@ -68,6 +70,11 @@ function Todos({ db }: { db: Database }) {
     void runSync(db)
   }
 
+  const remove = async (todo: TodoModel) => {
+    await db.write(() => db.get(TodoModel).markAsDeleted(todo.id))
+    void runSync(db)
+  }
+
   return (
     <>
       <Text style={styles.title}>todo-sync</Text>
@@ -92,11 +99,11 @@ function Todos({ db }: { db: Database }) {
         data={todos}
         keyExtractor={(todo) => todo.id}
         renderItem={({ item }) => (
-          <Pressable onPress={() => void toggle(item)}>
-            <Text style={[styles.item, item.done && styles.done]}>
-              {item.text}
-            </Text>
-          </Pressable>
+          <TodoItem
+            todo={item}
+            onToggle={() => void toggle(item)}
+            onDelete={() => void remove(item)}
+          />
         )}
       />
     </>
@@ -104,25 +111,33 @@ function Todos({ db }: { db: Database }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 80, paddingHorizontal: 24 },
+  container: {
+    flex: 1,
+    paddingTop: 80,
+    paddingHorizontal: 16,
+    backgroundColor: theme.colorWhite,
+  },
   title: { fontSize: 28, fontWeight: '600' },
-  status: { color: '#666', marginVertical: 8 },
+  status: { color: theme.colorGrey, marginVertical: 8 },
   row: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   input: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: theme.colorCerulean,
     borderRadius: 6,
     padding: 8,
   },
   button: {
-    backgroundColor: '#eee',
+    backgroundColor: theme.colorBlack,
     borderRadius: 6,
     paddingHorizontal: 16,
     justifyContent: 'center',
   },
-  buttonText: { fontWeight: '600' },
+  buttonText: {
+    color: theme.colorWhite,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
   list: { flex: 1 },
-  item: { paddingVertical: 6, fontSize: 16 },
-  done: { textDecorationLine: 'line-through', color: '#999' },
 })

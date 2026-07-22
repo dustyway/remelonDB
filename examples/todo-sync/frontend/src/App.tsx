@@ -38,6 +38,11 @@ export function App({ db }: { db: Database }) {
     void runSync(db)
   }
 
+  const remove = async (todo: TodoModel) => {
+    await db.write(() => db.get(TodoModel).markAsDeleted(todo.id))
+    void runSync(db)
+  }
+
   return (
     <>
       <h1>todo-sync</h1>
@@ -61,7 +66,22 @@ export function App({ db }: { db: Database }) {
             className={todo.done ? 'done' : ''}
             onClick={() => void toggle(todo)}
           >
-            {todo.text}
+            <span>{todo.text}</span>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation()
+                if (
+                  window.confirm(
+                    `Are you sure you want to delete ${todo.text}? It will be gone for good`,
+                  )
+                ) {
+                  void remove(todo)
+                }
+              }}
+            >
+              Delete
+            </button>
           </li>
         ))}
       </ul>
