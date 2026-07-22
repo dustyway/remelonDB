@@ -1,12 +1,12 @@
 // Boots the example server and the Vite dev server, waits until both
-// answer, runs the browser acts, and tears everything down. CI and
+// answer, runs the browser steps, and tears everything down. CI and
 // local runs use the same entry point: `pnpm --filter
 // example-todo-sync-web e2e`. Fails loudly if the ports are taken —
-// a stale server would poison the acts with old data.
+// a stale server would poison the steps with old data.
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { setTimeout as sleep } from 'node:timers/promises'
-import { runActs } from './acts.mjs'
+import { runSteps } from './steps.mjs'
 
 const webDir = fileURLToPath(new URL('..', import.meta.url))
 const hubDir = fileURLToPath(new URL('../../backend', import.meta.url))
@@ -76,7 +76,8 @@ if ((await up('http://localhost:8787')) || (await up('http://localhost:5199'))) 
   process.exit(1)
 }
 
-start('server', 'npx', ['tsx', 'server.ts'], hubDir)
+const startServer = () => start('server', 'npx', ['tsx', 'server.ts'], hubDir)
+let server = startServer()
 start('vite', 'npx', ['vite', '--port', '5199', '--strictPort'], webDir)
 
 try {
@@ -98,11 +99,21 @@ try {
     })
   ).json()
   if (fresh.changes?.todos?.updated?.length !== 0) {
-    throw new Error('server is not fresh — refusing to run acts against stale data')
+    throw new Error('server is not fresh — refusing to run steps against stale data')
   }
 
-  await runActs('http://localhost:5199/')
-  console.log('e2e: all acts passed')
+  await runSteps('http://localhost:5199/', {
+    restartServer: async () => {
+      server.expectedExit = true
+      killGroup(server, 'SIGTERM')
+      await sleep(500)
+      killGroup(server, 'SIGKILL')
+      while (await up('http://localhost:8787')) await sleep(200)
+      server = startServer()
+      await waitFor('server', () => up('http://localhost:8787'))
+    },
+  })
+  console.log('e2e: all steps passed')
 } catch (error) {
   console.error(error)
   process.exitCode = 1

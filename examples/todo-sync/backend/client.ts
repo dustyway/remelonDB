@@ -53,6 +53,9 @@ export function createSync(base: string) {
       try {
         await synchronize({
           database: db,
+          // sync lifecycle in the console (conflict retries, resyncs) —
+          // the e2e acts assert on these lines
+          log: (message) => console.log(message),
           pullChanges: async (args) =>
             wire.pullResult.parse(await post('pull', args)),
           pushChanges: async (args) =>
