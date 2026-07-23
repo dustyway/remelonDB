@@ -7,6 +7,7 @@
     "typecheck": "tsc --noEmit",
     "build": "pnpm -r build",
     "check:tutorial": "node scripts/check-tutorial.mjs",
+    "check:readme": "node scripts/check-readme.mjs",
     "check:sync-tour": "node scripts/check-sync-tour.mjs"
   },
   "devDependencies": {

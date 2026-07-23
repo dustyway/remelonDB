@@ -44,6 +44,7 @@ jobs:
             packages:
               - 'packages/**'
               - 'scripts/**'
+              - 'README.md'
               - 'docs/tutorial.md'
               - 'docs/sync-tour.md'
               - 'docs/sync_model.qnt'
@@ -91,9 +92,10 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      # The tutorial's code sections, executed against the built packages
-      # (scripts/check-tutorial.mjs) — docs cannot drift from the API.
+      # The tutorial's code sections and the README's API taste, executed
+      # against the built packages — docs cannot drift from the API.
       - run: pnpm check:tutorial
+      - run: pnpm check:readme
       - name: Pack and consume from plain Node
         run: |
           mkdir -p /tmp/tarballs /tmp/consume
