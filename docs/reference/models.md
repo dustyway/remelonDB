@@ -8,15 +8,17 @@ wrap the cached raws one-to-one.
 ## Defining a model
 
 ```ts
-import { column as c, table, ModelFor, type AssociationsMap } from '@remelondb/core'
+import { z } from 'zod'
+import { ModelFor, type AssociationsMap } from '@remelondb/core'
+import { zodTable } from '@remelondb/core/zod'
 
-const tasks = table('tasks', {
-  name: c.string(),
-  is_done: c.boolean(),
-  project_id: c.string().optional(),
-  created_at: c.number(),
-  updated_at: c.number(),
-})
+const tasks = zodTable('tasks', z.object({
+  name: z.string(),
+  is_done: z.boolean(),
+  project_id: z.string().nullable(),
+  created_at: z.number(),
+  updated_at: z.number(),
+}))
 
 class Task extends ModelFor(tasks) {
   static override readonly associations = {

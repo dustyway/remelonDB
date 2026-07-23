@@ -40,7 +40,7 @@ they track the code and are updated with it.
 | [reference/queries.md](reference/queries.md) | The Q DSL: every operator with its SQL and semantics, joins, LIKE escaping, unsafe escape hatches, compilation. |
 | [sync-tour.md](sync-tour.md) | The wire protocol in eight real requests and responses — the hands-on companion to the spec, with a clickable .http version in the example. |
 | [reference/sync.md](reference/sync.md) | Using `synchronize`: wire shapes, conflict semantics, resync, migration pulls, testing a backend. |
-| [reference/schema.md](reference/schema.md) | `appSchema`/`table()`/column builders, inferred record types, standard columns, reserved names, DDL output, migrations and the no-silent-reset contract. |
+| [reference/schema.md](reference/schema.md) | Defining tables (Zod-first via `zodTable`, hand-written builders as the alternative), inferred record types, standard columns, reserved names, DDL output, migrations and the no-silent-reset contract. |
 | [reference/records.md](reference/records.md) | `RawRecord`, the `sanitizedRaw` trust boundary and its coercion rules, sync fields (`_status`/`_changed`), ids. |
 | [reference/driver.md](reference/driver.md) | The `SqliteDriver` contract: method obligations, value conventions, batch atomicity, why the seam is async, how to implement and conformance-test a new driver. |
 

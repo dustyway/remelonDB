@@ -6,6 +6,52 @@ of single SQL statements for a driver to run atomically.
 
 ## Defining a schema
 
+One Zod object per table is the source of truth
+([zod-adapter.md](../zod-adapter.md)):
+
+```ts
+import { z } from 'zod'
+import { appSchema } from '@remelondb/core'
+import { zodTable } from '@remelondb/core/zod'
+
+const TaskRow = z.object({
+  name: z.string(),
+  position: z.number(),
+  is_done: z.boolean(),
+  project_id: z.string().nullable(),
+})
+const tasks = zodTable('tasks', TaskRow, { indexed: ['position'] })
+
+const schema = appSchema({ version: 1, tables: [tasks] })
+```
+
+- **Column vocabulary**: `z.string()`, `z.number()`, `z.boolean()`, each
+  optionally `.nullable()` (SQL NULL; `.optional()` is rejected — the
+  value vocabulary has `null`, not `undefined`). Anything else is a loud
+  error at `zodTable` time.
+- **Indexes** ride in the options bag (`indexed: [...]`) — Zod has no
+  word for them. Each creates `create index "…" on "table" ("column")`.
+- **Refinements** (`.min`, `.email`, …) keep their column type; they
+  validate on the sync wire, not on local writes
+  ([zod-adapter.md](../zod-adapter.md)).
+- **Record types are inferred**: `InferRecord<typeof tasks>` equals
+  `z.infer<typeof TaskRow> & { readonly id: string }` (`.nullable()`
+  columns are `T | null`). Collections obtained via `db.get(tasks)` or
+  `db.get(Task)` are typed by it, and misspelled column names in
+  `Q.where`/`Q.sortBy` are compile errors.
+- Columns are stored untyped in SQLite (dynamic typing); the declared
+  type drives JS-side sanitization (see [records.md](records.md)) and
+  migration backfill defaults.
+- **`created_at` / `updated_at`**, if declared, must be non-nullable
+  `number` columns (epoch-millisecond timestamps, auto-stamped by the
+  Model layer).
+
+### The hand-written builders
+
+`zodTable` compiles to the same `TableSchema` that core's own builders
+produce — Zod-free stacks (and migration steps, below) write it
+directly:
+
 ```ts
 import { appSchema, column as c, table } from '@remelondb/core'
 
@@ -15,29 +61,12 @@ const tasks = table('tasks', {
   is_done: c.boolean(),
   project_id: c.string().optional(),
 })
-
-const schema = appSchema({ version: 1, tables: [tasks] })
 ```
 
-- **Column builders**: `c.string()`, `c.number()`, `c.boolean()`. Columns
-  are stored untyped in SQLite (dynamic typing); the declared type drives
-  JS-side sanitization (see [records.md](records.md)) and migration
-  backfill defaults.
-- Tables can also be **derived from a shared Zod object** instead of
-  written by hand — `zodTable('tasks', TaskSchema)` in
-  [`@remelondb/core/zod`](../zod-adapter.md) produces the identical
-  `TableSchema`, with the record types guaranteed to match `z.infer`
-  ([zod-adapter.md](../zod-adapter.md)).
-- **`.optional()`**: the column may be `null`. Non-optional columns are
-  coerced to a type default (`''`/`0`/`false`) rather than null.
-- **`.indexed()`**: creates `create index "…" on "table" ("column")`.
-- **`created_at` / `updated_at`**, if declared, must be non-optional
-  `number` columns (epoch-millisecond timestamps, maintained by the future
-  Model layer).
-- **Record types are inferred**: `InferRecord<typeof tasks>` is the typed
-  record shape (`.optional()` columns become `T | null`). Collections
-  obtained via `db.get(tasks)` or `db.get(Task)` are typed by it, and
-  misspelled column names in `Q.where`/`Q.sortBy` are compile errors.
+`c.string()`/`c.number()`/`c.boolean()`, with `.optional()` (may be
+`null`) and `.indexed()`. The two forms are interchangeable —
+equivalence is pinned by a deep-equality test, and `InferRecord` works
+identically on both.
 
 Validation at construction (all throw with specific messages): identifiers
 must match `^[a-zA-Z_][a-zA-Z0-9_]*$`; duplicate tables are rejected;
