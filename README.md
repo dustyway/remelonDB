@@ -70,14 +70,17 @@ A taste of the API — the same code on every platform, swapping only
 the driver import:
 
 ```ts
-import { appSchema, column as c, table, Database, ModelFor, Q } from '@remelondb/core'
+import { z } from 'zod'
+import { appSchema, Database, ModelFor, Q } from '@remelondb/core'
+import { zodTable } from '@remelondb/core/zod'
 import { NodeSqliteDriver } from '@remelondb/driver-node'
 
-const tasks = table('tasks', {
-  name: c.string(),
-  position: c.number().indexed(),
-  is_done: c.boolean(),
+const TaskRow = z.object({
+  name: z.string(),
+  position: z.number(),
+  is_done: z.boolean(),
 })
+const tasks = zodTable('tasks', TaskRow, { indexed: ['position'] })
 
 const schema = appSchema({ version: 1, tables: [tasks] })
 
@@ -98,6 +101,9 @@ db.get(Task)
   .query(Q.where('is_done', false), Q.sortBy('position'))
   .observe((open) => console.log('open tasks:', open.length))
 ```
+
+(No Zod in your stack? The `table()`/`column` builders in core define
+the same tables by hand — [schema reference](docs/reference/schema.md).)
 
 The full walkthrough — associations, migrations, and sync against the
 shipped backend engine — is [docs/tutorial.md](docs/tutorial.md).
