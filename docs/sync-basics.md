@@ -37,6 +37,30 @@ no role — only the order in which devices reach the server. Device
 clocks can be wrong, skewed, or lying, so the protocol never consults
 them.
 
+## How deletion syncs: tombstones
+
+A deleted record can't simply be removed from the server's database.
+Pull asks "what changed since my cursor" — and a hard-deleted row no
+longer exists to be returned, so a device that was offline during the
+deletion would never hear about it and keep its copy forever. You
+can't sync an absence, so the absence becomes a thing.
+
+Deletion is therefore a write like any other: the row stays, marked
+dead, under a fresh revision. The next pull matches it and ships it in
+the `deleted` list; each device drops its local copy on arrival.
+
+Two rules keep this honest. A tombstone **never resurrects** — a stale
+offline edit pushed against a deleted record changes nothing; the
+editor learns of the deletion on its next pull instead. And deleting
+the already-deleted changes nothing either, so retries and the same
+delete arriving from two devices don't churn anyone's pulls.
+
+The cost is that dead rows accumulate. One may be pruned only once no
+device's cursor is old enough to still need it — the server's gc
+floor. A device returning from below the floor is told to resync from
+scratch rather than silently keep ghosts. The API side of all this
+lives in [reference/sync.md](reference/sync.md).
+
 ## A worked example: the long-offline device
 
 1. Monday: device A goes offline and renames a task to "Buy milk".

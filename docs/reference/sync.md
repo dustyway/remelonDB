@@ -102,6 +102,25 @@ apply/mark commits hold the writer queue briefly.
   not marked synced — it stays dirty for the next run. Rejected ids
   (`rejected`) likewise.
 
+## Deletion and tombstones
+
+Deletion is a synced write, not a removal. `markAsDeleted(id)` turns the
+record into a local tombstone: gone from queries and observers, kept in
+the database until a push ships it in the `deleted` array (a successful
+push then destroys it locally — step 2 above). `destroyPermanently(id)`
+skips sync entirely; never use it on records the server knows about, or
+other devices keep theirs.
+
+Backends mirror this ([sync-wire.md](../sync-wire.md)): a delete marks
+the row dead under a fresh revision, so later pulls serve it in
+`deleted`. A conflicting upsert against a dead row changes nothing —
+tombstones never resurrect; the stale editor learns of the deletion on
+its next pull — and re-deleting is a no-op. Server tombstones are
+retained until the gc floor passes them; a cursor older than the floor
+gets `resyncRequired` instead of silent gaps.
+
+Why deletion must work this way: [sync-basics.md](../sync-basics.md).
+
 ## Resync
 
 When the server answers `resyncRequired` (pruned history, expired
