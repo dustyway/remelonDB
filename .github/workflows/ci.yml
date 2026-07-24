@@ -69,10 +69,11 @@ jobs:
       # docs/sync-tour.md replayed against the example server — the
       # tour's captured responses cannot drift from behavior
       - run: pnpm check:sync-tour
-      # The sync protocol's formal model (docs/sync-wire.md): invariants
-      # must hold across 25k simulated traces
+      # The sync protocol's formal model (docs/sync-wire.md) must stay
+      # well-typed. Simulation and bounded verification are an offline
+      # practice run when the model changes (see docs/formal-model.md) —
+      # 0.32.0's run fetches a Rust evaluator from GitHub, too flaky for CI.
       - run: npx --yes @informalsystems/quint@0.32.0 typecheck docs/sync_model.qnt
-      - run: npx --yes @informalsystems/quint@0.32.0 run docs/sync_model.qnt --invariant=allInvariants --max-samples=25000 --max-steps=60
 
   # Consume the packed tarballs from a plain Node project — proves the
   # published artifacts (dist exports, workspace-dep rewriting) work for

@@ -106,11 +106,17 @@ of the modeling effort: a bug found before any implementation had it.
 
 ## How it is checked
 
-CI runs two commands on every push that touches packages or the
-executable docs ([ci.yml](../.github/workflows/ci.yml)):
+CI runs one command on every push ([ci.yml](../.github/workflows/ci.yml)),
+guarding that the model stays well-typed:
 
 ```sh
 quint typecheck docs/sync_model.qnt
+```
+
+Running the invariants is an offline practice, done when the model
+changes — both commands live in the model's header:
+
+```sh
 quint run docs/sync_model.qnt --invariant=allInvariants \
   --max-samples=25000 --max-steps=60
 ```
@@ -118,13 +124,12 @@ quint run docs/sync_model.qnt --invariant=allInvariants \
 `quint run` is **random simulation**: 25,000 traces of up to 60 steps
 each, invariants checked at every step — deep but sampled.
 
-Separately, `quint verify` does **bounded model checking** (Apalache
+Alongside it, `quint verify` does **bounded model checking** (Apalache
 over an SMT solver): it covers *every* possible trace up to a given
 depth, exhaustively. Its cost grows steeply with depth (minutes to
-hours), so it is not a CI check: it runs offline, deliberately, when
-the model changes — the command is in the model's header. The two
-checks are complements: simulation reaches deep interleavings by
-luck, bounded checking rules out shallow ones by construction. The
+hours). Both stay offline rather than in CI: simulation reaches deep
+interleavings by luck, bounded checking rules out shallow ones by
+construction. The
 bounds are only meaningful because known bugs are caught at them: the
 naive-mode canary (a 4-step trace) fails `verify` at depth 5 in about
 30 seconds.
