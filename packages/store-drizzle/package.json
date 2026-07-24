@@ -1,0 +1,58 @@
+{
+  "name": "@remelondb/store-drizzle",
+  "version": "0.0.8",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@remelondb/server": "workspace:*"
+  },
+  "peerDependencies": {
+    "drizzle-orm": ">=0.40.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.4",
+    "@types/node": "^24.0.0",
+    "drizzle-orm": "^0.45.2",
+    "vitest": "^3.2.7"
+  },
+  "license": "MIT",
+  "description": "remelonDB SyncStore for Postgres via drizzle-orm: config-per-table storage adapter satisfying the server store seam",
+  "keywords": [
+    "remelondb",
+    "watermelondb",
+    "drizzle",
+    "postgres",
+    "sync",
+    "offline-first",
+    "server"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dustyway/remelonDB.git",
+    "directory": "packages/store-drizzle"
+  },
+  "homepage": "https://github.com/dustyway/remelonDB#readme",
+  "bugs": "https://github.com/dustyway/remelonDB/issues",
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsdown",
+    "prepack": "tsdown"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "import": "./dist/index.mjs",
+        "default": "./dist/index.mjs"
+      }
+    },
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "src",
+    "!src/**/*.test.ts"
+  ]
+}

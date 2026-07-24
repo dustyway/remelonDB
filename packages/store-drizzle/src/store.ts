@@ -1,0 +1,299 @@
+/**
+ * The Postgres SyncStore (docs/server-design.md) over drizzle-orm:
+ * config per table, methods generated. The store earns the seam's
+ * obligations with a global revision sequence, a per-scope advisory
+ * lock on push, and tombstones that never resurrect.
+ */
+import { and, eq, getTableColumns, gt, inArray, isNull, ne, sql } from 'drizzle-orm'
+import type { SQL } from 'drizzle-orm'
+import type { PgColumn, PgDatabase, PgQueryResultHKT, PgTable } from 'drizzle-orm/pg-core'
+import type { StoredChange, SyncStore, SyncStoreTx, WireRow } from '@remelondb/server'
+
+export type DrizzleDb = PgDatabase<PgQueryResultHKT, Record<string, unknown>>
+export type DrizzleTx = Parameters<Parameters<DrizzleDb['transaction']>[0]>[0]
+
+/**
+ * Scoped-query replacements for tables whose scope is derived (e.g. a
+ * child owned through its parent). Config-only tables never need these.
+ */
+export interface TableOverrides<Scope> {
+  changedSince?(tx: DrizzleTx, scope: Scope, since: number): Promise<readonly StoredChange[]>
+  currentRevs?(
+    tx: DrizzleTx,
+    scope: Scope,
+    ids: readonly string[],
+  ): Promise<ReadonlyMap<string, number>>
+  foreignIds?(tx: DrizzleTx, scope: Scope, ids: readonly string[]): Promise<readonly string[]>
+  /** This table's contribution to the scope's highest revision. */
+  maxRev?(tx: DrizzleTx, scope: Scope): Promise<number>
+  upsert?(tx: DrizzleTx, scope: Scope, rows: readonly WireRow[]): Promise<void>
+  tombstone?(tx: DrizzleTx, scope: Scope, ids: readonly string[]): Promise<void>
+}
+
+/**
+ * One synced table. Machinery columns are the store's contract: a text
+ * `id` primary key (client-minted), a bigint `rev`, a nullable
+ * `deletedAt` tombstone marker, and — unless the scoped queries are
+ * overridden — a `scope` column the sync scope filters on. Every other
+ * column passes through untouched; when column names match wire names
+ * the default mapping is identity and the table syncs with no mapper
+ * code.
+ */
+export interface DrizzleTableConfig<Scope> {
+  readonly table: PgTable
+  readonly id: PgColumn
+  readonly rev: PgColumn
+  readonly deletedAt: PgColumn
+  /** Omit only when `overrides` supplies every scoped query. */
+  readonly scope?: PgColumn
+  /** Row (drizzle property keys) -> wire row; defaults to identity minus machinery columns. */
+  readonly toWire?: (row: Record<string, unknown>) => WireRow
+  /** Wire row -> column values (drizzle property keys); defaults to identity. */
+  readonly fromWire?: (row: WireRow) => Record<string, unknown>
+  /** Column names written on insert but never overwritten on conflict. */
+  readonly insertOnly?: readonly string[]
+  readonly overrides?: TableOverrides<Scope>
+}
+
+export interface DrizzleStoreOptions<Scope> {
+  readonly db: DrizzleDb
+  readonly tables: { readonly [table: string]: DrizzleTableConfig<Scope> }
+  /** Postgres sequence stamping revisions; defaults to `remelon_rev`. */
+  readonly revSequence?: string
+  /**
+   * Maps a scope to the advisory-lock key serializing its pushes.
+   * Defaults to a 64-bit hash of `String(scope)`; collisions only
+   * over-serialize, never corrupt.
+   */
+  readonly lockKey?: (scope: Scope) => bigint
+}
+
+interface UserColumn {
+  readonly key: string
+  readonly name: string
+}
+
+interface Prepared<Scope> {
+  readonly cfg: DrizzleTableConfig<Scope>
+  readonly idKey: string
+  readonly revKey: string
+  readonly deletedKey: string
+  readonly scopeKey: string | null
+  readonly userColumns: readonly UserColumn[]
+  readonly updateColumns: readonly UserColumn[]
+  readonly toWire: (row: Record<string, unknown>) => WireRow
+  readonly fromWire: (row: WireRow) => Record<string, unknown>
+}
+
+const fnv64 = (input: string): bigint => {
+  let hash = 0xcbf29ce484222325n
+  for (const char of input) {
+    hash ^= BigInt(char.codePointAt(0)!)
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n)
+  }
+  return BigInt.asIntN(64, hash)
+}
+
+const rowsOf = (result: unknown): Record<string, unknown>[] =>
+  Array.isArray(result) ? result : (result as { rows: Record<string, unknown>[] }).rows
+
+const excluded = (column: string): SQL => sql.raw(`excluded."${column}"`)
+
+const prepare = <Scope>(name: string, cfg: DrizzleTableConfig<Scope>): Prepared<Scope> => {
+  const columns = getTableColumns(cfg.table)
+  const keyOf = (column: PgColumn | undefined): string | null => {
+    if (!column) return null
+    for (const [key, candidate] of Object.entries(columns)) {
+      if (candidate === column) return key
+    }
+    throw new Error(`store-drizzle: table '${name}' config references a column not on its table`)
+  }
+  const idKey = keyOf(cfg.id)!
+  const revKey = keyOf(cfg.rev)!
+  const deletedKey = keyOf(cfg.deletedAt)!
+  const scopeKey = keyOf(cfg.scope)
+  if (!scopeKey) {
+    const o = cfg.overrides ?? {}
+    if (!(o.changedSince && o.currentRevs && o.foreignIds && o.maxRev)) {
+      throw new Error(
+        `store-drizzle: table '${name}' has no scope column; ` +
+          'overrides must supply changedSince, currentRevs, foreignIds and maxRev',
+      )
+    }
+  }
+  const machinery = new Set([idKey, revKey, deletedKey, ...(scopeKey ? [scopeKey] : [])])
+  const userColumns: UserColumn[] = Object.entries(columns)
+    .filter(([key]) => !machinery.has(key))
+    .map(([key, column]) => ({ key, name: column.name }))
+  const insertOnly = new Set(cfg.insertOnly ?? [])
+  const byName = new Map(userColumns.map((column) => [column.name, column]))
+  return {
+    cfg,
+    idKey,
+    revKey,
+    deletedKey,
+    scopeKey,
+    userColumns,
+    updateColumns: userColumns.filter((column) => !insertOnly.has(column.name)),
+    toWire:
+      cfg.toWire ??
+      ((row) => {
+        const wire: Record<string, unknown> = { id: row[idKey] }
+        for (const column of userColumns) wire[column.name] = row[column.key]
+        return wire as WireRow
+      }),
+    fromWire:
+      cfg.fromWire ??
+      ((row) => {
+        const values: Record<string, unknown> = {}
+        for (const [key, value] of Object.entries(row)) {
+          if (key === 'id') continue
+          const column = byName.get(key)
+          if (column) values[column.key] = value
+        }
+        return values
+      }),
+  }
+}
+
+/**
+ * A SyncStore over drizzle/Postgres. Tombstone retention is not yet
+ * bounded: `gcFloor()` is 0, every cursor is served, tombstones
+ * accumulate until a future GC feature prunes them.
+ * @category Store seam
+ */
+export function createDrizzleStore<Scope>(options: DrizzleStoreOptions<Scope>): SyncStore<Scope> {
+  const sequence = options.revSequence ?? 'remelon_rev'
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)?$/.test(sequence)) {
+    throw new Error(`store-drizzle: invalid sequence name '${sequence}'`)
+  }
+  const lockKey = options.lockKey ?? ((scope: Scope) => fnv64(String(scope)))
+  const tables = new Map<string, Prepared<Scope>>(
+    Object.entries(options.tables).map(([name, cfg]) => [name, prepare(name, cfg)]),
+  )
+  const tableOf = (name: string): Prepared<Scope> => {
+    const prepared = tables.get(name)
+    if (!prepared) throw new Error(`store-drizzle: unknown table '${name}'`)
+    return prepared
+  }
+
+  const nextRev = async (tx: DrizzleTx): Promise<number> => {
+    const rows = rowsOf(await tx.execute(sql.raw(`select nextval('${sequence}') as rev`)))
+    return Number(rows[0]!['rev'])
+  }
+
+  const txFor = (tx: DrizzleTx, scope: Scope): SyncStoreTx<Scope> => ({
+    changedSince: async (name, txScope, since) => {
+      const p = tableOf(name)
+      if (p.cfg.overrides?.changedSince) return p.cfg.overrides.changedSince(tx, txScope, since)
+      const rows = (await tx
+        .select()
+        .from(p.cfg.table)
+        .where(
+          and(eq(p.cfg.scope!, txScope as never), gt(p.cfg.rev, since as never)),
+        )) as Record<string, unknown>[]
+      return rows.map((row) => ({
+        id: String(row[p.idKey]),
+        rev: Number(row[p.revKey]),
+        row: row[p.deletedKey] == null ? p.toWire(row) : null,
+      }))
+    },
+    maxRev: async (txScope) => {
+      let max = 0
+      for (const p of tables.values()) {
+        const contribution = p.cfg.overrides?.maxRev
+          ? await p.cfg.overrides.maxRev(tx, txScope)
+          : Number(
+              rowsOf(
+                await tx.execute(
+                  sql`select coalesce(max(${p.cfg.rev}), 0) as rev from ${p.cfg.table} where ${p.cfg.scope!} = ${txScope}`,
+                ),
+              )[0]!['rev'],
+            )
+        if (contribution > max) max = contribution
+      }
+      return max
+    },
+    currentRevs: async (name, txScope, ids) => {
+      const p = tableOf(name)
+      if (p.cfg.overrides?.currentRevs) return p.cfg.overrides.currentRevs(tx, txScope, ids)
+      if (ids.length === 0) return new Map()
+      // tombstones included: a client editing a server-deleted row must conflict
+      const rows = await tx
+        .select({ id: p.cfg.id, rev: p.cfg.rev })
+        .from(p.cfg.table)
+        .where(and(inArray(p.cfg.id, [...ids] as never[]), eq(p.cfg.scope!, txScope as never)))
+      return new Map(rows.map((row) => [String(row.id), Number(row.rev)]))
+    },
+    foreignIds: async (name, txScope, ids) => {
+      const p = tableOf(name)
+      if (p.cfg.overrides?.foreignIds) return p.cfg.overrides.foreignIds(tx, txScope, ids)
+      if (ids.length === 0) return []
+      const rows = await tx
+        .select({ id: p.cfg.id })
+        .from(p.cfg.table)
+        .where(and(inArray(p.cfg.id, [...ids] as never[]), ne(p.cfg.scope!, txScope as never)))
+      return rows.map((row) => String(row.id))
+    },
+    upsert: async (name, txScope, wireRows) => {
+      const p = tableOf(name)
+      if (p.cfg.overrides?.upsert) return p.cfg.overrides.upsert(tx, txScope, wireRows)
+      if (wireRows.length === 0) return
+      const rev = await nextRev(tx)
+      const values = wireRows.map((row) => ({
+        ...p.fromWire(row),
+        [p.idKey]: row.id,
+        [p.revKey]: rev,
+        ...(p.scopeKey ? { [p.scopeKey]: txScope } : {}),
+      }))
+      const set: Record<string, SQL> = { [p.revKey]: excluded(p.cfg.rev.name) }
+      for (const column of p.updateColumns) set[column.key] = excluded(column.name)
+      await tx
+        .insert(p.cfg.table)
+        .values(values as never)
+        .onConflictDoUpdate({
+          target: p.cfg.id,
+          set: set as never,
+          // never resurrect a tombstone, never touch its rev
+          setWhere: isNull(p.cfg.deletedAt),
+        })
+    },
+    tombstone: async (name, txScope, ids) => {
+      const p = tableOf(name)
+      if (p.cfg.overrides?.tombstone) return p.cfg.overrides.tombstone(tx, txScope, ids)
+      if (ids.length === 0) return
+      const rev = await nextRev(tx)
+      await tx
+        .update(p.cfg.table)
+        .set({ [p.deletedKey]: sql`now()`, [p.revKey]: rev } as never)
+        .where(
+          and(
+            inArray(p.cfg.id, [...ids] as never[]),
+            isNull(p.cfg.deletedAt),
+            p.cfg.scope ? eq(p.cfg.scope, txScope as never) : undefined,
+          ),
+        )
+    },
+    gcFloor: async () => 0,
+  })
+
+  return {
+    transaction: (scope, mode, work) =>
+      options.db.transaction(
+        async (tx) => {
+          // Lock before any read: under 'read committed' each statement
+          // sees data committed before it, so once the lock is granted
+          // this push reads the previous push's commit. 'repeatable
+          // read' would pin the snapshot at the lock statement itself —
+          // taken while still waiting — and serialize into stale reads.
+          if (mode === 'push') {
+            await tx.execute(
+              sql.raw(`select pg_advisory_xact_lock(${lockKey(scope).toString()})`),
+            )
+          }
+          return work(txFor(tx, scope))
+        },
+        mode === 'pull' ? { isolationLevel: 'repeatable read' } : undefined,
+      ),
+  }
+}
