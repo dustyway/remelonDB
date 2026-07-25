@@ -190,12 +190,15 @@ services:
     environment:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
-      - todo-db-data:/var/lib/postgresql/data
+      - todo-db-data:/var/lib/postgresql
 volumes:
   todo-db-data:
 ```
 
 The server creates its own tables on first start; no migrations to run.
+Postgres 18's image wants its volume at `/var/lib/postgresql` (not the
+older `/data` suffix), and a reverse proxy that resolves upstreams at
+config load needs a reload after the app container is recreated.
 For a device build of the mobile app, set `EXPO_PUBLIC_SYNC_URL` (a
 `.env.local` in `mobile/` works) to point it at the deployed server.
 
