@@ -56,6 +56,7 @@
   "files": [
     "dist",
     "src",
-    "!src/**/*.test.ts"
+    "!src/**/*.test.ts",
+    "!src/fixture.ts"
   ]
 }

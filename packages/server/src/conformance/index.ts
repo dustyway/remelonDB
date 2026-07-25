@@ -75,12 +75,21 @@ const liveIds = (changes: SyncChanges, table: string): string[] => {
   return [...set.created, ...set.updated].map((row) => String(row['id']))
 }
 
-const pulled = (result: SyncPullResult) => {
+/**
+ * Assert a pull was served (not resyncRequired) and narrow to its
+ * package. Exported so backend test suites stop re-writing it.
+ * @category Conformance
+ */
+export const pulled = (result: SyncPullResult) => {
   expect(result).not.toHaveProperty('resyncRequired')
   return result as { changes: SyncChanges; cursor: string }
 }
-/** Every accepted push must satisfy the package rule; assert centrally. */
-const accepted = (result: SyncPushResult) => {
+/**
+ * Assert a push was accepted (not conflict) and that cursor/changes
+ * come as a package; narrows to the accepted shape.
+ * @category Conformance
+ */
+export const accepted = (result: SyncPushResult) => {
   expect(result).not.toHaveProperty('conflict')
   const ok = result as {
     cursor: string | null

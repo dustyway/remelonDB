@@ -1,45 +1,22 @@
-import { PGlite } from '@electric-sql/pglite'
-import { drizzle } from 'drizzle-orm/pglite'
-import { bigint, boolean, pgTable, text, timestamp } from 'drizzle-orm/pg-core'
 import { createSyncEngine } from '@remelondb/server'
 import { registerServerConformance } from '@remelondb/server/conformance'
+import { freshDb, tasks } from './fixture'
 import { createDrizzleStore } from './store'
-import type { DrizzleDb } from './store'
 
 // The drizzle store over real Postgres (pglite, in-process) must pass
 // the full backend contract, engine included — the same registration as
 // the memory store's. Item 4 (write during a pull) needs two
-// interleaved connections and pglite has one; it reports as skipped.
-const tasks = pgTable('tasks', {
-  id: text('id').primaryKey(),
-  rev: bigint('rev', { mode: 'number' }).notNull(),
-  deletedAt: timestamp('deleted_at', { withTimezone: true }),
-  owner: text('owner').notNull(),
-  name: text('name').notNull(),
-  done: boolean('done').notNull(),
-})
-
+// interleaved connections and pglite has one; the deterministic
+// construction in store.race.test.ts covers that property instead.
 let counter = 0
 const newId = (): string => `row-${++counter}`
 
 registerServerConformance({
   name: 'engine over DrizzleStore (pglite)',
   makeContext: async () => {
-    const client = new PGlite()
-    await client.exec(`
-      create sequence remelon_rev;
-      create table remelon_sync_meta (key text primary key, value bigint not null);
-      create table tasks (
-        id text primary key,
-        rev bigint not null,
-        deleted_at timestamptz,
-        owner text not null,
-        name text not null,
-        done boolean not null
-      );
-    `)
+    const { db } = await freshDb()
     const store = createDrizzleStore<string>({
-      db: drizzle(client) as unknown as DrizzleDb,
+      db,
       tables: {
         tasks: {
           table: tasks,

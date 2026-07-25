@@ -2,8 +2,9 @@ import { Pool } from 'pg'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { bigint, boolean, pgTable, text, timestamp } from 'drizzle-orm/pg-core'
 import { describe, expect, it } from 'vitest'
-import type { SyncChanges, SyncPullResult } from '@remelondb/core'
+import type { SyncChanges } from '@remelondb/core'
 import { createSyncEngine } from '@remelondb/server'
+import { accepted, pulled } from '@remelondb/server/conformance'
 import { createDrizzleStore } from './store'
 import type { DrizzleDb } from './store'
 
@@ -24,13 +25,6 @@ const raceTasks = pgTable('race_tasks', {
   done: boolean('done').notNull(),
 })
 
-const ok = (result: SyncPullResult): { changes: SyncChanges; cursor: string } => {
-  expect(result).not.toHaveProperty('resyncRequired')
-  return result as { changes: SyncChanges; cursor: string }
-}
-const accepted = (result: unknown): void => {
-  expect(result).not.toHaveProperty('conflict')
-}
 const liveIds = (changes: SyncChanges): string[] => {
   const set = changes['tasks'] ?? { created: [], updated: [], deleted: [] }
   return [...set.created, ...set.updated].map((row) => String(row['id']))
@@ -76,14 +70,14 @@ d('pull race on real postgres', () => {
       })
       const h = engine.as('racer')
 
-      const empty = ok(await h.pull({ cursor: null, schemaVersion: 1, migration: null }))
+      const empty = pulled(await h.pull({ cursor: null, schemaVersion: 1, migration: null }))
       accepted(
         await h.push({
           changes: { tasks: { created: [{ id: 'seed', name: 'seed', done: false }], updated: [], deleted: [] } },
           cursor: empty.cursor,
         }),
       )
-      const caughtUp = ok(await h.pull({ cursor: null, schemaVersion: 1, migration: null }))
+      const caughtUp = pulled(await h.pull({ cursor: null, schemaVersion: 1, migration: null }))
       const since = Number(caughtUp.cursor)
 
       let pinned!: () => void
@@ -122,7 +116,7 @@ d('pull race on real postgres', () => {
       expect(snapshot.cursor).toBeLessThan(duringRev)
       expect(snapshot.cursor).toBe(since)
       // ...so the next pull from that cursor delivers it: nothing lost
-      const recovery = ok(
+      const recovery = pulled(
         await h.pull({ cursor: String(snapshot.cursor), schemaVersion: 1, migration: null }),
       )
       expect(liveIds(recovery.changes)).toContain('during')

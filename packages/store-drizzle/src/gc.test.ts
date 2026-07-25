@@ -1,25 +1,10 @@
-import { PGlite } from '@electric-sql/pglite'
-import { drizzle } from 'drizzle-orm/pglite'
-import { bigint, boolean, pgTable, text, timestamp } from 'drizzle-orm/pg-core'
 import { describe, expect, it } from 'vitest'
-import type { SyncChanges, SyncPullResult } from '@remelondb/core'
+import type { SyncChanges } from '@remelondb/core'
 import { createSyncEngine } from '@remelondb/server'
+import { pulled } from '@remelondb/server/conformance'
+import { freshDb, tasks } from './fixture'
 import { createDrizzleStore } from './store'
-import type { DrizzleDb } from './store'
 
-const tasks = pgTable('tasks', {
-  id: text('id').primaryKey(),
-  rev: bigint('rev', { mode: 'number' }).notNull(),
-  deletedAt: timestamp('deleted_at', { withTimezone: true }),
-  owner: text('owner').notNull(),
-  name: text('name').notNull(),
-  done: boolean('done').notNull(),
-})
-
-const ok = (result: SyncPullResult): { changes: SyncChanges; cursor: string } => {
-  expect(result).not.toHaveProperty('resyncRequired')
-  return result as { changes: SyncChanges; cursor: string }
-}
 const pullArgs = (cursor: string | null) => ({ cursor, schemaVersion: 1, migration: null })
 const created = (rows: Record<string, unknown>[]): SyncChanges =>
   ({ tasks: { created: rows, updated: [], deleted: [] } }) as unknown as SyncChanges
@@ -28,21 +13,9 @@ const deleted = (ids: string[]): SyncChanges =>
 
 describe('gc and scrub', () => {
   it('scrubs tombstoned content, prunes below the floor, degrades old cursors', async () => {
-    const client = new PGlite()
-    await client.exec(`
-      create sequence remelon_rev;
-      create table remelon_sync_meta (key text primary key, value bigint not null);
-      create table tasks (
-        id text primary key,
-        rev bigint not null,
-        deleted_at timestamptz,
-        owner text not null,
-        name text not null,
-        done boolean not null
-      );
-    `)
+    const { client, db } = await freshDb()
     const store = createDrizzleStore<string>({
-      db: drizzle(client) as unknown as DrizzleDb,
+      db,
       tables: {
         tasks: {
           table: tasks,
@@ -57,7 +30,7 @@ describe('gc and scrub', () => {
     const engine = createSyncEngine({ store, tables: { tasks: {} } })
     const h = engine.as('scope-a')
 
-    const empty = ok(await h.pull(pullArgs(null)))
+    const empty = pulled(await h.pull(pullArgs(null)))
     await h.push({
       changes: created([
         { id: 'keep', name: 'keep me', done: false },
@@ -65,7 +38,7 @@ describe('gc and scrub', () => {
       ]),
       cursor: empty.cursor,
     })
-    const seeded = ok(await h.pull(pullArgs(null)))
+    const seeded = pulled(await h.pull(pullArgs(null)))
     await h.push({ changes: deleted(['gone']), cursor: seeded.cursor })
 
     // erasure is immediate: content scrubbed in the same stroke as the tombstone
@@ -76,7 +49,7 @@ describe('gc and scrub', () => {
     expect(scrubbed.rows[0]!.deleted_at).not.toBeNull()
 
     // the deletion still syncs before gc
-    const synced = ok(await h.pull(pullArgs(seeded.cursor)))
+    const synced = pulled(await h.pull(pullArgs(seeded.cursor)))
     expect(synced.changes['tasks']?.deleted).toContain('gone')
 
     // gc prunes the tombstone and persists the floor
@@ -87,9 +60,9 @@ describe('gc and scrub', () => {
     // a cursor from before the floor degrades to resync...
     expect(await h.pull(pullArgs(seeded.cursor))).toHaveProperty('resyncRequired')
     // ...a cursor at the floor is still served incrementally
-    ok(await h.pull(pullArgs(synced.cursor)))
+    pulled(await h.pull(pullArgs(synced.cursor)))
     // ...and a full re-pull converges without the deleted record
-    const rebuilt = ok(await h.pull(pullArgs(null)))
+    const rebuilt = pulled(await h.pull(pullArgs(null)))
     const ids = [...(rebuilt.changes['tasks']?.created ?? []), ...(rebuilt.changes['tasks']?.updated ?? [])]
       .map((row) => String(row['id']))
     expect(ids).toEqual(['keep'])
