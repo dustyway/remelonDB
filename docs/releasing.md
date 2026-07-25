@@ -51,6 +51,9 @@ A package that has never been published cannot use trusted publishing
 for its first release: publish its tarball once manually
 (`pnpm --filter <pkg> pack`, then `npm publish <tarball>` in an
 interactive terminal — browser auth + security key), then configure its
-trusted publisher as above. Later releases are fully automated. The
+trusted publisher as above. Order matters: do both **before approving
+the Release run** — an approved run that reaches a first-time package
+neither published nor configured fails with `ENEEDAUTH`. Later releases
+are fully automated. The
 workflow's already-published skip makes mixed releases safe: manual
 first publishes and CI publishes can share one tag.
