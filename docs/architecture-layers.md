@@ -30,10 +30,10 @@ on every platform.
 │  • tombstones + local storage = ordinary SQL over the driver│
 ├──────────────────── SqliteDriver seam ──────────────────────┤
 │ react-native driver │ web driver          │ node driver     │
-│ C++ TurboModule +   │ SQLite-WASM + OPFS  │ better-sqlite3  │
-│ bundled sqlite3,    │ in a Worker         │ (tests, tooling,│
-│ New-Arch/bridgeless │ (deferred, but seam │  conformance    │
-│                     │  designed for now)  │  suite)         │
+│ expo-sqlite, or a   │ SQLite-WASM + OPFS  │ better-sqlite3  │
+│ C++ TurboModule +   │ in a Worker         │ (tests, tooling,│
+│ bundled sqlite3     │                     │  conformance    │
+│                     │                     │  suite)         │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -126,7 +126,14 @@ replacement), drop `unsafeLokiExpr`/`lokiTransform`, keep `IS`/`IS NOT` null
 behavior and document it as SQLite semantics. Deleted-record filtering
 becomes a compiler flag, not a description-tree rewrite.
 
-**4. React Native driver is a C++ TurboModule.** Bridgeless-compatible by
+**4. Two React Native drivers, one seam.** `@remelondb/driver-rn` is the
+default: a thin adapter over expo-sqlite, which owns the native build and
+ships inside Expo Go, so an app needs no custom native build.
+`@remelondb/driver-rn-cpp` is the alternative for apps wanting a pinned,
+bundled SQLite and no expo dependency, at the cost of a development build.
+Same class name, same conformance suite; switching is one import.
+
+The C++ driver is a **pure C++ TurboModule**, bridgeless-compatible by
 construction: codegen'd spec, C++ implementation shared across iOS/Android,
 JSI under the hood without touching `RCTCxxBridge` or manual
 `global.*` installs. Android links JSI via prefab (`ReactAndroid::jsi`)
