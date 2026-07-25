@@ -175,9 +175,29 @@ from one process; put any TLS-terminating reverse proxy in front.
 Without a `DATABASE_URL` the memory store means one shared
 world-writable list that resets on restart — acceptable for a demo,
 nothing more. Pass the container a `DATABASE_URL` and the list persists
-in Postgres instead. For a device build of the mobile app, set
-`EXPO_PUBLIC_SYNC_URL` (a `.env.local` in `mobile/` works) to point it
-at the deployed server.
+in Postgres instead — as a compose pair:
+
+```yaml
+services:
+  todo-sync:
+    image: todo-sync
+    ports: ["8787:8787"]
+    environment:
+      DATABASE_URL: postgres://postgres:${DB_PASSWORD}@todo-db:5432/postgres
+    depends_on: [todo-db]
+  todo-db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - todo-db-data:/var/lib/postgresql/data
+volumes:
+  todo-db-data:
+```
+
+The server creates its own tables on first start; no migrations to run.
+For a device build of the mobile app, set `EXPO_PUBLIC_SYNC_URL` (a
+`.env.local` in `mobile/` works) to point it at the deployed server.
 
 ## Copying this into your own project
 
