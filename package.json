@@ -8,7 +8,8 @@
     "build": "pnpm -r build",
     "check:tutorial": "node scripts/check-tutorial.mjs",
     "check:readme": "node scripts/check-readme.mjs",
-    "check:sync-tour": "node scripts/check-sync-tour.mjs"
+    "check:sync-tour": "node scripts/check-sync-tour.mjs",
+    "check:backend-tutorial": "node scripts/check-backend-tutorial.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",

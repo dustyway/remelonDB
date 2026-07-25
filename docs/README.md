@@ -4,7 +4,9 @@ New here? Start with the **[tutorial](tutorial.md)**: it builds a
 flashcard app's data layer end to end (schema, models, queries, live
 observation, a migration, and sync). For how sync behaves — who wins
 when two devices edit, and how to change it — read
-**[sync-basics](sync-basics.md)**.
+**[sync-basics](sync-basics.md)**. The server side has its own
+walkthrough, **[backend-tutorial](backend-tutorial.md)**: the same sync
+engine over Postgres, every code block executed by CI.
 
 Two kinds of documents live here. **Design decisions** record *why* the
 project is shaped the way it is — written for people changing the

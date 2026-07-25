@@ -46,6 +46,7 @@ jobs:
               - 'scripts/**'
               - 'README.md'
               - 'docs/tutorial.md'
+              - 'docs/backend-tutorial.md'
               - 'docs/sync-tour.md'
               - 'docs/sync_model.qnt'
               - 'examples/todo-sync/backend/**'
@@ -114,6 +115,7 @@ jobs:
       # against the built packages — docs cannot drift from the API.
       - run: pnpm check:tutorial
       - run: pnpm check:readme
+      - run: pnpm check:backend-tutorial
       - name: Pack and consume from plain Node
         run: |
           mkdir -p /tmp/tarballs /tmp/consume
