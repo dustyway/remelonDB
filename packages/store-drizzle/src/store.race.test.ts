@@ -42,8 +42,10 @@ d('pull race on real postgres', () => {
     const pool = new Pool({ connectionString: url, max: 4 })
     try {
       await pool.query('drop table if exists race_tasks')
+      await pool.query('drop table if exists race_meta')
       await pool.query('drop sequence if exists race_rev')
       await pool.query('create sequence race_rev')
+      await pool.query('create table race_meta (key text primary key, value bigint not null)')
       await pool.query(`
         create table race_tasks (
           id text primary key,
@@ -57,6 +59,7 @@ d('pull race on real postgres', () => {
       const store = createDrizzleStore<string>({
         db: drizzle(pool) as unknown as DrizzleDb,
         revSequence: 'race_rev',
+        metaTable: 'race_meta',
         tables: {
           tasks: {
             table: raceTasks,

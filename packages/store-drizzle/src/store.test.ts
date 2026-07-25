@@ -28,6 +28,7 @@ registerServerConformance({
     const client = new PGlite()
     await client.exec(`
       create sequence remelon_rev;
+      create table remelon_sync_meta (key text primary key, value bigint not null);
       create table tasks (
         id text primary key,
         rev bigint not null,

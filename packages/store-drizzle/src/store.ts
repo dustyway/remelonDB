@@ -4,7 +4,7 @@
  * obligations with a global revision sequence, a per-scope advisory
  * lock on push, and tombstones that never resurrect.
  */
-import { and, eq, getTableColumns, gt, inArray, isNull, ne, sql } from 'drizzle-orm'
+import { and, eq, getTableColumns, gt, inArray, isNotNull, isNull, lte, ne, sql } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
 import type { PgColumn, PgDatabase, PgQueryResultHKT, PgTable } from 'drizzle-orm/pg-core'
 import type { StoredChange, SyncStore, SyncStoreTx, WireRow } from '@remelondb/server'
@@ -52,6 +52,13 @@ export interface DrizzleTableConfig<Scope> {
   readonly fromWire?: (row: WireRow) => Record<string, unknown>
   /** Column names written on insert but never overwritten on conflict. */
   readonly insertOnly?: readonly string[]
+  /**
+   * Column values (drizzle property keys) applied when a row is
+   * tombstoned. The wire never ships a tombstone's columns, so scrubbed
+   * content is immediately gone for every device — erasure (GDPR) comes
+   * from scrubbing, not from GC.
+   */
+  readonly scrub?: Record<string, unknown>
   readonly overrides?: TableOverrides<Scope>
 }
 
@@ -60,6 +67,8 @@ export interface DrizzleStoreOptions<Scope> {
   readonly tables: { readonly [table: string]: DrizzleTableConfig<Scope> }
   /** Postgres sequence stamping revisions; defaults to `remelon_rev`. */
   readonly revSequence?: string
+  /** Bookkeeping table holding the gc floor; defaults to `remelon_sync_meta`. */
+  readonly metaTable?: string
   /**
    * Maps a scope to the advisory-lock key serializing its pushes.
    * Defaults to a 64-bit hash of `String(scope)`; collisions only
@@ -158,14 +167,30 @@ const prepare = <Scope>(name: string, cfg: DrizzleTableConfig<Scope>): Prepared<
 
 /**
  * A SyncStore over drizzle/Postgres. Tombstone retention is not yet
- * bounded: `gcFloor()` is 0, every cursor is served, tombstones
- * accumulate until a future GC feature prunes them.
+ * bounded by `gc(floor)`; until the first call the floor is 0 and every
+ * cursor is served.
  * @category Store seam
  */
-export function createDrizzleStore<Scope>(options: DrizzleStoreOptions<Scope>): SyncStore<Scope> {
+export interface DrizzleStore<Scope> extends SyncStore<Scope> {
+  /**
+   * Prune tombstones with rev <= floor and raise the persisted floor
+   * (never lowered). Cursors below the floor then degrade to resync.
+   * The caller picks the floor — retention policy stays the app's.
+   */
+  gc(floor: number): Promise<void>
+}
+
+const IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)?$/
+
+/** @category Store seam */
+export function createDrizzleStore<Scope>(options: DrizzleStoreOptions<Scope>): DrizzleStore<Scope> {
   const sequence = options.revSequence ?? 'remelon_rev'
-  if (!/^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)?$/.test(sequence)) {
+  if (!IDENTIFIER.test(sequence)) {
     throw new Error(`store-drizzle: invalid sequence name '${sequence}'`)
+  }
+  const meta = options.metaTable ?? 'remelon_sync_meta'
+  if (!IDENTIFIER.test(meta)) {
+    throw new Error(`store-drizzle: invalid meta table name '${meta}'`)
   }
   const lockKey = options.lockKey ?? ((scope: Scope) => fnv64(String(scope)))
   const tables = new Map<string, Prepared<Scope>>(
@@ -265,7 +290,7 @@ export function createDrizzleStore<Scope>(options: DrizzleStoreOptions<Scope>): 
       const rev = await nextRev(tx)
       await tx
         .update(p.cfg.table)
-        .set({ [p.deletedKey]: sql`now()`, [p.revKey]: rev } as never)
+        .set({ [p.deletedKey]: sql`now()`, [p.revKey]: rev, ...(p.cfg.scrub ?? {}) } as never)
         .where(
           and(
             inArray(p.cfg.id, [...ids] as never[]),
@@ -274,8 +299,13 @@ export function createDrizzleStore<Scope>(options: DrizzleStoreOptions<Scope>): 
           ),
         )
     },
-    gcFloor: async () => 0,
+    gcFloor: async () => floorOf(tx),
   })
+
+  const floorOf = async (tx: DrizzleTx): Promise<number> => {
+    const rows = rowsOf(await tx.execute(sql.raw(`select value from ${meta} where key = 'gc_floor'`)))
+    return rows.length === 0 ? 0 : Number(rows[0]!['value'])
+  }
 
   return {
     transaction: (scope, mode, work) =>
@@ -295,5 +325,27 @@ export function createDrizzleStore<Scope>(options: DrizzleStoreOptions<Scope>): 
         },
         mode === 'pull' ? { isolationLevel: 'repeatable read' } : undefined,
       ),
+    gc: async (floor) => {
+      const target = Math.trunc(floor)
+      if (!Number.isFinite(target) || target < 0) {
+        throw new Error(`store-drizzle: invalid gc floor '${floor}'`)
+      }
+      await options.db.transaction(async (tx) => {
+        await tx.execute(
+          sql.raw(
+            `insert into ${meta} (key, value) values ('gc_floor', ${target}) ` +
+              `on conflict (key) do update set value = greatest(${meta}.value, excluded.value)`,
+          ),
+        )
+        // the persisted floor may already be higher; prune to it, not to
+        // the argument, so gc never resurrects served history
+        const effective = await floorOf(tx)
+        for (const p of tables.values()) {
+          await tx
+            .delete(p.cfg.table)
+            .where(and(isNotNull(p.cfg.deletedAt), lte(p.cfg.rev, effective as never)))
+        }
+      })
+    },
   }
 }

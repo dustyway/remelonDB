@@ -28,9 +28,20 @@ names, the default mapping is identity and a table needs no mapper code.
 
 ```ts
 import { drizzle } from 'drizzle-orm/node-postgres'
+import { z } from 'zod'
+import { syncSchemas } from '@remelondb/core/zod'
 import { createSyncEngine } from '@remelondb/server'
 import { createDrizzleStore } from '@remelondb/store-drizzle'
 import { decks } from './schema'
+
+// one Zod object per table: the client derives its local schema from it
+// (zodTable), the server validates rows with it — see docs/zod-adapter.md
+const Deck = z.object({
+  name: z.string().min(1),
+  source_lang: z.string(),
+  target_lang: z.string(),
+})
+const wire = syncSchemas({ decks: Deck })
 
 const db = drizzle(process.env.DATABASE_URL!)
 
@@ -47,14 +58,24 @@ const store = createDrizzleStore<string>({
   },
 })
 
-const engine = createSyncEngine({ store, tables: { decks: {} } })
+const engine = createSyncEngine({
+  store,
+  tables: {
+    decks: { validate: (row) => wire.rows.decks.safeParse(row).success },
+  },
+})
 ```
 
-Revisions come from one Postgres sequence (`remelon_rev` by default); create it
-in a migration:
+With NestJS, [`@remelondb/nestjs`](../nestjs/README.md) does the engine and
+validation wiring — hand it the store and the Zod objects.
+
+Two bookkeeping objects belong in a migration: the revision sequence and the
+one-row meta table holding the gc floor (names configurable via `revSequence`
+and `metaTable`):
 
 ```sql
 CREATE SEQUENCE IF NOT EXISTS remelon_rev;
+CREATE TABLE IF NOT EXISTS remelon_sync_meta (key text PRIMARY KEY, value bigint NOT NULL);
 ```
 
 Pushes serialize per scope with `pg_advisory_xact_lock`, keyed by `lockKey`
@@ -69,7 +90,26 @@ the config-only path, and the friendlier one for scope queries — or omit
 (`changedSince`, `currentRevs`, `foreignIds`, `maxRev`) with the join; the
 store enforces this at construction.
 
-## Not yet
+## Erasure (GDPR) and GC
 
-`gcFloor()` is 0: every cursor is served and tombstones accumulate; pruning is
-a future GC feature.
+These are different jobs. **Erasure** comes from scrubbing: give a table
+`scrub` values (drizzle property keys) and they are applied in the same UPDATE
+that tombstones the row —
+
+```ts
+tables: {
+  cards: { /* columns */, scrub: { content: '{}' } },
+}
+```
+
+The wire never ships a tombstone's columns, so scrubbed content is immediately
+gone for every device; deletion still syncs as an id. Full account erasure
+needs no tombstones at all: hard-`DELETE` the scope's rows — a deleted account
+can never pull again, so nothing needs to learn about the absence.
+
+**GC** bounds storage. `store.gc(floor)` prunes tombstones with `rev <= floor`
+and persists the floor (never lowered); a cursor below the floor answers
+`resyncRequired` and the client rebuilds from a full pull. The caller picks the
+floor — retention policy stays the app's (for "keep 90 days", record the
+current max rev periodically and pass the one from 90 days ago). Until the
+first `gc` call the floor is 0 and every cursor is served.
