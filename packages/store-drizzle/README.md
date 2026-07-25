@@ -89,27 +89,3 @@ the config-only path, and the friendlier one for scope queries — or omit
 `scope` and supply `overrides` implementing the scoped queries
 (`changedSince`, `currentRevs`, `foreignIds`, `maxRev`) with the join; the
 store enforces this at construction.
-
-## Erasure (GDPR) and GC
-
-These are different jobs. **Erasure** comes from scrubbing: give a table
-`scrub` values (drizzle property keys) and they are applied in the same UPDATE
-that tombstones the row —
-
-```ts
-tables: {
-  cards: { /* columns */, scrub: { content: '{}' } },
-}
-```
-
-The wire never ships a tombstone's columns, so scrubbed content is immediately
-gone for every device; deletion still syncs as an id. Full account erasure
-needs no tombstones at all: hard-`DELETE` the scope's rows — a deleted account
-can never pull again, so nothing needs to learn about the absence.
-
-**GC** bounds storage. `store.gc(floor)` prunes tombstones with `rev <= floor`
-and persists the floor (never lowered); a cursor below the floor answers
-`resyncRequired` and the client rebuilds from a full pull. The caller picks the
-floor — retention policy stays the app's (for "keep 90 days", record the
-current max rev periodically and pass the one from 90 days ago). Until the
-first `gc` call the floor is 0 and every cursor is served.

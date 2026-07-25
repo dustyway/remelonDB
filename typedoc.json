@@ -25,5 +25,19 @@
     "Tutorial": "https://github.com/dustyway/remelonDB/blob/main/docs/tutorial.md",
     "Guides & design": "https://github.com/dustyway/remelonDB/blob/main/docs/README.md",
     "GitHub": "https://github.com/dustyway/remelonDB"
-  }
+  },
+  "highlightLanguages": [
+    "bash",
+    "css",
+    "html",
+    "javascript",
+    "json",
+    "jsonc",
+    "json5",
+    "tsx",
+    "typescript",
+    "yaml",
+    "sql",
+    "shellscript"
+  ]
 }

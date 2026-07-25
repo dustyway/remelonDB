@@ -139,6 +139,12 @@ packages/
                  store included, bring a store adapter for persistence;
                  the wire spec's checklist ships as a runnable suite at
                  '@remelondb/server/conformance' (docs/server-design.md)
+  store-drizzle/ @remelondb/store-drizzle — Postgres store adapter via
+                 drizzle-orm: config per table, conformance-proven,
+                 tombstone gc + scrub (see its README)
+  nestjs/        @remelondb/nestjs — sync endpoints for NestJS: the
+                 canonical HTTP binding over any SyncStore, validated
+                 by the shared Zod table schemas
 examples/
   todo-sync/     one example, one shared schema, three packages:
                  backend/ (schema + ~50-line sync server), frontend/

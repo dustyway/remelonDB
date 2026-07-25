@@ -8,5 +8,19 @@
     "Sync",
     "*",
     "Advanced"
+  ],
+  "highlightLanguages": [
+    "bash",
+    "css",
+    "html",
+    "javascript",
+    "json",
+    "jsonc",
+    "json5",
+    "tsx",
+    "typescript",
+    "yaml",
+    "sql",
+    "shellscript"
   ]
 }
