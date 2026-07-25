@@ -8,6 +8,11 @@ when two devices edit, and how to change it — read
 walkthrough, **[backend-tutorial](backend-tutorial.md)**: the same sync
 engine over Postgres, every code block executed by CI.
 
+Working *on* the library rather than with it? Start with
+**[architecture](architecture.md)**: the shape of the system, where each
+concern lives, and what happens end to end on a write, a read, and a sync.
+It is the trunk the documents below hang off.
+
 Two kinds of documents live here. **Design decisions** record *why* the
 project is shaped the way it is — written for people changing the
 library, and dense on purpose; using remelonDB never requires reading

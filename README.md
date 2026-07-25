@@ -175,6 +175,8 @@ side of the wire. Everything else ships as a core or server subpath
   language: who wins when two devices edit, and how to change it
 - **[docs/sync-tour.md](docs/sync-tour.md)** — the sync protocol in
   eight real requests and responses, replayed by CI on every push
+- **[docs/architecture.md](docs/architecture.md)** — working on the
+  library: how the layers fit, and a write, a read, and a sync end to end
 - **[docs/README.md](docs/README.md)** — index of all documentation
 - **[API reference](https://dustyway.github.io/remelonDB/)** — generated
   from the source on every push (all packages, grouped by task, with
