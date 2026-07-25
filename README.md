@@ -165,6 +165,8 @@ side of the wire. Everything else ships as a core or server subpath
 
 - **[docs/tutorial.md](docs/tutorial.md)** — start here: a flashcard
   app's data layer, end to end
+- **[docs/backend-tutorial.md](docs/backend-tutorial.md)** — the server
+  side: the same sync engine over Postgres, every block executed by CI
 - **[examples/todo-sync](examples/todo-sync)** — then see it whole: a
   complete synced todo app (shared schema, ~50-line backend, web
   client); its two-window offline sync demo is e2e-tested in CI
@@ -184,6 +186,7 @@ side of the wire. Everything else ships as a core or server subpath
   [models](docs/reference/models.md) ·
   [queries](docs/reference/queries.md) ·
   [sync](docs/reference/sync.md) ·
+  [building a backend](docs/reference/backend.md) ·
   [schema & migrations](docs/reference/schema.md) ·
   [records](docs/reference/records.md) ·
   [the driver contract](docs/reference/driver.md)
