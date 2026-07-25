@@ -1,0 +1,64 @@
+{
+  "name": "@remelondb/nestjs",
+  "version": "0.0.8",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@remelondb/core": "workspace:*",
+    "@remelondb/server": "workspace:*"
+  },
+  "peerDependencies": {
+    "@nestjs/common": ">=10",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@nestjs/common": "^11.1.6",
+    "@nestjs/core": "^11.1.6",
+    "@nestjs/platform-express": "^11.1.6",
+    "@nestjs/testing": "^11.1.6",
+    "@types/node": "^24.0.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "vitest": "^3.2.7",
+    "zod": "^4.4.3"
+  },
+  "license": "MIT",
+  "description": "remelonDB sync endpoints for NestJS: the wire protocol's canonical HTTP binding over any SyncStore, validated by the shared Zod table schemas",
+  "keywords": [
+    "remelondb",
+    "watermelondb",
+    "nestjs",
+    "sync",
+    "offline-first",
+    "server"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dustyway/remelonDB.git",
+    "directory": "packages/nestjs"
+  },
+  "homepage": "https://github.com/dustyway/remelonDB#readme",
+  "bugs": "https://github.com/dustyway/remelonDB/issues",
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsdown",
+    "prepack": "tsdown"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "import": "./dist/index.mjs",
+        "default": "./dist/index.mjs"
+      }
+    },
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "src",
+    "!src/**/*.test.ts"
+  ]
+}
