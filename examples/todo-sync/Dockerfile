@@ -10,14 +10,15 @@ RUN pnpm install --frozen-lockfile --filter "example-todo-sync..." --filter "exa
 RUN pnpm --filter "@remelondb/core" --filter "@remelondb/driver-web" --filter "@remelondb/server" --filter "@remelondb/store-drizzle" run build
 RUN pnpm --filter example-todo-sync-web run build
 
-# The runtime keeps only the backend graph — prod deps, package sources
-# run via tsx — plus the built web client. No frontend toolchain, no
-# devDependencies, no playwright.
+RUN pnpm --config.node-linker=hoisted --filter example-todo-sync deploy --legacy --prod /deployed
+
+# The runtime is a pnpm-deployed bundle: only the backend package and
+# its prod graph (workspace deps copied in, hoisted so peers resolve),
+# plus the built web client. No pnpm, no toolchain, no devDependencies.
 FROM node:24-slim
-RUN npm install -g pnpm@11
 WORKDIR /app
-COPY . .
-RUN pnpm install --frozen-lockfile --prod --filter "example-todo-sync..."
-COPY --from=build /app/examples/todo-sync/frontend/dist ./examples/todo-sync/frontend/dist
+COPY --from=build /deployed .
+COPY --from=build /app/examples/todo-sync/frontend/dist ./frontend-dist
+ENV DIST=/app/frontend-dist
 EXPOSE 8787
-CMD ["pnpm", "--filter", "example-todo-sync", "serve"]
+CMD ["node_modules/.bin/tsx", "serve.ts"]
