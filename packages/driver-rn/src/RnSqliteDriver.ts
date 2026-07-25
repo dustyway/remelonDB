@@ -10,9 +10,9 @@ import * as SQLite from 'expo-sqlite'
  * SqliteDriver over expo-sqlite: a thin adapter mapping the seam's seven
  * methods onto its async API. expo-sqlite owns the native SQLite build —
  * and ships inside Expo Go, so apps using this driver need no custom
- * native build. The previous in-repo C++ TurboModule is parked
- * (docs/parked.md, tag `parked/driver-rn-cpp`) and revivable behind the
- * same interface.
+ * native build. `@remelondb/driver-rn-cpp` implements the same seam as a
+ * C++ TurboModule with a bundled SQLite, for apps that want no expo
+ * dependency; same class name, so switching is one import change.
  *
  * `name` is ':memory:' or a database filename managed by expo-sqlite.
  *
