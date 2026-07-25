@@ -47,6 +47,13 @@ null scope answers 401 before any protocol work.
 `crossValidate` passes through to the engine for cross-record rules (a card
 must reference a deck pushed alongside it or already owned).
 
+The module serves pull and push; it does not notify. Clients decide when to
+sync, and for most apps the arrival triggers are enough. If you need changes
+to land in an already-open session, add an `@Sse` route of your own that
+publishes to a scope after a push returns without a conflict —
+[when to sync](https://github.com/dustyway/remelonDB/blob/main/docs/sync-triggering.md)
+covers the design and when it is worth it.
+
 ## Conformance
 
 The package's test suite runs the full backend conformance checklist through

@@ -80,6 +80,14 @@ const driver = new WebSqliteDriver({
 Only one tab is active at a time, but the handoff is explicit and
 nothing can race.
 
+The same rule rules out background sync on the web. A service worker
+woken by Web Push cannot open the database to sync: it either fails
+because a tab holds it, or takes it over and terminates that tab's
+worker. So Web Push can tell the user something changed; the data
+lands when the tab is next opened or focused. The Background Sync API
+is blocked for the same reason. Mobile has no such restriction — see
+[when to sync](https://github.com/dustyway/remelonDB/blob/main/docs/sync-triggering.md).
+
 For apps that need every tab live simultaneously, route every tab
 through one connection. Two patterns, in order of preference:
 

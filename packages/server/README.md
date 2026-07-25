@@ -35,6 +35,14 @@ Prove an adapter with the `@remelondb/server/conformance` suite: run it
 against `engine.as(...)` over your store — this package's own test does
 exactly that with the memory store.
 
+The engine answers requests; it never initiates. If clients should learn
+about changes without asking, publish a signal from your route handler
+after a push returns without a conflict, and let the client respond by
+calling `synchronize`. The signal carries no data — the cursor stays the
+only path — and it is worth building only when changes arrive faster than
+sessions do:
+[when to sync](https://github.com/dustyway/remelonDB/blob/main/docs/sync-triggering.md).
+
 ## License
 
 [MIT](https://github.com/dustyway/remelonDB/blob/main/LICENSE)

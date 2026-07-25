@@ -154,6 +154,13 @@ The gaps are as deliberate as the coverage; each has a better home:
   no-auth design does not reach.
 - **Custom conflict resolution.** `synchronize()` accepts a
   `conflictResolver`; the example uses the default.
+- **A realistic sync trigger.** The app syncs every two seconds so two
+  windows converge while you watch. That is demo pacing, not a
+  recommendation — a real app syncs on app start, on foreground, on
+  `online`, and after each local write, and adds a server signal only
+  when changes arrive faster than sessions do.
+  [docs/sync-triggering.md](../../docs/sync-triggering.md) has the
+  decision and the tradeoffs.
 - **Rejection handling in the UI.** The server validates every pushed
   row at the door, but the app never sends an invalid row, so nothing
   in the UI reacts to a rejection. `backend/requests.http` and
@@ -215,3 +222,8 @@ npm install @remelondb/core @remelondb/driver-web @remelondb/server zod
 The published packages ship compiled JavaScript with type
 declarations, so no TypeScript-aware runner is needed beyond your
 normal build.
+
+One thing not to copy verbatim: the two-second sync interval in
+`App.tsx`. Replace it with the arrival triggers described in
+[docs/sync-triggering.md](../../docs/sync-triggering.md) — on a phone,
+a two-second poll keeps the radio awake continuously.

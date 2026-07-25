@@ -70,6 +70,11 @@ const unsubscribe = db
 await synchronize({ database: db, pullChanges, pushChanges }) // your backend
 ```
 
+Nothing schedules that call: the library has no timer and holds no
+connection. Sync on app start, on foreground, on `online`, and after
+local writes — see
+[when to sync](https://github.com/dustyway/remelonDB/blob/main/docs/sync-triggering.md).
+
 ## Documentation
 
 - [Tutorial](https://github.com/dustyway/remelonDB/blob/main/docs/tutorial.md):
@@ -79,6 +84,7 @@ await synchronize({ database: db, pullChanges, pushChanges }) // your backend
   [models](https://github.com/dustyway/remelonDB/blob/main/docs/reference/models.md) ·
   [queries](https://github.com/dustyway/remelonDB/blob/main/docs/reference/queries.md) ·
   [sync](https://github.com/dustyway/remelonDB/blob/main/docs/reference/sync.md) ·
+  [when to sync](https://github.com/dustyway/remelonDB/blob/main/docs/sync-triggering.md) ·
   [schema & migrations](https://github.com/dustyway/remelonDB/blob/main/docs/reference/schema.md) ·
   [records](https://github.com/dustyway/remelonDB/blob/main/docs/reference/records.md) ·
   [the driver contract](https://github.com/dustyway/remelonDB/blob/main/docs/reference/driver.md)
