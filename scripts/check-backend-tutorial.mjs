@@ -1,12 +1,13 @@
 // Executable check for docs/backend-tutorial.md: extracts the ```js
 // blocks at runtime and executes them, in order, against the built
 // workspace packages — the markdown is the single source. Blocks fenced
-// ```js fragment (the node-postgres swap, the NestJS mounting) are
-// illustrative and skipped; the store, engine, and sync round trip run
-// for real against in-process Postgres (pglite).
+// ```js fragment (the NestJS mounting) are illustrative and skipped;
+// the store, engine, and sync round trip run for real against Postgres:
+// DATABASE_URL if set (CI provides a service container), otherwise the
+// tutorial's own docker fallback on localhost:5433.
 //
-// The assembled module lives inside packages/store-drizzle so pglite
-// and drizzle-orm resolve from that package's dependencies; the mapped
+// The assembled module lives inside packages/store-drizzle so pg and
+// drizzle-orm resolve from that package's dependencies; the mapped
 // @remelondb/* specifiers resolve to built dist files.
 //
 // Run: pnpm build && node scripts/check-backend-tutorial.mjs
@@ -103,7 +104,7 @@ assert(pushed.cursor === '1', 'push cursor: ' + pushed.cursor)
 const seen = secondDevice.changes.tasks.updated.map((row) => row.id)
 assert(seen.length === 1 && seen[0] === 'task-1', 'second device saw: ' + seen)
 assert(afterDelete.changes.tasks.deleted.includes('task-1'), 'tombstone not delivered')
-const raw = await client.query("select deleted_at, rev from tasks where id = 'task-1'")
+const raw = await pool.query("select deleted_at, rev from tasks where id = 'task-1'")
 assert(raw.rows[0].deleted_at !== null, 'row not tombstoned in postgres')
 assert(Number(raw.rows[0].rev) > 1, 'tombstone rev not bumped')
 const graceRows = [
@@ -112,6 +113,7 @@ const graceRows = [
   ...(grace.changes.tasks?.deleted ?? []),
 ]
 assert(graceRows.length === 0, 'scope leaked: ' + graceRows.length)
+await pool.end()
 globalThis.__backendTutorialPassed = { blocks: ${blocks.length} }
 `
 

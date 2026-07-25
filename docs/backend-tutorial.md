@@ -3,9 +3,8 @@
 The [tutorial](tutorial.md) ends with a client syncing against the
 in-memory reference store. This walkthrough builds the real thing: the
 same sync engine over Postgres, ready to mount in a server. Everything
-here runs as written — CI executes these blocks — using in-process
-Postgres ([pglite](https://pglite.dev)), so there is nothing to install
-or start; production swaps one import and a connection string.
+here runs as written — CI executes these blocks against a real
+Postgres — and one docker command gives you the same locally.
 
 The layers, bottom to top: a Postgres **store**
 (`@remelondb/store-drizzle`), the protocol **engine**
@@ -15,6 +14,7 @@ to this walkthrough.
 
 ```sh
 pnpm add @remelondb/server @remelondb/store-drizzle drizzle-orm pg zod
+docker run -d -p 5433:5432 -e POSTGRES_PASSWORD=pg postgres:18-alpine
 ```
 
 ## The shared schema
@@ -37,15 +37,23 @@ A synced table is the Zod object's keys as columns — names matching, so
 no mapping code — plus four machinery columns: a client-minted `text` id
 (never a server default), a `bigint` revision, a nullable `deleted_at`
 tombstone marker, and an owner column carrying the sync scope. Two
-bookkeeping objects ride along in the same migration:
+bookkeeping objects ride along in the same migration. The connection
+string comes from the environment in production; the fallback matches
+the docker command above, and the drops make the walkthrough rerunnable:
 
 ```js
-import { PGlite } from '@electric-sql/pglite'
-import { drizzle } from 'drizzle-orm/pglite'
+import { drizzle } from 'drizzle-orm/node-postgres'
 import { bigint, boolean, pgTable, text, timestamp } from 'drizzle-orm/pg-core'
+import { Pool } from 'pg'
 
-const client = new PGlite() // in-process Postgres, only for this tutorial
-await client.exec(`
+const pool = new Pool({
+  connectionString:
+    process.env.DATABASE_URL ?? 'postgres://postgres:pg@localhost:5433/postgres',
+})
+await pool.query(`
+  drop table if exists tasks;
+  drop table if exists remelon_sync_meta;
+  drop sequence if exists remelon_rev;
   create sequence remelon_rev;
   create table remelon_sync_meta (key text primary key, value bigint not null);
   create table tasks (
@@ -58,7 +66,7 @@ await client.exec(`
   );
   create index tasks_owner_rev_idx on tasks (owner, rev);
 `)
-const db = drizzle(client)
+const db = drizzle(pool)
 
 const tasks = pgTable('tasks', {
   id: text('id').primaryKey(),
@@ -68,15 +76,6 @@ const tasks = pgTable('tasks', {
   name: text('name').notNull(),
   done: boolean('done').notNull(),
 })
-```
-
-In production the database is a real server:
-
-```js fragment
-import { drizzle } from 'drizzle-orm/node-postgres'
-import { Pool } from 'pg'
-
-const db = drizzle(new Pool({ connectionString: process.env.DATABASE_URL }))
 ```
 
 ## The store

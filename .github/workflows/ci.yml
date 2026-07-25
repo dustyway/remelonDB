@@ -100,6 +100,19 @@ jobs:
     needs: changes
     if: needs.changes.outputs.packages == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    # the backend tutorial's blocks run against real Postgres
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -116,6 +129,8 @@ jobs:
       - run: pnpm check:tutorial
       - run: pnpm check:readme
       - run: pnpm check:backend-tutorial
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
       - name: Pack and consume from plain Node
         run: |
           mkdir -p /tmp/tarballs /tmp/consume
