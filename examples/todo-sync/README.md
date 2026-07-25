@@ -23,6 +23,10 @@ What it demonstrates:
   background, deletes travelling as tombstones.
 - Offline work. Cut the connection and keep going; changes push when it
   returns.
+- A swappable server store. The backend runs in memory by default and
+  on Postgres when `DATABASE_URL` is set (`backend/store.ts`, via
+  `@remelondb/store-drizzle`) — same engine, same wire, same clients;
+  only persistence changes.
 - Conflicts, visibly. Concurrent changes to different fields of one
   todo merge field by field; a same-field race resolves through
   pull-and-retry, and both UIs surface a brief note while it happens.
@@ -167,11 +171,13 @@ docker run -p 8787:8787 todo-sync
 ```
 
 `backend/serve.ts` serves the built web client and the sync routes
-from one process; put any TLS-terminating reverse proxy in front. The
-memory store means one shared world-writable list that resets on
-restart — acceptable for a demo, nothing more. For a device build of
-the mobile app, set `EXPO_PUBLIC_SYNC_URL` (a `.env.local` in
-`mobile/` works) to point it at the deployed server.
+from one process; put any TLS-terminating reverse proxy in front.
+Without a `DATABASE_URL` the memory store means one shared
+world-writable list that resets on restart — acceptable for a demo,
+nothing more. Pass the container a `DATABASE_URL` and the list persists
+in Postgres instead. For a device build of the mobile app, set
+`EXPO_PUBLIC_SYNC_URL` (a `.env.local` in `mobile/` works) to point it
+at the deployed server.
 
 ## Copying this into your own project
 
