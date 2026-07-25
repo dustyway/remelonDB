@@ -17,6 +17,22 @@ export interface SyncHandlers {
   push(args: SyncPushArgs): Promise<SyncPushResult>
 }
 
+/**
+ * A request the engine cannot express in a protocol reply (sync-wire.md
+ * treats it as malformed). Transports match on the class instead of the
+ * message and answer 400.
+ * @category Engine
+ */
+export class SyncProtocolError extends Error {
+  constructor(
+    readonly code: 'unusable-id',
+    message: string,
+  ) {
+    super(message)
+    this.name = 'SyncProtocolError'
+  }
+}
+
 export interface TableConfig {
   /** Per-record validation; false lands the id in `rejected`. */
   readonly validate?: (row: WireRow) => boolean
@@ -130,7 +146,7 @@ export function createSyncEngine<Scope>(
         ]) {
           const id = raw['id']
           if (typeof id !== 'string' || id.length === 0) {
-            throw new Error('sync push: record without a usable id')
+            throw new SyncProtocolError('unusable-id', 'sync push: record without a usable id')
           }
           const row = raw as WireRow
           if (options.tables[table]?.validate?.(row) === false) {
