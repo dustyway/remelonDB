@@ -25,8 +25,9 @@ rebuilds everything on two principles:
 1. **A query is data, not code.** `Q.where('likes', Q.gt(10))` builds a
    serializable description; one pure function compiles it to parameterized
    SQL. See [docs/q-dsl-and-one-engine.md](docs/q-dsl-and-one-engine.md).
-2. **One engine: SQLite everywhere.** Native (bundled sqlite3 via a C++
-   TurboModule), web (SQLite-WASM + OPFS in a Worker), Node (better-sqlite3).
+2. **One engine: SQLite everywhere.** Native (expo-sqlite, or a C++
+   TurboModule with bundled sqlite3), web (SQLite-WASM + OPFS in a
+   Worker), Node (better-sqlite3).
    Query semantics are inherited from SQLite rather than re-implemented per
    platform — observation re-queries SQLite too, so there is no second
    engine anywhere.
@@ -45,8 +46,8 @@ migrations, database core, model layer, and the
 conformance suite on all four platforms: Node (better-sqlite3),
 [web](packages/driver-web/README.md) (Chromium, Firefox, WebKit, and
 real Safari over OPFS), and
-[Android and iOS](packages/driver-rn/README.md) (on-device, same 50/50
-suite as Node, plus a real reload-teardown cycle on iOS). A production
+[Android and iOS](packages/driver-rn-cpp/README.md) (on-device, same
+50/50 suite as Node, plus a real reload-teardown cycle on iOS). A production
 `vite build` smoke test covers the packed-tarball consumer path
 end-to-end; every package README checklist is fully ticked.
 
@@ -224,5 +225,5 @@ an executable invariant.
 reactive observation, the offline-first sync protocol) to
 [WatermelonDB](https://github.com/Nozbe/WatermelonDB) by Nozbe and
 contributors (MIT); the code here is written from scratch. Generated
-codegen files under `packages/driver-rn/android/generated/` retain
+codegen files under `packages/driver-rn-cpp/android/generated/` retain
 their Meta MIT headers.
