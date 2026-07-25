@@ -54,6 +54,21 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    # store-drizzle's pull-race test needs real multi-connection
+    # Postgres (pglite is single-connection); without REMELON_TEST_PG
+    # it reports as skipped.
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -65,6 +80,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
+        env:
+          REMELON_TEST_PG: postgres://postgres:postgres@localhost:5432/postgres
       - run: pnpm typecheck
       # docs/sync-tour.md replayed against the example server — the
       # tour's captured responses cannot drift from behavior
