@@ -19,7 +19,7 @@
     "zod": "^4.4.3"
   },
   "license": "MIT",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "pnpm": {
     "peerDependencyRules": {
       "allowedVersions": {
