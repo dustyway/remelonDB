@@ -47,7 +47,13 @@ export interface RemelonSyncAsyncOptions<Scope> {
   ) => RemelonSyncOptions<Scope> | Promise<RemelonSyncOptions<Scope>>
 }
 
-interface SyncRuntime {
+/**
+ * What the module provides under {@link REMELON_SYNC}: the prepared
+ * engine + validation behind the controller. Injectable by apps that
+ * want the runtime without the bundled controller.
+ * @category Transport
+ */
+export interface SyncRuntime {
   scopeFrom(request: unknown): unknown
   pull(scope: unknown, body: unknown): Promise<SyncPullResult>
   push(scope: unknown, body: unknown): Promise<SyncPushResult>
