@@ -10,6 +10,42 @@ This guide covers what those moments are. For what `synchronize` does once
 called, see [reference/sync.md](reference/sync.md); for how the protocol
 behaves, [sync-basics.md](sync-basics.md).
 
+## Choosing a strategy
+
+One number decides most of it: **how many changes arrive per user session.**
+Estimate how often data changes elsewhere, and how often this user opens the
+app.
+
+**Below one change per session** — a personal app whose data changes a few
+times a day, opened more often than that. Sync on arrival and stop: app
+start, foreground, `online`, after each local write. No interval, no
+connection, no server signal. The single daily change is already on screen
+by the time the user has finished looking, because they triggered a sync by
+arriving.
+
+**Above one change per session** — shared lists, several active devices,
+anything where data moves while someone is watching. The arrival triggers
+still apply, and now a [server signal](#server-triggered-sync) earns its
+keep, because changes need to land in a session that is already open.
+
+The overhead of getting this wrong in the live direction is large. A
+20-second heartbeat is 4,320 pings per client per day; if it delivers one
+signal, that is three orders of magnitude of waste, and on mobile every ping
+wakes the radio. The overhead of getting it wrong the other way is a change
+that waits until the user next opens the app, which for infrequent data is
+usually invisible.
+
+Three cases override the count:
+
+- **A screen that must stay live while unattended** — a dashboard, a display
+  board. Signal channel regardless of change rate.
+- **Data needed before the app is opened**, for a notification badge or an
+  offline-ready cache. That is background delivery, not a signal channel:
+  push through the OS on mobile, and not possible on web (see below).
+- **Demos.** `examples/todo-sync` polls every two seconds so two windows
+  visibly converge while someone watches. Right for a demo, wrong for an
+  app.
+
 ## The trigger set
 
 Five moments, which between them cover most applications:
@@ -42,10 +78,10 @@ while one is running joins it — so overlapping triggers need no guarding.
 
 ## Polling
 
-`examples/todo-sync` polls every two seconds. That is demo pacing, so two
-browser windows visibly converge while someone watches, and it is not a
-recommendation: a two-second poll keeps a mobile device's radio awake
-continuously.
+An interval is rarely the right primary mechanism: it is strictly worse
+than the arrival triggers for infrequent data, and strictly worse than a
+signal for frequent data. Where it does belong is as a backstop, covered at
+the end of this guide.
 
 If you do poll, measure the interval in minutes rather than seconds, pause
 it while the app is backgrounded or the tab is hidden, and back off while
