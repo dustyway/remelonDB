@@ -1,7 +1,7 @@
 # Driver contract reference
 
 The `SqliteDriver` interface is the project's portability seam
-([architecture-layers.md](../architecture-layers.md)): a deliberately dumb
+([layers.md](../layers.md)): a deliberately dumb
 SQL executor. A driver knows nothing about queries, records, schemas,
 tombstones, or sync — all of that is core code emitting SQL. Implementing a
 new platform means implementing these seven methods and passing the

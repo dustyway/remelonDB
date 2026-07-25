@@ -2,7 +2,7 @@
  * String key-value storage over the core-owned `local_storage` table
  * (created by encodeSchema). Used by sync for its cursor, available to
  * apps for small metadata. A core feature over plain SQL — not a driver
- * method (docs/architecture-layers.md, decision 2).
+ * method (docs/layers.md, decision 2).
  */
 import type { SqliteDriver } from '../driver/SqliteDriver'
 

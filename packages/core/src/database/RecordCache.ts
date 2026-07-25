@@ -1,5 +1,5 @@
 /**
- * The identity map (docs/architecture-layers.md, decision 1): one RawRecord
+ * The identity map (docs/layers.md, decision 1): one RawRecord
  * instance per record id, owned entirely by JS. Drivers always return full
  * rows; this cache decides whether an existing instance is reused — there is
  * no cross-boundary cache state to desync.

@@ -2,7 +2,7 @@
  * The Database: owns the driver, the collections, the writer queue, and
  * the change-notification bus.
  *
- * The batch failure contract (docs/architecture-layers.md, decision 7):
+ * The batch failure contract (docs/layers.md, decision 7):
  * driver.executeBatch is atomic; cache changes and notifications are
  * applied only after it resolves. On rejection, in-memory state is
  * untouched and the error propagates to the writer block.

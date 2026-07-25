@@ -2,7 +2,7 @@
 
 Condensed findings from a full read of upstream's adapter stack, query layer,
 core ORM/reactivity, and sync. This is the factual basis for
-`architecture-layers.md`. Paths are relative to `watermelondb-upstream/`.
+`layers.md`. Paths are relative to `watermelondb-upstream/`.
 
 ## How upstream is layered
 

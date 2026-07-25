@@ -4,7 +4,7 @@
  * from a description is ever inlined into SQL text except identifiers,
  * which the Q builders have already validated against a strict pattern.
  *
- * Semantics notes (see docs/architecture-layers.md):
+ * Semantics notes (see docs/layers.md):
  * - Equality uses SQLite `IS` / `IS NOT`, so eq(null) works and
  *   notEq(x) matches rows where the column is null.
  * - Joins are always LEFT JOIN (no upstream inner-join compat hack);

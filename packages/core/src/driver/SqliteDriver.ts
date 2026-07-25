@@ -1,5 +1,5 @@
 /**
- * The portability seam (see docs/architecture-layers.md).
+ * The portability seam (see docs/layers.md).
  *
  * A driver is a dumb SQL executor: it knows nothing about queries, records,
  * schemas, tombstones, or sync. Everything above this interface is written

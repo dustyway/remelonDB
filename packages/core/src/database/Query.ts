@@ -1,6 +1,6 @@
 /**
  * A Query pairs a Collection with a QueryDescription and offers fetch and
- * one observation strategy (docs/architecture-layers.md, decision 6):
+ * one observation strategy (docs/layers.md, decision 6):
  * re-fetch when any of the query's tables change, emit when the result
  * list actually differs — by membership, order, or the content of visible
  * columns. Identity alone can't detect content edits (the cache mutates

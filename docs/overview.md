@@ -100,7 +100,7 @@ without risk.
 
 Steps 4 through 6 are ordered so a failure at 4 leaves 5 and 6 unreached.
 That ordering is the batch failure contract, decision 7 in
-[architecture-layers.md](architecture-layers.md).
+[layers.md](layers.md).
 
 ## Life of an observed read
 
@@ -181,7 +181,7 @@ New to the codebase, in this order:
 1. This document.
 2. [tutorial.md](tutorial.md) — the API surface from the outside.
 3. [q-dsl-and-one-engine.md](q-dsl-and-one-engine.md) and
-   [architecture-layers.md](architecture-layers.md) — the two decisions
+   [layers.md](layers.md) — the two decisions
    everything else follows from.
 4. The reference guide for whichever layer you are changing.
 5. [sync-design.md](sync-design.md) before touching anything sync.

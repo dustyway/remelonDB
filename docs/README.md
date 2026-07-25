@@ -9,9 +9,9 @@ walkthrough, **[backend-tutorial](backend-tutorial.md)**: the same sync
 engine over Postgres, every code block executed by CI.
 
 Working *on* the library rather than with it? Start with
-**[architecture](architecture.md)**: the shape of the system, where each
-concern lives, and what happens end to end on a write, a read, and a sync.
-It is the trunk the documents below hang off.
+**[overview](overview.md)**: the shape of the system, where each concern
+lives, and what happens end to end on a write, a read, and a sync. It is
+the trunk the documents below hang off.
 
 Two kinds of documents live here. **Design decisions** record *why* the
 project is shaped the way it is — written for people changing the
@@ -19,12 +19,18 @@ library, and dense on purpose; using remelonDB never requires reading
 them. **Reference guides** describe *what exists and how to use it*;
 they track the code and are updated with it.
 
+## Orientation
+
+| Doc | Covers |
+| --- | --- |
+| [overview.md](overview.md) | How the layers fit, where each concern lives, and a write, a read, and a sync traced end to end. The entry point for working on the library. |
+
 ## Design decisions
 
 | Doc | Decision |
 | --- | --- |
 | [q-dsl-and-one-engine.md](q-dsl-and-one-engine.md) | Queries are serializable data; SQLite is the single query engine on every platform, without exception — observers re-query rather than re-match in JS. |
-| [architecture-layers.md](architecture-layers.md) | The portability seam is a ~7-method `SqliteDriver` (dumb SQL executor), not an ORM-flavored adapter. Async at the seam. Record caching owned by JS only. Tombstones/local storage are core features, not driver methods. RN driver is a C++ TurboModule. |
+| [layers.md](layers.md) | The portability seam is a ~7-method `SqliteDriver` (dumb SQL executor), not an ORM-flavored adapter. Async at the seam. Record caching owned by JS only. Tombstones/local storage are core features, not driver methods. Two RN drivers (expo-sqlite by default, a C++ TurboModule as the alternative). |
 | [sync-design.md](sync-design.md) | Generic reimplementation of WatermelonDB's sync protocol with two contract-level fixes: an opaque commit-ordered cursor (kills the lost-write race) and push-responds-like-a-pull (kills the push echo). |
 | [sync-basics.md](sync-basics.md) | Plain-language guide to the protocol's behavior: pull-then-push, per-column merge, why wall-clock time never decides a winner, and `conflictResolver` recipes for when last-pusher-wins is the wrong policy (stale offline edits). |
 | [sync-wire.md](sync-wire.md) | The normative wire contract: exact JSON shapes, backend obligations as testable MUSTs, client guarantees, canonical HTTP binding, and a conformance checklist for server implementations. |

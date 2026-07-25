@@ -36,7 +36,7 @@ The portability seam is a dumb, ~7-method **`SqliteDriver`**
 (execute SQL, atomically batch, report `user_version`). Everything above it
 (query compiler, schema DDL, record sanitization, observation, sync) is
 written once in TypeScript and identical on every platform. See
-[docs/architecture-layers.md](docs/architecture-layers.md).
+[docs/layers.md](docs/layers.md).
 
 ## Status
 
@@ -175,14 +175,14 @@ side of the wire. Everything else ships as a core or server subpath
   language: who wins when two devices edit, and how to change it
 - **[docs/sync-tour.md](docs/sync-tour.md)** — the sync protocol in
   eight real requests and responses, replayed by CI on every push
-- **[docs/architecture.md](docs/architecture.md)** — working on the
-  library: how the layers fit, and a write, a read, and a sync end to end
+- **[docs/overview.md](docs/overview.md)** — working on the library: how
+  the layers fit, and a write, a read, and a sync end to end
 - **[docs/README.md](docs/README.md)** — index of all documentation
 - **[API reference](https://dustyway.github.io/remelonDB/)** — generated
   from the source on every push (all packages, grouped by task, with
   examples)
 - Design decisions: [engine choice](docs/q-dsl-and-one-engine.md) ·
-  [architecture layers](docs/architecture-layers.md) ·
+  [layers](docs/layers.md) ·
   [sync protocol](docs/sync-design.md) ·
   [upstream study](docs/upstream-study.md)
 - Reference: [database & observation](docs/reference/database.md) ·

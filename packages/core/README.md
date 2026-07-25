@@ -83,7 +83,7 @@ await synchronize({ database: db, pullChanges, pushChanges }) // your backend
   [records](https://github.com/dustyway/remelonDB/blob/main/docs/reference/records.md) ·
   [the driver contract](https://github.com/dustyway/remelonDB/blob/main/docs/reference/driver.md)
 - Design:
-  [architecture layers](https://github.com/dustyway/remelonDB/blob/main/docs/architecture-layers.md) ·
+  [layers](https://github.com/dustyway/remelonDB/blob/main/docs/layers.md) ·
   [queries as data, one engine](https://github.com/dustyway/remelonDB/blob/main/docs/q-dsl-and-one-engine.md) ·
   [sync protocol](https://github.com/dustyway/remelonDB/blob/main/docs/sync-design.md)
 

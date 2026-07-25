@@ -1,5 +1,5 @@
 /**
- * Codegen spec for the pure C++ TurboModule (docs/architecture-layers.md
+ * Codegen spec for the pure C++ TurboModule (docs/layers.md
  * §4): bridgeless-compatible by construction, no manual global.* installs.
  *
  * All methods are synchronous — SQLite runs in-process on the JS thread
