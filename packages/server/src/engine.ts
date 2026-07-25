@@ -112,20 +112,28 @@ export function createSyncEngine<Scope>(
 
   const as = (scope: Scope): SyncHandlers => ({
     pull: async (args) => {
-      const since = args.cursor === null ? 0 : decodeCursor(args.cursor)
+      const full = args.cursor === null
+      const decoded = args.cursor === null ? 0 : decodeCursor(args.cursor)
       return options.store.transaction(scope, 'pull', async (tx) => {
         const floor = await tx.gcFloor()
-        const max = await tx.maxRev(scope)
-        if (since === null || since < floor || since > max) {
+        // pruning can drop a scope's live max below the floor (the
+        // tombstone held it) and a quiet scope's max may never reach a
+        // global floor; served history extends to the floor, so cursors
+        // live in [floor, effMax] and issued cursors never fall below it
+        const effMax = Math.max(await tx.maxRev(scope), floor)
+        // a full pull is always complete: a snapshot carries no
+        // deletions, so pruned tombstones cannot be missing from it
+        if (decoded === null || (!full && (decoded < floor || decoded > effMax))) {
           return { resyncRequired: true } // unknown or expired cursor
         }
+        const since = decoded
         const effectiveSince = args.migration !== null ? 0 : since
         return {
           changes: toChanges(
             await collectSince(tx, scope, effectiveSince),
             new Set(),
           ),
-          cursor: String(Math.max(since, max)),
+          cursor: String(Math.max(since, effMax)),
         }
       })
     },
@@ -229,7 +237,8 @@ export function createSyncEngine<Scope>(
             .concat(Object.values(rejected).flat()),
         )
         return {
-          cursor: String(await tx.maxRev(scope)),
+          // never issue a cursor below the floor (same rule as pull)
+          cursor: String(Math.max(await tx.maxRev(scope), floor)),
           changes: toChanges(
             await collectSince(tx, scope, since),
             requestIds,
