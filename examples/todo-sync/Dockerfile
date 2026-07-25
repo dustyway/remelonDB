@@ -7,7 +7,7 @@ WORKDIR /app
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 COPY . .
 RUN pnpm install --frozen-lockfile --filter "example-todo-sync..." --filter "example-todo-sync-web..."
-RUN pnpm --filter "@remelondb/core" --filter "@remelondb/driver-web" --filter "@remelondb/server" run build
+RUN pnpm --filter "@remelondb/core" --filter "@remelondb/driver-web" --filter "@remelondb/server" --filter "@remelondb/store-drizzle" run build
 RUN pnpm --filter example-todo-sync-web run build
 EXPOSE 8787
 CMD ["pnpm", "--filter", "example-todo-sync", "serve"]

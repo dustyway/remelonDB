@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage } from 'node:http'
-import { createMemoryStore, createSyncEngine } from '@remelondb/server'
+import { createSyncEngine } from '@remelondb/server'
 import { wire } from './schema'
+import { createStore } from './store'
 
 // The entire backend. The sync engine owns every protocol semantic
 // (cursors, conflicts, rejection, the interleave); the store keeps rows
@@ -10,7 +11,7 @@ import { wire } from './schema'
 // this demo has no accounts, every browser shares the list.
 
 const engine = createSyncEngine({
-  store: createMemoryStore(),
+  store: await createStore(),
   tables: {
     todos: { validate: (row) => wire.rows['todos']!.safeParse(row).success },
   },

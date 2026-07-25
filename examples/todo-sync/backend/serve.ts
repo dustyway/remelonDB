@@ -2,8 +2,9 @@ import { createServer, type IncomingMessage } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { extname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createMemoryStore, createSyncEngine } from '@remelondb/server'
+import { createSyncEngine } from '@remelondb/server'
 import { wire } from './schema'
+import { createStore } from './store'
 
 // Deployment entry: the same two sync routes as server.ts plus static
 // serving of the built web client, one process on one port. server.ts
@@ -14,7 +15,7 @@ const dist =
 const port = Number(process.env['PORT'] ?? 8787)
 
 const engine = createSyncEngine({
-  store: createMemoryStore(),
+  store: await createStore(),
   tables: {
     todos: { validate: (row) => wire.rows['todos']!.safeParse(row).success },
   },

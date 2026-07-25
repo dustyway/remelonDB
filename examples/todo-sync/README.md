@@ -37,6 +37,16 @@ pnpm --filter example-todo-sync server     # terminal 1: sync server on :8787
 pnpm --filter example-todo-sync-web dev    # terminal 2: web client on :5173
 ```
 
+The server keeps todos in memory (a restart empties the list). Point it
+at Postgres and they persist — the same Zod object's keys become the
+table's columns, stored via `@remelondb/store-drizzle`:
+
+```sh
+docker run -d -p 5433:5432 -e POSTGRES_PASSWORD=pg postgres:18-alpine
+DATABASE_URL=postgres://postgres:pg@localhost:5433/postgres \
+  pnpm --filter example-todo-sync server
+```
+
 For the mobile client (a development build, not Expo Go — the SQLite
 driver is native code):
 
