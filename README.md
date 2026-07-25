@@ -173,6 +173,9 @@ side of the wire. Everything else ships as a core or server subpath
   client); its two-window offline sync demo is e2e-tested in CI
 - **[docs/sync-basics.md](docs/sync-basics.md)** — sync in plain
   language: who wins when two devices edit, and how to change it
+- **[docs/sync-triggering.md](docs/sync-triggering.md)** — when to call
+  `synchronize`: triggers, server signals, battery, and what background
+  sync can do on each platform
 - **[docs/sync-tour.md](docs/sync-tour.md)** — the sync protocol in
   eight real requests and responses, replayed by CI on every push
 - **[docs/overview.md](docs/overview.md)** — working on the library: how

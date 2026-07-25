@@ -5,7 +5,9 @@ opaque commit-ordered cursor, why push responds like a pull, the backend
 MUSTs — live in [../sync-design.md](../sync-design.md). The backend itself
 ships as [`@remelondb/server`](../../packages/server); read the design doc
 first if you're backing it with your own `SyncStore` adapter or building
-a backend from scratch.
+a backend from scratch. *When* to call it — the trigger set,
+server-signalled sync, battery, background sync per platform — is
+[../sync-triggering.md](../sync-triggering.md).
 
 ## Calling synchronize
 

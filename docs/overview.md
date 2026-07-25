@@ -143,6 +143,11 @@ other clients committed in between, excluding the pushing client's own
 records. That is what stops a client re-downloading its own writes forever.
 The cursor and the changes travel together or not at all.
 
+Nothing in the library decides *when* a sync runs; the application calls
+`synchronize` on the moments that matter to it.
+[sync-triggering.md](sync-triggering.md) covers which moments those are and
+why polling is rarely the right answer.
+
 Conflicts are resolved on the client, per column. The merged record is the
 remote version with locally-changed columns laid back on top, so two devices
 editing different columns both keep their edits, and two editing the same

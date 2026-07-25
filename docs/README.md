@@ -53,6 +53,7 @@ they track the code and are updated with it.
 | [reference/queries.md](reference/queries.md) | The Q DSL: every operator with its SQL and semantics, joins, LIKE escaping, unsafe escape hatches, compilation. |
 | [sync-tour.md](sync-tour.md) | The wire protocol in eight real requests and responses — the hands-on companion to the spec, with a clickable .http version in the example. |
 | [reference/sync.md](reference/sync.md) | Using `synchronize`: wire shapes, conflict semantics, resync, migration pulls, testing a backend. |
+| [sync-triggering.md](sync-triggering.md) | When to call `synchronize`: the trigger set, server-signalled sync and why signals carry no data, battery, and why background sync works on mobile but not on web. |
 | [reference/backend.md](reference/backend.md) | Building a sync backend: the transport/engine/store layers, the Postgres table contract, store and endpoint configuration, retention, conformance. |
 | [reference/schema.md](reference/schema.md) | Defining tables (Zod-first via `zodTable`, hand-written builders as the alternative), inferred record types, standard columns, reserved names, DDL output, migrations and the no-silent-reset contract. |
 | [reference/records.md](reference/records.md) | `RawRecord`, the `sanitizedRaw` trust boundary and its coercion rules, sync fields (`_status`/`_changed`), ids. |
