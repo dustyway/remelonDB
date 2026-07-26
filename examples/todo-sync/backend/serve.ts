@@ -1,4 +1,5 @@
-import { createServer, type IncomingMessage } from 'node:http'
+import { createServer } from 'node:http'
+import { text } from 'node:stream/consumers'
 import { readFile } from 'node:fs/promises'
 import { extname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -22,14 +23,6 @@ const engine = createSyncEngine({
 })
 const handlers = engine.as('everyone')
 
-const readBody = (request: IncomingMessage): Promise<string> =>
-  new Promise((resolve, reject) => {
-    let body = ''
-    request.on('data', (chunk: Buffer) => (body += chunk))
-    request.on('end', () => resolve(body))
-    request.on('error', reject)
-  })
-
 const contentTypes: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript',
@@ -46,7 +39,7 @@ const server = createServer(async (request, response) => {
   }
   try {
     if (request.method === 'POST') {
-      const body: unknown = JSON.parse(await readBody(request))
+      const body: unknown = JSON.parse(await text(request))
       if (request.url === '/sync/pull') {
         return respond(200, await handlers.pull(wire.pullArgs.parse(body)))
       }

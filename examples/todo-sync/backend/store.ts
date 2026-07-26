@@ -4,7 +4,6 @@ import {
   bigint,
   boolean,
   doublePrecision,
-  index,
   pgTable,
   text,
   timestamp,
@@ -19,19 +18,15 @@ import type { DrizzleDb } from '@remelondb/store-drizzle'
 // The table is the Todo Zod object's keys as columns — names matching
 // the wire, so no mappers — plus the four machinery columns the drizzle
 // store requires (id, rev, deleted_at, owner).
-export const todos = pgTable(
-  'todos',
-  {
-    id: text('id').primaryKey(),
-    rev: bigint('rev', { mode: 'number' }).notNull(),
-    deletedAt: timestamp('deleted_at', { withTimezone: true }),
-    owner: text('owner').notNull(),
-    text: text('text').notNull(),
-    done: boolean('done').notNull(),
-    createdAt: doublePrecision('created_at').notNull(),
-  },
-  (table) => [index('todos_owner_rev_idx').on(table.owner, table.rev)],
-)
+export const todos = pgTable('todos', {
+  id: text('id').primaryKey(),
+  rev: bigint('rev', { mode: 'number' }).notNull(),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  owner: text('owner').notNull(),
+  text: text('text').notNull(),
+  done: boolean('done').notNull(),
+  createdAt: doublePrecision('created_at').notNull(),
+})
 
 const bootstrap = async (db: DrizzleDb): Promise<void> => {
   const statements = [

@@ -1,4 +1,5 @@
-import { createServer, type IncomingMessage } from 'node:http'
+import { createServer } from 'node:http'
+import { text } from 'node:stream/consumers'
 import { createSyncEngine } from '@remelondb/server'
 import { wire } from './schema'
 import { createStore } from './store'
@@ -18,14 +19,6 @@ const engine = createSyncEngine({
 })
 const handlers = engine.as('everyone')
 
-const readBody = (request: IncomingMessage): Promise<string> =>
-  new Promise((resolve, reject) => {
-    let body = ''
-    request.on('data', (chunk: Buffer) => (body += chunk))
-    request.on('end', () => resolve(body))
-    request.on('error', reject)
-  })
-
 const server = createServer(async (request, response) => {
   const respond = (status: number, body: unknown): void => {
     response.writeHead(status, { 'content-type': 'application/json' })
@@ -35,7 +28,7 @@ const server = createServer(async (request, response) => {
     if (request.method !== 'POST') {
       return respond(404, { error: 'POST /sync/pull or /sync/push' })
     }
-    const body: unknown = JSON.parse(await readBody(request))
+    const body: unknown = JSON.parse(await text(request))
     if (request.url === '/sync/pull') {
       return respond(200, await handlers.pull(wire.pullArgs.parse(body)))
     }
