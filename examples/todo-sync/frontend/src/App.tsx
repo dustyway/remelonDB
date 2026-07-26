@@ -12,9 +12,7 @@ export function App({ db }: { db: Database }) {
     ),
   )
   const [text, setText] = useState('')
-  const [editing, setEditing] = useState<{ id: string; text: string } | null>(
-    null,
-  )
+  const [editing, setEditing] = useState<string | null>(null)
   const syncStatus = useSyncExternalStore(subscribeSyncStatus, getSyncStatus)
   const syncNote = useSyncExternalStore(subscribeSyncStatus, getSyncNote)
 
@@ -47,9 +45,7 @@ export function App({ db }: { db: Database }) {
     void runSync(db)
   }
 
-  const commitEdit = async () => {
-    if (!editing) return
-    const { id, text: draft } = editing
+  const commitEdit = async (id: string, draft: string) => {
     setEditing(null)
     const trimmed = draft.trim()
     if (!trimmed) return
@@ -81,18 +77,15 @@ export function App({ db }: { db: Database }) {
             className={todo.done ? 'done' : ''}
             onClick={() => void toggle(todo)}
           >
-            {editing?.id === todo.id ? (
+            {editing === todo.id ? (
               <input
                 aria-label="Edit todo"
-                value={editing.text}
+                defaultValue={todo.text}
                 autoFocus
                 onClick={(event) => event.stopPropagation()}
-                onChange={(event) =>
-                  setEditing({ id: todo.id, text: event.target.value })
-                }
-                onBlur={() => void commitEdit()}
+                onBlur={(event) => void commitEdit(todo.id, event.currentTarget.value)}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter') void commitEdit()
+                  if (event.key === 'Enter') event.currentTarget.blur()
                   if (event.key === 'Escape') setEditing(null)
                 }}
               />
@@ -103,7 +96,7 @@ export function App({ db }: { db: Database }) {
               type="button"
               onClick={(event) => {
                 event.stopPropagation()
-                setEditing({ id: todo.id, text: todo.text })
+                setEditing(todo.id)
               }}
             >
               Edit
