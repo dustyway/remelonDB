@@ -136,24 +136,28 @@ class Review extends ModelFor(reviews) {
 
 ## 4. Open the database
 
+The manager owns the open — it deduplicates concurrent inits, keeps a
+failed open retryable, and (on the web) handles takeover. Section 11
+shows what that buys in an app; here it is one extra line:
+
 ```js
-import { Database } from '@remelondb/core'
+import { createDatabaseManager, Database } from '@remelondb/core'
 import { NodeSqliteDriver } from '@remelondb/driver-node'
 
-const db = await Database.open({
-  driver: new NodeSqliteDriver(),
-  schema,
-  modelClasses: [Deck, Card, Review],
-  name: 'flashcards.db',   // ':memory:' for experiments
+const manager = createDatabaseManager({
+  open: () =>
+    Database.open({
+      driver: new NodeSqliteDriver(),
+      schema,
+      modelClasses: [Deck, Card, Review],
+      name: 'flashcards.db',   // ':memory:' for experiments
+    }),
 })
+const db = await manager.init()
 ```
 
 On first open the schema DDL runs; on later opens with a higher schema
-version, migrations run (section 9). In an application, wrap this call
-in `createDatabaseManager` — it deduplicates concurrent opens, keeps
-failures retryable, and feeds `useDatabaseState` from
-`@remelondb/core/react`; the raw `Database.open` used throughout this
-tutorial is the primitive it manages.
+version, migrations run (section 9).
 
 ## 5. Create a deck and its cards
 
@@ -369,11 +373,65 @@ What the server must guarantee, and why, is specified in
 [sync-design.md](sync-design.md); the client-side details are in the
 [sync reference](reference/sync.md).
 
+## 11. Use it in an app
+
+Section 4 opened through the manager without saying why. An app has
+more lives than a script: a first open, a failed open the user
+retries, on the web a takeover by another tab. The manager owns that
+lifecycle — concurrent `init()` calls share one open, a failure stays
+retryable, and a superseded attempt can never clobber a newer
+database:
+
+```js
+const scratch = createDatabaseManager({
+  open: () =>
+    Database.open({
+      driver: new NodeSqliteDriver(),
+      schema,
+      modelClasses: [Deck, Card, Review],
+      name: ':memory:',
+    }),
+})
+
+console.log(scratch.state.status)   // 'idle'
+const db2 = await scratch.init()
+console.log(scratch.state.status)   // 'ready'
+console.log(db2 === scratch.database) // true
+```
+
+In React (web or native), drive the UI from the manager's state with
+the hook from `@remelondb/core/react`, and on the web pass
+`shared: true` so every tab lives on one database:
+
+```js fragment
+const manager = createDatabaseManager({
+  open: (onTakenOver) =>
+    Database.open({
+      driver: new WebSqliteDriver({ shared: true, takeover: true, onTakenOver }),
+      schema, migrations, modelClasses, name: 'app.db',
+    }),
+})
+
+function Root() {
+  const { status, error } = useDatabaseState(manager)
+  if (status === 'ready') return <App db={manager.database} />
+  if (status === 'error') return <Retry error={error} onRetry={() => manager.init()} />
+  return <Splash />
+}
+```
+
+The todo-sync example runs this bootstrap on web and native alike
+(`frontend/src/db.ts`, `mobile/src/db.ts`).
+
 ## Where next
 
 - [The example app](../examples/todo-sync/README.md): everything above
-  running in a browser — two windows syncing through a ~50-line server,
-  offline writes catching up on reconnect, and a 12-line React bridge.
+  running in a browser — two tabs mirroring one shared database, a
+  private window syncing through a ~50-line server, offline writes
+  catching up on reconnect, and a 12-line React bridge.
+- [Multi-tab](multi-tab.md): how shared mode works — the broker, write
+  arbitration, change broadcast — and the model-checked ordering
+  invariant behind it.
 - [Queries](reference/queries.md), [models](reference/models.md),
   [database & observation](reference/database.md): the day-to-day API.
 - [Schema & migrations](reference/schema.md),
