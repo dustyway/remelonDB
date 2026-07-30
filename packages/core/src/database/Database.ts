@@ -234,6 +234,66 @@ export class Database {
       }
     }
 
+    this.notifyChanges(changesByTable)
+  }
+
+  /**
+   * Apply a change set committed by ANOTHER context sharing this storage
+   * (docs/multi-tab.md): bring the record cache up to date and notify
+   * observers, without writing — storage already has the data. Runs
+   * exclusively like a commit; must not be called from inside
+   * database.write or database.read (the queue is not re-entrant).
+   *
+   * Idempotent by design: a re-broadcast create for a cached id degrades
+   * to an update, and a destroy for an unknown id is a no-op.
+   */
+  async applyExternalChanges(changes: DatabaseChangeSet): Promise<void> {
+    await this.queue.enqueue(async () => {
+      const changesByTable = new Map<string, CollectionChange[]>()
+      for (const [tableName, tableChanges] of Object.entries(changes)) {
+        const collection = this.get(tableName)
+        const applied: CollectionChange[] = []
+        for (const change of tableChanges) {
+          const raw = change.record
+          switch (change.type) {
+            case 'created':
+            case 'updated': {
+              const cached = collection.cache.get(raw.id)
+              if (cached && cached !== raw) {
+                Object.assign(cached, raw)
+              } else if (!cached) {
+                collection.cache.add(raw)
+              }
+              applied.push({
+                record: collection.cache.get(raw.id)!,
+                type: cached ? 'updated' : 'created',
+              })
+              break
+            }
+            case 'destroyed': {
+              const record = collection.cache.get(raw.id)
+              if (!record) {
+                break // never seen here: nothing observed, nothing to do
+              }
+              record._status = 'deleted'
+              collection.cache.delete(raw.id)
+              applied.push({ record, type: 'destroyed' })
+              break
+            }
+          }
+        }
+        if (applied.length > 0) {
+          changesByTable.set(tableName, applied)
+        }
+      }
+      if (changesByTable.size > 0) {
+        this.notifyChanges(changesByTable)
+      }
+    }, true)
+  }
+
+  /** Notify database subscribers and collection buses about a commit. */
+  private notifyChanges(changesByTable: Map<string, CollectionChange[]>): void {
     const changeSet: { [table: string]: CollectionChangeSet } = {}
     for (const [table, changes] of changesByTable) {
       changeSet[table] = changes
