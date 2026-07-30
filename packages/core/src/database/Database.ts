@@ -11,7 +11,7 @@
  * user_version; core decides fresh-setup / migrate / ready / error. A
  * missing migration path is an explicit error, never a silent reset.
  */
-import type { SqliteDriver } from '../driver/SqliteDriver'
+import type { ExternalChangeSet, SqliteDriver } from '../driver/SqliteDriver'
 import type {
   AppSchema,
   ColumnName,
@@ -139,6 +139,14 @@ export class Database {
     for (const modelClass of options.modelClasses ?? []) {
       database.get(modelClass.table)._bindModelClass(modelClass)
     }
+    // Change propagation, receiving half (docs/multi-tab.md): commits
+    // from other contexts flow into this cache and its observers. The
+    // rejection swallow is deliberate: a change set for an unknown table
+    // cannot occur while every context runs the same schema, and a
+    // failed external apply must never take down the driver's listener.
+    driver.onExternalChanges?.((changes) => {
+      void database.applyExternalChanges(changes as DatabaseChangeSet).catch(() => {})
+    })
     return database
   }
 
@@ -178,19 +186,28 @@ export class Database {
 
   /** Run exclusive write work. Mutations are only allowed inside. */
   write<T>(work: () => Promise<T>): Promise<T> {
-    return this.queue.enqueue(() => this.withWorkSlot(true, work), true)
+    return this.withWorkSlot(true, work)
   }
 
   /** A consistency window: no writer runs while this block does. */
   read<T>(work: () => Promise<T>): Promise<T> {
-    return this.queue.enqueue(() => this.withWorkSlot(false, work), false)
+    return this.withWorkSlot(false, work)
   }
 
   /**
    * Hold the driver's cross-context slot (docs/multi-tab.md) around a
-   * block, when the driver has one. Acquired inside the local queue so
-   * in-process FIFO order is preserved; drivers without shared storage
-   * don't implement the hook and pay nothing.
+   * block, when the driver has one. The slot is acquired BEFORE entering
+   * the local queue, deliberately: while this context waits for its
+   * grant, the queue stays free to apply change broadcasts from other
+   * contexts — and the transport's FIFO ordering guarantees the grant
+   * arrives after every broadcast committed before it (the previous
+   * holder publishes before it releases). Acquiring inside the queue
+   * instead would park those applies behind this block, whose reads
+   * would then trust a cache that is missing the other context's
+   * committed writes — a lost update. Cross-call FIFO is preserved
+   * because the broker's grant queue is itself FIFO in request order.
+   * Drivers without shared storage don't implement the hook; their
+   * blocks enqueue directly, exactly as before.
    */
   private async withWorkSlot<T>(
     exclusive: boolean,
@@ -198,11 +215,11 @@ export class Database {
   ): Promise<T> {
     const acquire = this.driver.acquireWorkSlot
     if (!acquire) {
-      return work()
+      return this.queue.enqueue(work, exclusive)
     }
     const release = await acquire.call(this.driver, exclusive)
     try {
-      return await work()
+      return await this.queue.enqueue(work, exclusive)
     } finally {
       await release()
     }
@@ -256,7 +273,11 @@ export class Database {
       }
     }
 
-    this.notifyChanges(changesByTable)
+    const changeSet = this.notifyChanges(changesByTable)
+    // Change propagation, sending half (docs/multi-tab.md). Only real
+    // commits publish — applyExternalChanges must not re-publish what it
+    // received, or two contexts would echo changes forever.
+    this.driver.publishChanges?.(changeSet as ExternalChangeSet)
   }
 
   /**
@@ -315,7 +336,9 @@ export class Database {
   }
 
   /** Notify database subscribers and collection buses about a commit. */
-  private notifyChanges(changesByTable: Map<string, CollectionChange[]>): void {
+  private notifyChanges(
+    changesByTable: Map<string, CollectionChange[]>,
+  ): DatabaseChangeSet {
     const changeSet: { [table: string]: CollectionChangeSet } = {}
     for (const [table, changes] of changesByTable) {
       changeSet[table] = changes
@@ -328,6 +351,7 @@ export class Database {
     for (const [table, changes] of changesByTable) {
       this.get(table)._notify(changes)
     }
+    return changeSet
   }
 
   /** Subscribe to committed changes touching any of the given tables. */

@@ -1,5 +1,6 @@
 import type {
   BatchStatement,
+  ExternalChangeSet,
   Row,
   SqlArgs,
   SqliteDriver,
@@ -95,6 +96,7 @@ export class WebSqliteDriver implements SqliteDriver {
    * released before the next test file needs them.
    */
   hostedComputeWorker: { terminate(): void } | null = null
+  private externalChangesHandler: ((changes: ExternalChangeSet) => void) | null = null
 
   constructor(private readonly options: WebSqliteDriverOptions = {}) {}
 
@@ -120,6 +122,16 @@ export class WebSqliteDriver implements SqliteDriver {
             const data = (event as MessageEvent).data as
               | { control?: string }
               | null
+            if (data?.control === 'externalChanges') {
+              const payload = data as unknown as {
+                name: string
+                changes: ExternalChangeSet
+              }
+              if (payload.name === this.name) {
+                this.externalChangesHandler?.(payload.changes)
+              }
+              return
+            }
             if (data?.control === 'spawnWorker') {
               // The broker cannot spawn workers (no Worker constructor in
               // SharedWorkerGlobalScope on Chromium/WebKit) — this tab
@@ -326,6 +338,29 @@ export class WebSqliteDriver implements SqliteDriver {
     return async () => {
       await this.request({ op: 'releaseSlot', slot })
     }
+  }
+
+  /**
+   * Change propagation (docs/multi-tab.md): commits publish to the broker,
+   * which relays them to the other tabs; the broker's relays arrive here
+   * and go to the registered handler. Both are shared-mode-only —
+   * dedicated storage has no other context to tell.
+   */
+  publishChanges(changes: ExternalChangeSet): void {
+    if (!this.sharedMode || this.name === null) {
+      return
+    }
+    // best-effort: a lost notification means a stale cache elsewhere
+    // until the next commit, and the next real request errors loudly
+    void this.request({
+      op: 'publishChanges',
+      name: this.name,
+      changes,
+    }).catch(() => {})
+  }
+
+  onExternalChanges(handler: (changes: ExternalChangeSet) => void): void {
+    this.externalChangesHandler = handler
   }
 
   async close(): Promise<void> {

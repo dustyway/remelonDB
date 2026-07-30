@@ -76,9 +76,23 @@ docs/multi-tab.md). Core calls it around every `database.write` block
 (`exclusive: false`); the returned function releases the slot. The
 contract is the classic readers-writer discipline: an exclusive slot
 excludes everything, shared slots coexist, grants are FIFO so writers
-cannot starve. Drivers with exclusive storage (Node, React Native, the
-web driver outside shared mode) omit it — the in-process work queue
-already serializes locally and core skips the hook entirely.
+cannot starve. Core acquires the slot before entering its local queue,
+so a waiting context keeps applying external changes and a grant
+happens-after every change committed before it. Drivers with exclusive
+storage (Node, React Native, the web driver outside shared mode) omit
+it — the in-process work queue already serializes locally and core
+skips the hook entirely.
+
+**`publishChanges(changes)?` / `onExternalChanges(handler)?`** —
+optional, the two halves of change propagation for shared-storage
+drivers (docs/multi-tab.md). Core calls `publishChanges` after every
+committed batch with the batch's change set (best-effort,
+fire-and-forget: a lost notification is a stale cache elsewhere until
+the next one, never data loss). The driver invokes the
+`onExternalChanges` handler with change sets committed by other
+contexts; core routes them into `database.applyExternalChanges`, which
+updates the record cache in place and notifies observers. A driver
+implements both members or neither.
 
 ## Value conventions
 

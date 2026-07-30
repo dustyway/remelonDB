@@ -1,10 +1,13 @@
 # Multi-tab (design)
 
-Status: designed, not implemented. The single-owner half — fail fast
-when another tab holds the database, opt-in takeover — ships in
-`@remelondb/driver-web` (its README documents the API). This page
-records the design for the full goal: every tab live at once, all
-observing and writing the same database.
+Status: implemented behind the opt-in `{ shared: true }` driver option —
+transport, refcounted opens, write arbitration, and change broadcast all
+ship and are covered by the browser suites on Chromium, Firefox, WebKit,
+and Safari. Still to do before it becomes the default: the
+forced-fallback conformance run, the todo-sync two-tab showcase, and the
+open questions below. The single-owner behavior — fail fast when another
+tab holds the database, opt-in takeover — remains the default and the
+no-`SharedWorker` fallback.
 
 ## The problem has two layers
 

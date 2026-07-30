@@ -188,6 +188,21 @@ const handle = (port: PortLike, request: WorkerRequest): void => {
       grantSlots()
       return
     }
+    case 'publishChanges': {
+      // fan out to every OTHER tab holding this database; the sender's
+      // own cache is already up to date (its commit did that)
+      for (const holder of holders.get(request.name) ?? []) {
+        if (holder !== port) {
+          holder.postMessage({
+            control: 'externalChanges',
+            name: request.name,
+            changes: request.changes,
+          })
+        }
+      }
+      answer(port, request.id, null)
+      return
+    }
     case 'open': {
       const existing = holders.get(request.name)
       if (existing && existing.size > 0 && computePort) {

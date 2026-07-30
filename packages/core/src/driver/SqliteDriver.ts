@@ -67,4 +67,32 @@ export interface SqliteDriver {
    * queue already serializes locally, and core skips the hook entirely.
    */
   acquireWorkSlot?(exclusive: boolean): Promise<() => Promise<void>>
+
+  /**
+   * Optional change propagation, the sending half (docs/multi-tab.md):
+   * core calls this after every committed batch with the batch's change
+   * set. A shared-storage driver relays it to the other contexts;
+   * best-effort and fire-and-forget — a lost notification means a stale
+   * cache elsewhere until the next one, never data loss.
+   */
+  publishChanges?(changes: ExternalChangeSet): void
+
+  /**
+   * Optional change propagation, the receiving half: the driver invokes
+   * `handler` with change sets committed by OTHER contexts. Core feeds
+   * them into `database.applyExternalChanges`. At most one handler; a
+   * driver that implements one of the propagation members implements both.
+   */
+  onExternalChanges?(handler: (changes: ExternalChangeSet) => void): void
+}
+
+/** One committed change, as propagated between contexts. */
+export interface ExternalChange {
+  readonly record: { readonly id: string } & Record<string, unknown>
+  readonly type: 'created' | 'updated' | 'destroyed'
+}
+
+/** A batch's changes keyed by table — the shape the change buses deliver. */
+export type ExternalChangeSet = {
+  readonly [table: string]: readonly ExternalChange[]
 }

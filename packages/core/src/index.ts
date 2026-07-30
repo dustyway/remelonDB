@@ -4,6 +4,8 @@ export type {
   Row,
   BatchStatement,
   SqliteDriver,
+  ExternalChange,
+  ExternalChangeSet,
 } from './driver/SqliteDriver'
 
 /**

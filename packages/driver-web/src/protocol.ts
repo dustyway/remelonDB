@@ -5,7 +5,7 @@
  * Node: the same server code runs against a real browser Worker or an
  * in-process message channel.
  */
-import type { SqlValue } from '@remelondb/core'
+import type { ExternalChangeSet, SqlValue } from '@remelondb/core'
 
 export interface Endpoint {
   postMessage(message: unknown): void
@@ -48,6 +48,15 @@ export type WorkerRequest = { readonly id: number } & (
    */
   | { readonly op: 'acquireSlot'; readonly exclusive: boolean }
   | { readonly op: 'releaseSlot'; readonly slot: number }
+  /**
+   * Change broadcast (docs/multi-tab.md), answered by the broker: relays
+   * a committed change set to every OTHER tab holding `name` open.
+   */
+  | {
+      readonly op: 'publishChanges'
+      readonly name: string
+      readonly changes: ExternalChangeSet
+    }
 )
 
 export type WorkerResponse =

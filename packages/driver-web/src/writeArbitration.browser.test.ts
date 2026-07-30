@@ -88,11 +88,10 @@ describe('shared mode write arbitration', () => {
       await driverA.query('select "value" from "counters" where "id" = ?', ['c1']),
     ).toEqual([{ value: 2 }])
 
-    // cache-level visibility across tabs is NOT this slice's contract:
-    // dbA's cache is authoritative and still holds its own last write.
-    // Change broadcast (docs/multi-tab.md) is what will make this read 2.
+    // with change broadcast, B's increment reaches A's cache too — the
+    // cached instance converges without any A-side action
     const [finalA] = await dbA.get(Counter).query().fetch()
-    expect(finalA!.value).toBe(1)
+    await expect.poll(() => finalA!.value).toBe(2)
 
     await driverA.close()
     await driverB.destroy()
