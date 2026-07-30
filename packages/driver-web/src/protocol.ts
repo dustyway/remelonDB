@@ -41,6 +41,13 @@ export type WorkerRequest = { readonly id: number } & (
   | { readonly op: 'destroy'; readonly name: string }
   /** Liveness probe (the broker checks its compute channel with it). */
   | { readonly op: 'ping' }
+  /**
+   * Write-block arbitration (docs/multi-tab.md), answered by the broker
+   * itself — these never reach SQLite. An exclusive slot excludes every
+   * other slot; shared slots (read consistency windows) coexist.
+   */
+  | { readonly op: 'acquireSlot'; readonly exclusive: boolean }
+  | { readonly op: 'releaseSlot'; readonly slot: number }
 )
 
 export type WorkerResponse =

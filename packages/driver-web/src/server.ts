@@ -189,6 +189,9 @@ export class SqliteWorkerServer {
       }
       case 'ping':
         return null
+      case 'acquireSlot':
+      case 'releaseSlot':
+        throw new Error(`${request.op} is broker-only and must not reach the worker`)
       case 'open':
         throw new Error('open is handled asynchronously') // see serve()
     }

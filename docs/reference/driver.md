@@ -69,6 +69,17 @@ successful setup or migration.
 `-shm`). Used by database reset; must leave nothing that would resurrect
 state on the next `open`.
 
+**`acquireWorkSlot(exclusive)?`** — optional, for drivers whose storage
+is shared between contexts (browser tabs behind one broker, see
+docs/multi-tab.md). Core calls it around every `database.write` block
+(`exclusive: true`) and `database.read` consistency window
+(`exclusive: false`); the returned function releases the slot. The
+contract is the classic readers-writer discipline: an exclusive slot
+excludes everything, shared slots coexist, grants are FIFO so writers
+cannot starve. Drivers with exclusive storage (Node, React Native, the
+web driver outside shared mode) omit it — the in-process work queue
+already serializes locally and core skips the hook entirely.
+
 ## Value conventions
 
 - `SqlValue = string | number | boolean | null` is the entire vocabulary

@@ -56,4 +56,15 @@ export interface SqliteDriver {
 
   /** Delete the database and its sidecar files. Used by database reset. */
   destroy(): Promise<void>
+
+  /**
+   * Optional cross-context arbitration (docs/multi-tab.md): when the same
+   * storage is shared between contexts (browser tabs behind one broker),
+   * `database.write` blocks must not interleave with each other or with
+   * `database.read` consistency windows from other contexts. A driver that
+   * shares storage implements this; the returned function releases the
+   * slot. Drivers with exclusive storage omit it — the in-process work
+   * queue already serializes locally, and core skips the hook entirely.
+   */
+  acquireWorkSlot?(exclusive: boolean): Promise<() => Promise<void>>
 }

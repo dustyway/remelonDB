@@ -178,12 +178,34 @@ export class Database {
 
   /** Run exclusive write work. Mutations are only allowed inside. */
   write<T>(work: () => Promise<T>): Promise<T> {
-    return this.queue.enqueue(work, true)
+    return this.queue.enqueue(() => this.withWorkSlot(true, work), true)
   }
 
   /** A consistency window: no writer runs while this block does. */
   read<T>(work: () => Promise<T>): Promise<T> {
-    return this.queue.enqueue(work, false)
+    return this.queue.enqueue(() => this.withWorkSlot(false, work), false)
+  }
+
+  /**
+   * Hold the driver's cross-context slot (docs/multi-tab.md) around a
+   * block, when the driver has one. Acquired inside the local queue so
+   * in-process FIFO order is preserved; drivers without shared storage
+   * don't implement the hook and pay nothing.
+   */
+  private async withWorkSlot<T>(
+    exclusive: boolean,
+    work: () => Promise<T>,
+  ): Promise<T> {
+    const acquire = this.driver.acquireWorkSlot
+    if (!acquire) {
+      return work()
+    }
+    const release = await acquire.call(this.driver, exclusive)
+    try {
+      return await work()
+    } finally {
+      await release()
+    }
   }
 
   /** Commit operations atomically. Must be called inside database.write. */

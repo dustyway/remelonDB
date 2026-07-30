@@ -137,8 +137,57 @@ const answer = (port: PortLike, id: number, result: unknown): void => {
   port.postMessage({ id, ok: true, result } satisfies WorkerResponse)
 }
 
+/**
+ * Write-block arbitration (docs/multi-tab.md): a plain token queue. An
+ * exclusive slot (a db.write block) is granted only when nothing is
+ * held; shared slots (db.read windows) coexist with each other. Strict
+ * FIFO — a waiting writer blocks later readers, so writers can't starve.
+ */
+interface SlotWaiter {
+  readonly port: PortLike
+  readonly requestId: number
+  readonly exclusive: boolean
+}
+
+let nextSlot = 1
+const heldSlots = new Map<number, { exclusive: boolean }>()
+const slotQueue: SlotWaiter[] = []
+
+const heldExclusive = (): boolean =>
+  [...heldSlots.values()].some((slot) => slot.exclusive)
+
+const grantSlots = (): void => {
+  while (slotQueue.length > 0) {
+    const head = slotQueue[0]!
+    const canGrant = head.exclusive
+      ? heldSlots.size === 0
+      : !heldExclusive()
+    if (!canGrant) {
+      return
+    }
+    slotQueue.shift()
+    const slot = nextSlot++
+    heldSlots.set(slot, { exclusive: head.exclusive })
+    answer(head.port, head.requestId, { slot })
+    if (head.exclusive) {
+      return // exclusive holder: nothing else runs until release
+    }
+  }
+}
+
 const handle = (port: PortLike, request: WorkerRequest): void => {
   switch (request.op) {
+    case 'acquireSlot': {
+      slotQueue.push({ port, requestId: request.id, exclusive: request.exclusive })
+      grantSlots()
+      return
+    }
+    case 'releaseSlot': {
+      heldSlots.delete(request.slot)
+      answer(port, request.id, null)
+      grantSlots()
+      return
+    }
     case 'open': {
       const existing = holders.get(request.name)
       if (existing && existing.size > 0 && computePort) {

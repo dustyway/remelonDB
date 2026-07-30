@@ -310,6 +310,24 @@ export class WebSqliteDriver implements SqliteDriver {
     return this.name
   }
 
+  /**
+   * Cross-tab write-block arbitration (docs/multi-tab.md). In shared mode
+   * the broker grants slots; in dedicated mode storage is exclusive to
+   * this driver and its in-process queue, so the slot is a free no-op.
+   */
+  async acquireWorkSlot(exclusive: boolean): Promise<() => Promise<void>> {
+    if (!this.sharedMode) {
+      return async () => {}
+    }
+    const { slot } = await this.request<{ slot: number }>({
+      op: 'acquireSlot',
+      exclusive,
+    })
+    return async () => {
+      await this.request({ op: 'releaseSlot', slot })
+    }
+  }
+
   async close(): Promise<void> {
     const name = this.openName
     await this.request({ op: 'close', name })
