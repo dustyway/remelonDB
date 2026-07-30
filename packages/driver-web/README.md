@@ -88,37 +88,29 @@ lands when the tab is next opened or focused. The Background Sync API
 is blocked for the same reason. Mobile has no such restriction — see
 [when to sync](https://github.com/dustyway/remelonDB/blob/main/docs/sync-triggering.md).
 
-For apps that need every tab live simultaneously, route every tab
-through one connection. Two patterns, in order of preference:
+For every tab live simultaneously, opt in to **shared mode**:
 
-1. **Web Locks leader election** (works everywhere, including Chrome
-   for Android, which has no `SharedWorker`): every tab requests the
-   same exclusive lock; the winner opens the `Database` and serves the
-   others over a `BroadcastChannel`. The lock releases automatically
-   when the leader tab closes, and the next tab in line takes over and
-   reopens.
+```ts
+const driver = new WebSqliteDriver({ shared: true })
+```
 
-   ```ts
-   navigator.locks.request('remelondb:app.db', async () => {
-     const db = await Database.open({ driver: new WebSqliteDriver(), ... })
-     serveOverBroadcastChannel(db)          // your RPC layer
-     await new Promise(() => {})            // hold the lock for tab lifetime
-   })
-   // tabs that don't hold the lock talk to the leader instead
-   ```
+All tabs then route through one SharedWorker broker to a single
+connection: same-name opens share it instead of contending (no lock,
+no takeover), commits in any tab reach every other tab's record cache
+and observers, and `db.write` blocks are serialized across tabs by the
+broker so racing read-modify-write converges (see "The RPC protocol"
+below and [docs/multi-tab.md](../../docs/multi-tab.md) for the design,
+including the ordering invariant; [docs/multi-tab.qnt](../../docs/multi-tab.qnt)
+model-checks it). Where `SharedWorker` is unavailable (Chrome for
+Android), the option gracefully falls back to the single-owner
+behavior above — same API, same errors, the takeover UI simply becomes
+reachable again.
 
-2. **A `SharedWorker` owning the database**: move `Database.open` (or
-   just the driver) into a SharedWorker that every tab connects to.
-   Structurally simpler — one owner by construction, no election, no
-   handover — but unavailable on Chrome for Android.
-
-Neither routing pattern ships as a helper yet; the driver deliberately
-stays a single-connection seam. The full every-tab-live design — leader
-election, follower driver calls forwarded over the existing `Endpoint`
-protocol, and committed changes broadcast into each tab's record cache —
-is [docs/multi-tab.md](../../docs/multi-tab.md). If you only target
-desktop browsers and need true multi-tab today, prefer the
-SharedWorker; if Android web matters, use the lock election.
+Two honest caveats while the mode is opt-in: sync coordination across
+tabs is not built yet (every tab may run `synchronize`; the arbiter
+makes it converge but N tabs sync N times), and the open questions in
+docs/multi-tab.md list the remaining sharp edges. Shared mode becomes
+the default once those close.
 
 ## The RPC protocol
 
