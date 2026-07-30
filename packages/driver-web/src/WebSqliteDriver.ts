@@ -59,6 +59,15 @@ export interface WebSqliteDriverOptions {
   readonly takeover?: boolean
   /** Called when another tab takes this database over (see `takeover`). */
   readonly onTakenOver?: () => void
+  /**
+   * Opt in to the SharedWorker owner (docs/multi-tab.md): all tabs route
+   * through one worker, so same-name opens SHARE a connection instead of
+   * contending for it — no lock, no takeover. Change propagation between
+   * tabs is not wired yet, so caches in other tabs go stale until it is;
+   * hence opt-in. Where `SharedWorker` is unavailable (Chrome for
+   * Android), falls back to the default single-owner behavior.
+   */
+  readonly shared?: boolean
   /** Override the transport — used by tests to run in-process. */
   readonly createEndpoint?: () => Endpoint
 }
@@ -82,9 +91,31 @@ export class WebSqliteDriver implements SqliteDriver {
 
   constructor(private readonly options: WebSqliteDriverOptions = {}) {}
 
+  /** True when this driver routes through the SharedWorker owner. */
+  private get sharedMode(): boolean {
+    return this.options.shared === true && typeof SharedWorker !== 'undefined'
+  }
+
   private createEndpoint(): Endpoint {
     if (this.options.createEndpoint) {
       return this.options.createEndpoint()
+    }
+    if (this.sharedMode) {
+      const shared = new SharedWorker(
+        new URL('./shared-worker.ts', import.meta.url),
+        { type: 'module' },
+      )
+      shared.port.start()
+      return {
+        postMessage: (message) => shared.port.postMessage(message),
+        addMessageListener: (listener) =>
+          shared.port.addEventListener('message', (event) =>
+            listener((event as MessageEvent).data),
+          ),
+        // closing OUR port must not kill the shared owner — other tabs
+        // may be using it; the browser reclaims it with the last tab.
+        terminate: () => shared.port.close(),
+      }
     }
     const worker = new Worker(new URL('./worker.ts', import.meta.url), {
       type: 'module',
@@ -209,8 +240,12 @@ export class WebSqliteDriver implements SqliteDriver {
       throw new Error('WebSqliteDriver: database is already open')
     }
     const storage = this.options.storage ?? 'opfs'
+    // Shared mode has a single owner by construction — the Web Lock
+    // contention this coordinates simply cannot happen there.
     const coordinated =
-      storage === 'opfs' ? await this.acquireTabLock(name) : false
+      storage === 'opfs' && !this.sharedMode
+        ? await this.acquireTabLock(name)
+        : false
     this.takenOver = false
     if (!this.endpoint) {
       this.endpoint = this.createEndpoint()
