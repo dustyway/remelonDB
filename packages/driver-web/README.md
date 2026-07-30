@@ -161,3 +161,25 @@ SharedWorker; if Android web matters, use the lock election.
       across a page reload
 - [x] Multi-tab behavior: single-connection by design, documented below
       (see "Multi-tab usage")
+
+### Known flake: Playwright-WebKit OPFS pool reuse
+
+`BROWSER=webkit` is retried up to 3× (`vitest.browser.config.ts`); the
+other targets are not. Playwright's WebKit build has a timing-dependent
+OPFS SAH-pool bug: when the conformance suite churns ephemeral databases
+through the one shared pool, a recycled slot occasionally returns stale
+state, so a just-created table reads back missing (`SQLITE_ERROR: no
+such table`) or a fresh database reads as corrupt (`SQLITE_NOTADB`).
+
+It reproduces only on Playwright-WebKit — **real Safari (safaridriver)
+and Chromium pass the identical suite on every run** — and it clears on
+immediate re-run, which is what the retry absorbs. It is not a product
+bug: applications open one long-lived database and never churn the pool
+this way (verified: a full write cycle per database over a fresh pool
+never corrupts; the failure needs the shared-pool open/destroy churn the
+tests create). Ruled out as causes: the request dispatcher (serialized,
+covered by `server.concurrency.test.ts`), pool capacity (fails at 512
+too), `unlink` accumulation (pool stays at one file), and stale
+sqlite-wasm (already on the latest, 3.53.0-build1, which carries the
+2023 SAH-pool filename-buffer fix). A green WebKit run still means every
+test passed. To reproduce the raw flake, set the WebKit `retry` to 0.
