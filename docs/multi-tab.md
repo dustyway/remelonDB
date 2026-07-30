@@ -1,12 +1,13 @@
 # Multi-tab (design)
 
 Status: implemented behind the opt-in `{ shared: true }` driver option —
-transport, refcounted opens, write arbitration, and change broadcast all
-ship and are covered by the browser suites on Chromium, Firefox, WebKit,
-and Safari. Still to do before it becomes the default: the
-forced-fallback conformance run, the todo-sync two-tab showcase, and the
-open questions below. The single-owner behavior — fail fast when another
-tab holds the database, opt-in takeover — remains the default and the
+transport, refcounted opens, write arbitration, change broadcast, and
+sync-lease ownership all ship, covered by the browser suites on
+Chromium, Firefox, WebKit, and Safari, plus the forced-fallback run and
+the todo-sync example's two-tab e2e (deployed at todo.dustyway.org).
+The remaining gate before shared becomes the default is the open
+questions below. The single-owner behavior — fail fast when another tab
+holds the database, opt-in takeover — remains the default and the
 no-`SharedWorker` fallback.
 
 ## The problem has two layers
@@ -110,11 +111,24 @@ provenance flag on `batch` was considered and rejected: the broadcast
 arrives in the commit path's OUTPUT shape and must skip the writer
 assertion and driver encoding).
 
-**Sync across tabs is not solved yet.** Today every tab may run
-`synchronize` against the shared storage. The write arbiter serializes
-the blocks so this converges, but N tabs sync N times over the network.
-The intended end state — one sync owner, status broadcast to the rest —
-needs a home now that the broker runs no core code; see open questions.
+**Sync runs on one tab at a time, via a lease.** `synchronize`
+consults the driver's `requestSyncTurn` at entry; in shared mode that
+asks the broker for the sync lease (`syncTurn`). The broker grants the
+asker that already holds it (each tick renews), or a free or expired
+lease; everyone else's tick returns early without touching the
+network. A lease rather than a lock, deliberately: the holder's
+periodic ticks are its heartbeat, so a closed tab simply stops
+renewing and another tab inherits within the lease duration — no
+death detection, self-healing. Apps change nothing: a naive
+sync-interval in every tab becomes correct because only the holder's
+`synchronize` actually runs.
+
+One bounded edge: the lease gates the START of a run, it does not
+cancel one in flight. A sync outlasting the lease (default 10s) lets
+another tab inherit mid-run and sync concurrently for one round — the
+protocol resolves that like any device-vs-device race, so the cost is
+a conflict retry, not corruption. Keep `syncLeaseMs` comfortably above
+the worst-case sync duration.
 
 **Fallback without `SharedWorker`.** Feature-detect. Where it is
 missing (Chrome for Android), the driver behaves as it ships today:
@@ -184,12 +198,9 @@ tabs.
 
 - A tab dying while HOLDING a write slot leaks it and stalls every
   writer: the broker's liveness probe covers dead compute, not dead
-  slot holders. Candidate: each tab holds a Web Lock the broker can
-  test (`ifAvailable`) when a slot outlives a deadline; released locks
-  mean a dead holder, revoke the slot.
-- Where sync ownership lives (see "Sync across tabs"): the broker runs
-  no core code, so "one sync owner" needs either a designated tab or a
-  broker-granted sync token, same shape as the write slot.
+  slot holders. Two candidates: a deadline on held slots (the lease
+  pattern that solved sync ownership), or a per-tab Web Lock the
+  broker can test (`ifAvailable`) when a slot outlives a deadline.
 - Backpressure on forwarded statements from a very chatty tab.
 - Whether a frozen (not dead) host tab freezes its dedicated worker
   with it. If it does, passive detection covers it the same as death:

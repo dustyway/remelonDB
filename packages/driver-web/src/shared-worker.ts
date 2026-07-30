@@ -54,6 +54,7 @@ let spawnRequested = false
 let nextRouteId = 1
 const routes = new Map<number, Route>()
 const holders = new Map<string, Set<PortLike>>()
+const syncLeases = new Map<string, { port: PortLike; expiresAt: number }>()
 const backlog: Array<{
   port: PortLike
   request: WorkerRequest
@@ -186,6 +187,19 @@ const handle = (port: PortLike, request: WorkerRequest): void => {
       heldSlots.delete(request.slot)
       answer(port, request.id, null)
       grantSlots()
+      return
+    }
+    case 'syncTurn': {
+      const now = Date.now()
+      const lease = syncLeases.get(request.name)
+      const granted = !lease || lease.port === port || lease.expiresAt <= now
+      if (granted) {
+        syncLeases.set(request.name, {
+          port,
+          expiresAt: now + request.leaseMs,
+        })
+      }
+      answer(port, request.id, { granted })
       return
     }
     case 'publishChanges': {

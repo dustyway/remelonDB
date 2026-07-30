@@ -83,6 +83,12 @@ storage (Node, React Native, the web driver outside shared mode) omit
 it — the in-process work queue already serializes locally and core
 skips the hook entirely.
 
+**`requestSyncTurn()?`** — optional, for shared-storage drivers: asked
+by `synchronize` at entry; answer false and the run becomes a cheap
+no-op. Implemented as a broker lease on the web (renewed by asking,
+inherited on expiry when the holder disappears). Drivers with
+exclusive storage omit it — they always own sync.
+
 **`publishChanges(changes)?` / `onExternalChanges(handler)?`** —
 optional, the two halves of change propagation for shared-storage
 drivers (docs/multi-tab.md). Core calls `publishChanges` after every

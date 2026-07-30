@@ -57,6 +57,11 @@ export type WorkerRequest = { readonly id: number } & (
       readonly name: string
       readonly changes: ExternalChangeSet
     }
+  /**
+   * Sync-lease request (broker-answered): granted when the asker holds
+   * the lease, or it is free or expired. Asking again renews.
+   */
+  | { readonly op: 'syncTurn'; readonly name: string; readonly leaseMs: number }
 )
 
 export type WorkerResponse =

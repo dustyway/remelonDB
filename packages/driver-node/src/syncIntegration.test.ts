@@ -4,7 +4,7 @@
  * delete conflicts, the equality gate, conflict retries, rejections,
  * resync replacement, and the two-sync collision guard.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   appSchema,
   Database,
@@ -120,6 +120,24 @@ describe('sync engine', () => {
 
   afterEach(async () => {
     await driver.destroy().catch(() => {})
+  })
+
+  // Multi-tab sync ownership (docs/multi-tab.md): when the driver
+  // exposes requestSyncTurn, synchronize runs only for the lease
+  // holder — denied contexts return without touching the server.
+  it('skips the run when the driver denies the sync turn', async () => {
+    const turns: boolean[] = [false, true]
+    ;(driver as { requestSyncTurn?: () => Promise<boolean> }).requestSyncTurn =
+      async () => turns.shift() ?? true
+    const pull = vi.fn(server.pull)
+    const push = vi.fn(server.push)
+
+    await sync({ pullChanges: pull, pushChanges: push }) // denied: no traffic
+    expect(pull).not.toHaveBeenCalled()
+    expect(push).not.toHaveBeenCalled()
+
+    await sync({ pullChanges: pull, pushChanges: push }) // granted: normal run
+    expect(pull).toHaveBeenCalled()
   })
 
   it('first sync pulls everything as synced records', async () => {

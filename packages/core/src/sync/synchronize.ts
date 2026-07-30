@@ -135,6 +135,13 @@ async function runSynchronize(options: SynchronizeOptions): Promise<void> {
   const { database, log = () => {} } = options
   const retries = options.conflictRetries ?? 5
 
+  // Multi-tab: only the sync-lease holder runs; everyone else's tick is
+  // a cheap no-op. Drivers without shared storage have no hook.
+  if ((await database.driver.requestSyncTurn?.()) === false) {
+    log('sync turn denied — another context holds the sync lease')
+    return
+  }
+
   for (let attempt = 1; attempt <= retries; attempt++) {
     // ---- pull phase ----
     const pullCursor = await getCursor(database)

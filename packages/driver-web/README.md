@@ -121,11 +121,11 @@ Android), the option gracefully falls back to the single-owner
 behavior above — same API, same errors, the takeover UI simply becomes
 reachable again.
 
-Two honest caveats while the mode is opt-in: sync coordination across
-tabs is not built yet (every tab may run `synchronize`; the arbiter
-makes it converge but N tabs sync N times), and the open questions in
-docs/multi-tab.md list the remaining sharp edges. Shared mode becomes
-the default once those close.
+Sync also coordinates itself: `synchronize` runs only in the tab
+holding the broker's sync lease (renewed on each tick, inherited when
+the holder closes), so a naive per-tab sync interval is correct. The
+remaining sharp edges before shared mode becomes the default are the
+open questions in docs/multi-tab.md.
 
 ## The RPC protocol
 
@@ -145,6 +145,7 @@ truth). Who answers depends on the op:
 | `ping` | worker | liveness probe (the broker checks its compute channel) |
 | `acquireSlot` / `releaseSlot` | broker | cross-tab write-block arbitration (never reach SQLite) |
 | `publishChanges` | broker | relay a commit's change set to the other tabs |
+| `syncTurn` | broker | sync-lease request: grant/renew for the holder, deny others |
 
 In shared mode the broker additionally pushes two unsolicited control
 messages to tabs: `{control: 'spawnWorker'}` (asking a tab to host the

@@ -84,6 +84,15 @@ export interface SqliteDriver {
    * driver that implements one of the propagation members implements both.
    */
   onExternalChanges?(handler: (changes: ExternalChangeSet) => void): void
+
+  /**
+   * Optional sync ownership (docs/multi-tab.md): when storage is shared
+   * between contexts, only one of them should run `synchronize` at a
+   * time. Implemented as a lease the holder renews by asking again;
+   * `synchronize` consults this at entry and returns early when denied.
+   * Drivers with exclusive storage omit it — they always own sync.
+   */
+  requestSyncTurn?(): Promise<boolean>
 }
 
 /** One committed change, as propagated between contexts. */

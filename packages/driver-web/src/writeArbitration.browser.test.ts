@@ -17,6 +17,27 @@ class Counter extends ModelFor(countersTable) {}
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
+describe('shared mode sync lease', () => {
+  it('one tab holds the lease; expiry passes it on', async () => {
+    const name = `lease-${Date.now()}.db`
+    const tabA = new WebSqliteDriver({ shared: true, syncLeaseMs: 300 })
+    const tabB = new WebSqliteDriver({ shared: true, syncLeaseMs: 300 })
+    await tabA.open(name)
+    await tabB.open(name)
+
+    expect(await tabA.requestSyncTurn()).toBe(true) // takes the lease
+    expect(await tabB.requestSyncTurn()).toBe(false) // held by A
+    expect(await tabA.requestSyncTurn()).toBe(true) // renewal
+
+    await wait(350) // A stops renewing (its tab "closed")
+    expect(await tabB.requestSyncTurn()).toBe(true) // B inherits
+    expect(await tabA.requestSyncTurn()).toBe(false) // A is out now
+
+    await tabA.close()
+    await tabB.destroy()
+  })
+})
+
 describe('shared mode write arbitration', () => {
   it('driver slots: exclusive excludes, shared coexists', async () => {
     const name = `arb-driver-${Date.now()}.db`

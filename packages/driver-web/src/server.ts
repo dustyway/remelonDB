@@ -192,6 +192,7 @@ export class SqliteWorkerServer {
       case 'acquireSlot':
       case 'releaseSlot':
       case 'publishChanges':
+      case 'syncTurn':
         throw new Error(`${request.op} is broker-only and must not reach the worker`)
       case 'open':
         throw new Error('open is handled asynchronously') // see serve()

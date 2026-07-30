@@ -62,13 +62,19 @@ export interface WebSqliteDriverOptions {
   readonly onTakenOver?: () => void
   /**
    * Opt in to the SharedWorker owner (docs/multi-tab.md): all tabs route
-   * through one worker, so same-name opens SHARE a connection instead of
-   * contending for it — no lock, no takeover. Change propagation between
-   * tabs is not wired yet, so caches in other tabs go stale until it is;
-   * hence opt-in. Where `SharedWorker` is unavailable (Chrome for
+   * through one worker, so same-name opens SHARE a live connection —
+   * no lock, no takeover; commits broadcast into every tab's cache,
+   * write blocks arbitrate across tabs, and sync runs on one tab at a
+   * time via a lease. Where `SharedWorker` is unavailable (Chrome for
    * Android), falls back to the default single-owner behavior.
    */
   readonly shared?: boolean
+  /**
+   * Shared mode: how long a granted sync lease lasts before another tab
+   * may take it over. Renewal happens implicitly on each sync tick, so
+   * this only matters after the holder goes away. Default 10s.
+   */
+  readonly syncLeaseMs?: number
   /** Override the transport — used by tests to run in-process. */
   readonly createEndpoint?: () => Endpoint
 }
@@ -361,6 +367,25 @@ export class WebSqliteDriver implements SqliteDriver {
 
   onExternalChanges(handler: (changes: ExternalChangeSet) => void): void {
     this.externalChangesHandler = handler
+  }
+
+  /**
+   * Sync ownership (docs/multi-tab.md): in shared mode, a lease from
+   * the broker decides which tab's synchronize actually runs; asking
+   * again renews it, and an expired lease passes to the next asker (a
+   * closed tab stops renewing, so ownership self-heals). Dedicated
+   * storage always owns sync.
+   */
+  async requestSyncTurn(): Promise<boolean> {
+    if (!this.sharedMode || this.name === null) {
+      return true
+    }
+    const { granted } = await this.request<{ granted: boolean }>({
+      op: 'syncTurn',
+      name: this.name,
+      leaseMs: this.options.syncLeaseMs ?? 10_000,
+    })
+    return granted
   }
 
   async close(): Promise<void> {
