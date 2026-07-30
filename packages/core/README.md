@@ -70,6 +70,10 @@ const unsubscribe = db
 await synchronize({ database: db, pullChanges, pushChanges }) // your backend
 ```
 
+App bootstraps should wrap this in `createDatabaseManager` (see the
+root README): shared init, retryable failure, takeover handling, and a
+React hook via `@remelondb/core/react`.
+
 Nothing schedules that call: the library has no timer and holds no
 connection. Sync on app start, on foreground, on `online`, and after
 local writes — see

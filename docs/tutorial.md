@@ -149,7 +149,11 @@ const db = await Database.open({
 ```
 
 On first open the schema DDL runs; on later opens with a higher schema
-version, migrations run (section 9).
+version, migrations run (section 9). In an application, wrap this call
+in `createDatabaseManager` — it deduplicates concurrent opens, keeps
+failures retryable, and feeds `useDatabaseState` from
+`@remelondb/core/react`; the raw `Database.open` used throughout this
+tutorial is the primitive it manages.
 
 ## 5. Create a deck and its cards
 

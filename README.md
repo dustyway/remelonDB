@@ -67,6 +67,14 @@ implement the seam over your database and prove the adapter with the
 suite. The `@remelondb/core/zod` subpath
 derives tables and wire validators from shared Zod schemas.
 
+Multi-tab on the web ships behind the opt-in `shared: true` driver
+option: every tab live on one database through a SharedWorker broker,
+with cross-tab write arbitration, change broadcast into each tab's
+record cache, and a graceful single-owner fallback where SharedWorker
+is missing. The coordination protocol has its own CI-checked Quint
+model ([docs/multi-tab.qnt](docs/multi-tab.qnt)); the design and its
+implementation learnings are in [docs/multi-tab.md](docs/multi-tab.md).
+
 A taste of the API — the same code on every platform, swapping only
 the driver import:
 
@@ -102,6 +110,11 @@ db.get(Task)
   .query(Q.where('is_done', false), Q.sortBy('position'))
   .observe((open) => console.log('open tasks:', open.length))
 ```
+
+In an app, wrap the open in `createDatabaseManager` (and
+`useDatabaseState` from `@remelondb/core/react`): concurrent inits
+share one open, failures stay retryable, and web takeover is handled —
+see the driver-web README and the todo-sync example.
 
 (No Zod in your stack? The `table()`/`column` builders in core define
 the same tables by hand — [schema reference](docs/reference/schema.md).)

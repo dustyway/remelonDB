@@ -59,6 +59,10 @@ const db = await Database.open({
 })
 ```
 
+Apps should wrap the open in `createDatabaseManager` (core) and drive
+UI from `useDatabaseState` (`@remelondb/core/react`) — the same
+bootstrap as web, with the takeover callback simply unused on native.
+
 ## How it's put together
 
 | Piece | Role |

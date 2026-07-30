@@ -19,18 +19,33 @@ safaridriver (checklist below).
 
 ## Usage
 
+The recommended app bootstrap is the database manager — one shared
+open, retryable failure, takeover handled — with the React hook for
+lifecycle state:
+
 ```ts
-import { Database } from '@remelondb/core'
+import { createDatabaseManager, Database } from '@remelondb/core'
+import { useDatabaseState } from '@remelondb/core/react'
 import { WebSqliteDriver } from '@remelondb/driver-web'
 
-const db = await Database.open({
-  driver: new WebSqliteDriver(), // storage: 'opfs' by default
-  schema,
-  migrations,
-  modelClasses: [Task],
-  name: 'app.db',
+const manager = createDatabaseManager({
+  open: (onTakenOver) =>
+    Database.open({
+      driver: new WebSqliteDriver({ shared: true, takeover: true, onTakenOver }),
+      schema,
+      migrations,
+      modelClasses: [Task],
+      name: 'app.db',
+    }),
 })
+
+// in a component: const { status, error } = useDatabaseState(manager)
+// when status is 'ready': manager.database
 ```
+
+`Database.open` is the primitive underneath — fine to call directly in
+tests and scripts; apps should let the manager own the lifecycle. The
+todo-sync example's `frontend/src/db.ts` is the working reference.
 
 - **Persistence is never silently downgraded**: the default `storage:
   'opfs'` fails loudly if OPFS is unavailable (old browser, sandboxed
