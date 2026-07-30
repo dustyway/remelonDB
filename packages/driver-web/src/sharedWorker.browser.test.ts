@@ -42,5 +42,12 @@ describe('shared worker mode (opt-in)', () => {
     await tabA.close()
     expect(await tabB.query('select count(*) as n from t', [])).toEqual([{ n: 2 }])
     await tabB.destroy() // last holder: unlink so reruns start clean
+
+    // Release the SAH pool for the next test file: terminate the hosted
+    // compute worker (in a real app it dies with its tab) and give the
+    // handles a moment to free — same hygiene as the durability test.
+    tabA.hostedComputeWorker?.terminate()
+    tabB.hostedComputeWorker?.terminate()
+    await new Promise((resolve) => setTimeout(resolve, 100))
   })
 })

@@ -88,6 +88,13 @@ export class WebSqliteDriver implements SqliteDriver {
   >()
   private releaseTabLock: (() => void) | null = null
   private takenOver = false
+  /**
+   * @internal The compute worker this tab spawned for the broker, when it
+   * was the one asked to host it. It lives and dies with the tab — except
+   * in tests, which terminate it explicitly so the SAH pool's handles are
+   * released before the next test file needs them.
+   */
+  hostedComputeWorker: { terminate(): void } | null = null
 
   constructor(private readonly options: WebSqliteDriverOptions = {}) {}
 
@@ -122,6 +129,7 @@ export class WebSqliteDriver implements SqliteDriver {
                 new URL('./worker.ts', import.meta.url),
                 { type: 'module' },
               )
+              this.hostedComputeWorker = compute
               const channel = new MessageChannel()
               compute.postMessage({ __remelondbAdoptPort: true }, [
                 channel.port2,
