@@ -62,12 +62,15 @@ Android emulators reach the local server automatically (`10.0.2.2`);
 a physical device needs `EXPO_PUBLIC_SYNC_URL` pointing at a server it
 can reach (see "Deploying the demo").
 
-Open the web client twice: one normal window and one **private** window.
-Two tabs in the same profile share one OPFS database (and the driver
-holds a single connection), so a private window or a second browser is
-what plays the part of a second device. A second normal tab gets a
-clear "open in another tab" error; the driver's takeover option and
-the planned every-tab-live design are covered in the
+Open the web client twice — both ways work, and they demonstrate
+different things. Two **tabs** in the same profile share one live
+database (the client runs the driver's shared mode): edits mirror
+between them instantly, no server involved. A **private** window or a
+second browser has its own OPFS storage and plays the part of a second
+device, syncing through the server. The lifecycle bootstrap is
+`createDatabaseManager` + `useDatabaseState` from
+`@remelondb/core/react` (see `src/db.ts` and `src/main.tsx` — three
+lines each); shared mode and its fallback are covered in the
 [driver README](../../packages/driver-web/README.md#multi-tab-usage)
 and [docs/multi-tab.md](../../docs/multi-tab.md).
 

@@ -162,6 +162,19 @@ export async function runSteps(url, hooks = {}) {
   await b.page.waitForSelector(`li.done:has-text("${EDITED}")`, { timeout: 20000 })
   console.log('step 8: offline text edit and remote toggle merge field by field')
 
+  // Step 9: two TABS of one browser share one live database (shared
+  // mode) — a second page in A's context mirrors the first, both ways.
+  const TABBED = `two tabs one db ${suffix}`
+  const a2 = await a.context.newPage()
+  await a2.goto(url)
+  await a2.waitForSelector('#status')
+  await addTodo(a, TABBED)
+  await a2.waitForSelector(`li:has-text("${TABBED}")`, { timeout: 5000 })
+  await a2.click(`li:has-text("${TABBED}")`)
+  await a.page.waitForSelector(`li.done:has-text("${TABBED}")`, { timeout: 5000 })
+  await a2.close()
+  console.log('step 9: two tabs mirror through one shared database')
+
   // Aborted /sync fetches during the outage are the point, not a defect.
   const expected = (m) => /sync\/(pull|push)|Failed to load resource|ERR_FAILED/.test(m)
   const unexpected = [...a.errors, ...b.errors].filter((m) => !expected(m))
