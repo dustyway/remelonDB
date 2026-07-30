@@ -13,19 +13,6 @@ import { defineConfig } from 'vitest/config'
 
 const browser = process.env.BROWSER ?? 'chromium'
 
-// Playwright's WebKit build has an OPFS SAH-pool quirk: when the
-// conformance suite churns ephemeral databases through the one shared
-// pool, a recycled slot occasionally comes back with stale state, so a
-// just-written table reads back missing (SQLITE_ERROR: no such table) or
-// a fresh db reads as corrupt (SQLITE_NOTADB). It is specific to
-// Playwright-WebKit — real Safari (via safaridriver) and Chromium pass
-// the identical suite every run — and it is timing-dependent: the same
-// test passes on immediate re-run. Real apps open one persistent
-// database and never churn the pool this way, so this is a test-harness
-// artifact, not a product bug. Retry only WebKit to absorb it; a green
-// pass still means every test passed. Tracked upstream (see docs).
-const retry = browser === 'webkit' ? 3 : 0
-
 if (browser === 'safari') {
   // wdio's default HTTP path hands an undici-6 Agent to Node >= 26's
   // built-in fetch, which rejects it (UND_ERR_INVALID_ARG: invalid
@@ -40,7 +27,14 @@ export default defineConfig({
   },
   test: {
     include: ['src/**/*.browser.test.ts'],
-    retry,
+    // The OPFS SAH pool is one exclusive, origin-wide resource: only one
+    // worker can own it at a time. Vitest runs test files in parallel by
+    // default, so several files then fight over that single pool — which
+    // corrupts recycled slots (SQLITE_NOTADB / a just-created table
+    // reading back missing) and starves the single-owner takeover in
+    // sharedFallback until it times out. Both are the same root cause.
+    // Run browser files serially so each owns the pool uncontended.
+    fileParallelism: false,
     browser: {
       enabled: true,
       provider:
