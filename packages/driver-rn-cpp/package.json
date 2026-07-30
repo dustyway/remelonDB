@@ -19,16 +19,15 @@
     "build": "tsdown",
     "prepack": "tsdown"
   },
-  "dependencies": {
-    "@remelondb/core": "workspace:*"
-  },
   "peerDependencies": {
-    "react-native": ">=0.76"
+    "react-native": ">=0.76",
+    "@remelondb/core": "workspace:*"
   },
   "devDependencies": {
     "react": "^19.1.0",
     "react-native": "^0.86.0",
-    "@types/react": "^19.0.0"
+    "@types/react": "^19.0.0",
+    "@remelondb/core": "workspace:*"
   },
   "codegenConfig": {
     "name": "RemelonDriverSpec",

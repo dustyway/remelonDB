@@ -152,13 +152,13 @@ importers:
 
   packages/driver-node:
     dependencies:
-      '@remelondb/core':
-        specifier: workspace:*
-        version: link:../core
       better-sqlite3:
         specifier: ^12.2.0
         version: 12.11.1
     devDependencies:
+      '@remelondb/core':
+        specifier: workspace:*
+        version: link:../core
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
@@ -167,11 +167,10 @@ importers:
         version: 24.13.3
 
   packages/driver-rn:
-    dependencies:
+    devDependencies:
       '@remelondb/core':
         specifier: workspace:*
         version: link:../core
-    devDependencies:
       '@types/react':
         specifier: ^19.0.0
         version: 19.2.17
@@ -186,11 +185,10 @@ importers:
         version: 0.86.0(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.7)
 
   packages/driver-rn-cpp:
-    dependencies:
+    devDependencies:
       '@remelondb/core':
         specifier: workspace:*
         version: link:../core
-    devDependencies:
       '@types/react':
         specifier: ^19.0.0
         version: 19.2.17
@@ -203,13 +201,13 @@ importers:
 
   packages/driver-web:
     dependencies:
-      '@remelondb/core':
-        specifier: workspace:*
-        version: link:../core
       '@sqlite.org/sqlite-wasm':
         specifier: 3.53.0-build1
         version: 3.53.0-build1
     devDependencies:
+      '@remelondb/core':
+        specifier: workspace:*
+        version: link:../core
       '@vitest/browser':
         specifier: ^3.2.7
         version: 3.2.7(playwright@1.61.1)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))(vitest@3.2.7)(webdriverio@9.29.1)
@@ -221,13 +219,6 @@ importers:
         version: 9.29.1
 
   packages/nestjs:
-    dependencies:
-      '@remelondb/core':
-        specifier: workspace:*
-        version: link:../core
-      '@remelondb/server':
-        specifier: workspace:*
-        version: link:../server
     devDependencies:
       '@nestjs/common':
         specifier: ^11.1.6
@@ -241,6 +232,12 @@ importers:
       '@nestjs/testing':
         specifier: ^11.1.6
         version: 11.1.28(@nestjs/common@11.1.28(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.28)(@nestjs/platform-express@11.1.28)
+      '@remelondb/core':
+        specifier: workspace:*
+        version: link:../core
+      '@remelondb/server':
+        specifier: workspace:*
+        version: link:../server
       '@types/node':
         specifier: ^24.0.0
         version: 24.13.3
@@ -258,20 +255,15 @@ importers:
         version: 4.4.3
 
   packages/server:
-    dependencies:
+    devDependencies:
       '@remelondb/core':
         specifier: workspace:*
         version: link:../core
-    devDependencies:
       vitest:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@24.13.3)(@vitest/browser@3.2.7)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0)
 
   packages/store-drizzle:
-    dependencies:
-      '@remelondb/server':
-        specifier: workspace:*
-        version: link:../server
     devDependencies:
       '@electric-sql/pglite':
         specifier: ^0.5.4
@@ -279,6 +271,9 @@ importers:
       '@remelondb/core':
         specifier: workspace:*
         version: link:../core
+      '@remelondb/server':
+        specifier: workspace:*
+        version: link:../server
       '@types/node':
         specifier: ^24.0.0
         version: 24.13.3

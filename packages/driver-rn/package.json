@@ -12,17 +12,16 @@
     "build": "tsdown",
     "prepack": "tsdown"
   },
-  "dependencies": {
-    "@remelondb/core": "workspace:*"
-  },
   "peerDependencies": {
-    "expo-sqlite": ">=15.0.0"
+    "expo-sqlite": ">=15.0.0",
+    "@remelondb/core": "workspace:*"
   },
   "devDependencies": {
     "react": "^19.1.0",
     "react-native": "^0.86.0",
     "@types/react": "^19.0.0",
-    "expo-sqlite": "~57.0.1"
+    "expo-sqlite": "~57.0.1",
+    "@remelondb/core": "workspace:*"
   },
   "license": "MIT",
   "description": "remelonDB SqliteDriver for React Native: pure C++ TurboModule with bundled SQLite",

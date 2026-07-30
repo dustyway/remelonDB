@@ -5,11 +5,10 @@
   "exports": {
     ".": "./src/index.ts"
   },
-  "dependencies": {
-    "@remelondb/server": "workspace:*"
-  },
+  "dependencies": {},
   "peerDependencies": {
-    "drizzle-orm": ">=0.40.0"
+    "drizzle-orm": ">=0.40.0",
+    "@remelondb/server": "workspace:*"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.4",
@@ -18,7 +17,8 @@
     "@types/pg": "^8.20.0",
     "drizzle-orm": "^0.45.2",
     "pg": "^8.22.0",
-    "vitest": "^3.2.7"
+    "vitest": "^3.2.7",
+    "@remelondb/server": "workspace:*"
   },
   "license": "MIT",
   "description": "remelonDB SyncStore for Postgres via drizzle-orm: config-per-table storage adapter satisfying the server store seam",

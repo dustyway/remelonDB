@@ -6,11 +6,9 @@
     ".": "./src/index.ts",
     "./conformance": "./src/conformance/index.ts"
   },
-  "dependencies": {
-    "@remelondb/core": "workspace:*"
-  },
   "peerDependencies": {
-    "vitest": ">=3"
+    "vitest": ">=3",
+    "@remelondb/core": "workspace:*"
   },
   "peerDependenciesMeta": {
     "vitest": {
@@ -18,7 +16,8 @@
     }
   },
   "devDependencies": {
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "@remelondb/core": "workspace:*"
   },
   "license": "MIT",
   "description": "remelonDB sync backend engine: the wire protocol implemented once above a small storage seam, with an in-memory store and conformance-proven semantics",

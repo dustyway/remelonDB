@@ -5,13 +5,11 @@
   "exports": {
     ".": "./src/index.ts"
   },
-  "dependencies": {
-    "@remelondb/core": "workspace:*",
-    "@remelondb/server": "workspace:*"
-  },
   "peerDependencies": {
     "@nestjs/common": ">=10",
-    "zod": "^4.0.0"
+    "zod": "^4.0.0",
+    "@remelondb/core": "workspace:*",
+    "@remelondb/server": "workspace:*"
   },
   "devDependencies": {
     "@nestjs/common": "^11.1.6",
@@ -22,7 +20,9 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "vitest": "^3.2.7",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@remelondb/core": "workspace:*",
+    "@remelondb/server": "workspace:*"
   },
   "license": "MIT",
   "description": "remelonDB sync endpoints for NestJS: the wire protocol's canonical HTTP binding over any SyncStore, validated by the shared Zod table schemas",
