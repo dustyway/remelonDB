@@ -206,29 +206,38 @@ export function createSqliteWorkerServing(
   const serverPromise = loadSqlite().then(
     (sqlite3) => new SqliteWorkerServer(sqlite3),
   )
+  // Requests run strictly in arrival order, across every endpoint this
+  // server answers (the worker scope plus the broker's adopted ports).
+  // `open` is async — it awaits the OPFS pool install — so without a
+  // single shared queue a later request could run while an earlier one
+  // is parked at that await and race it on the pool (double install, two
+  // opens past the `already open` guard). The queue never rejects: each
+  // step turns its own failure into an error response.
+  let queue: Promise<unknown> = serverPromise
   return (endpoint) => {
     endpoint.addMessageListener((message) => {
       const request = message as WorkerRequest
       if (typeof (request as { op?: unknown }).op !== 'string') {
         return // control traffic (port adoption), not a request
       }
-      void serverPromise
-        .then(async (server) => {
+      queue = queue.then(async () => {
+        const server = await serverPromise
+        try {
           const result =
             request.op === 'open'
               ? await server.open(request.name, request.storage)
               : server.handle(request)
           const response: WorkerResponse = { id: request.id, ok: true, result }
           endpoint.postMessage(response)
-        })
-        .catch((error: unknown) => {
+        } catch (error: unknown) {
           const response: WorkerResponse = {
             id: request.id,
             ok: false,
             error: error instanceof Error ? error.message : String(error),
           }
           endpoint.postMessage(response)
-        })
+        }
+      })
     })
   }
 }
