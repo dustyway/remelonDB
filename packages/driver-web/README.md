@@ -120,6 +120,31 @@ is [docs/multi-tab.md](../../docs/multi-tab.md). If you only target
 desktop browsers and need true multi-tab today, prefer the
 SharedWorker; if Android web matters, use the lock election.
 
+## The RPC protocol
+
+Every request carries an `id`; the answering side replies with
+`{id, ok, result}` or `{id, ok: false, error}`. Requests and responses
+are structured-clonable plain data (`src/protocol.ts` is the source of
+truth). Who answers depends on the op:
+
+| Op | Answered by | Purpose |
+| --- | --- | --- |
+| `open` | worker | open by name, report `user_version` (async: awaits pool install) |
+| `close` | worker | close the named connection |
+| `query` / `execute` | worker | one SELECT / one non-SELECT statement |
+| `executeBatch` | worker | atomic multi-statement transaction |
+| `setUserVersion` | worker | `PRAGMA user_version` after setup/migration |
+| `destroy` | worker | delete the database and sidecar files |
+| `ping` | worker | liveness probe (the broker checks its compute channel) |
+| `acquireSlot` / `releaseSlot` | broker | cross-tab write-block arbitration (never reach SQLite) |
+| `publishChanges` | broker | relay a commit's change set to the other tabs |
+
+In shared mode the broker additionally pushes two unsolicited control
+messages to tabs: `{control: 'spawnWorker'}` (asking a tab to host the
+compute worker) and `{control: 'externalChanges', name, changes}`
+(another tab's commit). In dedicated mode only the worker-answered ops
+occur, over a direct Worker transport.
+
 ## Layout
 
 | Piece | Role |

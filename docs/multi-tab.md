@@ -73,26 +73,48 @@ was built for exactly this substitution.
 **Write serialization across tabs.** Statements from all tabs flow
 through the one connection, which serializes them — but a `db.write`
 block is multiple statements, and two tabs' blocks must not
-interleave. The SharedWorker arbitrates: a plain queue of write-block
-tokens, granted one at a time, `db.read` consistency windows granted
-shared. In-process code, no cross-context locks. Single-tab behavior
-is unchanged: an uncontended grant is immediate.
+interleave. The SharedWorker arbitrates: a plain FIFO queue of
+write-block tokens (`acquireSlot`/`releaseSlot`), exclusive granted one
+at a time, `db.read` consistency windows granted shared. In-process
+code, no cross-context locks. Single-tab behavior is unchanged: an
+uncontended grant is immediate.
 
-**Change propagation.** After each committed batch, the SharedWorker
-broadcasts the batch's change sets to every connected port — raw-level
-records keyed by table, the shape the change buses already deliver.
-Every other tab applies them through a new core doorway (working name
-`database.applyExternalChanges(changes)`): update cached raws in place
-exactly as batch commit does, then notify the collection and database
-change buses. Observers then behave as if the write were local —
-including content-only re-emissions on reloading queries. The doorway
-is the only core change this design needs; everything else lives in
-the web driver package.
+**The ordering invariant (do not refactor this away).** Core acquires
+the slot BEFORE entering its local work queue, not inside it. While a
+context waits for its grant, its queue stays free to apply change
+broadcasts from the other contexts — and because a holder publishes its
+changes before it releases, per-port FIFO delivery guarantees the grant
+response arrives after every broadcast committed before it. A block
+therefore always reads a cache that includes everything serialized
+ahead of it. The first implementation acquired the slot inside the
+queue; broadcasts then parked behind the waiting block, whose reads
+trusted a stale cache and overwrote another tab's committed increment —
+a storage-level lost update, caught by the convergence test the moment
+broadcast existed. Serializing blocks is not enough; blocks must also
+happen-after what they were serialized behind, and the transport's
+message ordering is what provides that for free.
 
-**Sync stays single-owner.** Only the SharedWorker runs `synchronize`
-and holds the autosync loop; it broadcasts sync status alongside
-change sets. Tab-initiated sync requests are forwarded, not run
-locally.
+**Change propagation.** After each committed batch, core hands the
+batch's change set to the driver (`publishChanges`, best-effort and
+fire-and-forget — a lost notification is a stale cache until the next
+one, never data loss); the driver relays it to the broker, which fans
+it out to every OTHER port holding that database — never back to the
+sender, whose commit already updated its own cache (self-echo would
+loop). The receiving driver hands the set to core
+(`onExternalChanges`), which routes it into
+`database.applyExternalChanges`: cached raws updated in place exactly
+as batch commit does, then the collection and database change buses
+notified. Observers behave as if the write were local. The doorway is
+a new entry point sharing the commit path's cache-and-notify tail (a
+provenance flag on `batch` was considered and rejected: the broadcast
+arrives in the commit path's OUTPUT shape and must skip the writer
+assertion and driver encoding).
+
+**Sync across tabs is not solved yet.** Today every tab may run
+`synchronize` against the shared storage. The write arbiter serializes
+the blocks so this converges, but N tabs sync N times over the network.
+The intended end state — one sync owner, status broadcast to the rest —
+needs a home now that the broker runs no core code; see open questions.
 
 **Fallback without `SharedWorker`.** Feature-detect. Where it is
 missing (Chrome for Android), the driver behaves as it ships today:
@@ -117,18 +139,35 @@ everywhere. `MessagePort` transfer into a SharedWorker — the one
 capability the design leans on — is long-standing in all supported
 browsers.
 
+## What this cost in core
+
+Three seams, all optional and inert without a sharing driver (the
+original design hoped for one; arbitration and propagation each needed
+their own):
+
+- `database.applyExternalChanges(changes)` — the receiving doorway.
+- `SqliteDriver.acquireWorkSlot?(exclusive)` — cross-context block
+  arbitration, held by `write`/`read` around their blocks.
+- `SqliteDriver.publishChanges?` / `onExternalChanges?` — the two
+  halves of change propagation.
+
+The protocol gained broker-only ops (`acquireSlot`, `releaseSlot`,
+`publishChanges`, plus the `ping` probe and two control messages) — the
+full op table lives in the driver-web README, since the base protocol
+serves every mode, not just multi-tab.
+
 ## What does not change
 
-The wire protocol, the server packages, and the Node/RN drivers are
-untouched. So is the single-tab path: one tab means one port and no
-contention; the only addition is the SharedWorker hop between tab and
-SQLite worker.
+The sync wire protocol, the server packages, and the Node/RN drivers
+are untouched (they simply don't implement the optional seams). So is
+the single-tab dedicated path: no broker, no slots, no broadcasts —
+bit-identical behavior to before this work.
 
 ## Verification plan
 
 A dedicated browser suite in `@remelondb/driver-web`, same style as
-the existing conformance runs: nested-worker spawn works on every
-target browser; N tabs connect and resolve to one owner; a write in
+the existing conformance runs: the spawn/port-handoff boot works on
+every target browser; N tabs connect and resolve to one owner; a write in
 any tab is observed in every tab (list membership and content changes
 both); closing the last tab and reopening finds the data (owner
 teardown released the pool); the write arbiter prevents interleaved
@@ -142,9 +181,14 @@ tabs.
 
 ## Open questions
 
-- Whether `applyExternalChanges` is a new entry point or a provenance
-  flag on the existing batch-commit path (skip the driver writes, keep
-  the cache update and notifications).
+- A tab dying while HOLDING a write slot leaks it and stalls every
+  writer: the broker's liveness probe covers dead compute, not dead
+  slot holders. Candidate: each tab holds a Web Lock the broker can
+  test (`ifAvailable`) when a slot outlives a deadline; released locks
+  mean a dead holder, revoke the slot.
+- Where sync ownership lives (see "Sync across tabs"): the broker runs
+  no core code, so "one sync owner" needs either a designated tab or a
+  broker-granted sync token, same shape as the write slot.
 - Backpressure on forwarded statements from a very chatty tab.
 - Whether a frozen (not dead) host tab freezes its dedicated worker
   with it. If it does, passive detection covers it the same as death:
