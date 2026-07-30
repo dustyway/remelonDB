@@ -20,12 +20,5 @@
     "zod": "^4.4.3"
   },
   "license": "MIT",
-  "version": "0.0.9",
-  "pnpm": {
-    "peerDependencyRules": {
-      "allowedVersions": {
-        "react-dom>react": "^19.2.0"
-      }
-    }
-  }
+  "version": "0.0.9"
 }

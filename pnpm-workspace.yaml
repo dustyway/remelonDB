@@ -2,6 +2,9 @@ packages:
   - packages/*
   - examples/*
   - examples/*/*
+peerDependencyRules:
+  allowedVersions:
+    react-dom>react: ^19.2.0
 allowBuilds:
   better-sqlite3: true
   # webdriverio pulls these in, but only safaridriver is used (BROWSER=safari)
