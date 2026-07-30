@@ -5,11 +5,13 @@
   "exports": {
     ".": "./src/index.ts",
     "./conformance": "./src/conformance/index.ts",
-    "./zod": "./src/zod/index.ts"
+    "./zod": "./src/zod/index.ts",
+    "./react": "./src/react/index.ts"
   },
   "peerDependencies": {
     "vitest": ">=3",
-    "zod": "^4.0.0"
+    "zod": "^4.0.0",
+    "react": ">=18"
   },
   "peerDependenciesMeta": {
     "vitest": {
@@ -17,11 +19,16 @@
     },
     "zod": {
       "optional": true
+    },
+    "react": {
+      "optional": true
     }
   },
   "devDependencies": {
     "vitest": "^3.2.4",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "react": "^19.1.0",
+    "@types/react": "^19.0.0"
   },
   "license": "MIT",
   "description": "remelonDB core: reactive offline-first database over a pluggable SQLite driver — queries as data, schema/migrations, observation, sync engine",

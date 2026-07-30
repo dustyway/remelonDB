@@ -55,6 +55,13 @@ export type { RawRecord, DirtyRaw, SyncStatus } from './rawRecord/index'
 export { randomId } from './utils/randomId'
 
 export { Database } from './database/Database'
+export { createDatabaseManager } from './database/DatabaseManager'
+export type {
+  DatabaseManager,
+  DatabaseManagerOptions,
+  DatabaseManagerState,
+  DatabaseManagerStatus,
+} from './database/DatabaseManager'
 export type { DatabaseOptions, DatabaseChangeSet } from './database/Database'
 export { Collection } from './database/Collection'
 export type {
