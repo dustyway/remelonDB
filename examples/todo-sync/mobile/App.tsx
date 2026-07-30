@@ -11,8 +11,9 @@ import {
 import { Q, type Database } from '@remelondb/core'
 import { TodoModel } from 'example-todo-sync/schema'
 import { useQuery } from 'example-todo-sync/client'
+import { useDatabaseState } from '@remelondb/core/react'
 import { TodoItem } from './components/TodoItem'
-import { openDb } from './src/db'
+import { manager } from './src/db'
 import {
   getSyncNote,
   getSyncStatus,
@@ -21,16 +22,20 @@ import {
 } from './src/sync'
 import { theme } from './theme'
 
-// Hermes has no top-level await, so the database opens behind a state
-// gate instead of the web client's awaited module import.
 export default function App() {
-  const [db, setDb] = useState<Database | null>(null)
+  const { status, error } = useDatabaseState(manager)
   useEffect(() => {
-    void openDb().then(setDb)
+    void manager.init().catch(() => {}) // errors surface through the state
   }, [])
   return (
     <View style={styles.container}>
-      {db ? <Todos db={db} /> : <Text>opening database…</Text>}
+      {status === 'ready' ? (
+        <Todos db={manager.database} />
+      ) : status === 'error' ? (
+        <Text>{String(error)}</Text>
+      ) : (
+        <Text>opening database…</Text>
+      )}
       <StatusBar style="auto" />
     </View>
   )
