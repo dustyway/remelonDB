@@ -316,18 +316,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Fetch SQLite amalgamation
         run: node packages/driver-rn-cpp/scripts/fetch-sqlite.mjs
-      - name: Pack workspace packages (rewriting workspace deps to tarballs)
+      - name: Pack workspace packages
         run: |
           mkdir -p /tmp/packed
           pnpm --filter @remelondb/core pack --pack-destination /tmp/packed
-          CORE_TGZ=$(ls /tmp/packed/*core*.tgz)
-          node -e "
-            const fs = require('fs')
-            const path = 'packages/driver-rn-cpp/package.json'
-            const pkg = JSON.parse(fs.readFileSync(path, 'utf8'))
-            pkg.dependencies['@remelondb/core'] = 'file:' + process.argv[1]
-            fs.writeFileSync(path, JSON.stringify(pkg, null, 2))
-          " "$CORE_TGZ"
           pnpm --filter @remelondb/driver-rn-cpp pack --pack-destination /tmp/packed
       - name: Create RN 0.86 test app
         run: |
