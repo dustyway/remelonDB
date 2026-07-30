@@ -173,9 +173,10 @@ both); closing the last tab and reopening finds the data (owner
 teardown released the pool); the write arbiter prevents interleaved
 write blocks (two tabs racing read-modify-write converge correctly);
 sync runs exactly once across tabs. The fallback path is part of the
-suite, not an assumption: a run with `SharedWorker` forcibly disabled
-(an option the driver exposes for exactly this) must reproduce
-today's single-owner conformance results. The todo-sync example then
+suite, not an assumption: a dedicated run deletes the `SharedWorker`
+constructor from the realm (no driver option needed) and proves
+`{ shared: true }` reproduces the single-owner semantics — fail fast,
+takeover with notification, coordination seams degrading to no-ops. The todo-sync example then
 drops the "use a private window" caveat and demonstrates two real
 tabs.
 
