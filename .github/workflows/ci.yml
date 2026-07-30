@@ -92,6 +92,7 @@ jobs:
       # practice run when the model changes (see docs/formal-model.md) —
       # 0.32.0's run fetches a Rust evaluator from GitHub, too flaky for CI.
       - run: npx --yes @informalsystems/quint@0.32.0 typecheck docs/sync_model.qnt
+      - run: npx --yes @informalsystems/quint@0.32.0 typecheck docs/multi-tab.qnt
 
   # Consume the packed tarballs from a plain Node project — proves the
   # published artifacts (dist exports, workspace-dep rewriting) work for

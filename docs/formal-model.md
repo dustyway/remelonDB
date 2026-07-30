@@ -1,8 +1,24 @@
-# How the formal model and its verification work
+# How the formal models and their verification work
 
-An explanation of [sync_model.qnt](sync_model.qnt): what it is, what
+An explanation of the Quint models in this repo: what they are, what
 CI actually checks, what that does and does not guarantee. No formal
-methods background assumed.
+methods background assumed. There are two:
+
+- [sync_model.qnt](sync_model.qnt) — the client/server sync protocol
+  (the original model this page was written around; everything below
+  uses it as the running example).
+- [multi-tab.qnt](multi-tab.qnt) — the browser multi-tab coordination
+  protocol from [multi-tab.md](multi-tab.md): write-slot arbitration
+  plus change broadcast, and the FIFO ordering invariant that makes a
+  write block always read what was serialized before it. Same
+  conventions as the sync model, including the bug-reproduction flag:
+  `STRICT_INBOX_FIFO = false` models the discarded acquire-inside-queue
+  design and fails `commitReadsFresh` with a lost-update trace — that
+  bug was first caught by a browser test during implementation; the
+  model now reproduces it on demand and certifies the shipped fix
+  across every interleaving it explores.
+
+Both are typechecked in CI; simulation runs locally (see below).
 
 ## Why a model exists
 
