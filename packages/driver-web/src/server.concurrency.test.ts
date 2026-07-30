@@ -9,6 +9,7 @@
  * in strict arrival order, so an async op fully settles before the next
  * one starts. They fail against an un-serialized dispatcher.
  */
+import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import type { Sqlite3Static } from '@sqlite.org/sqlite-wasm'
 import type { Endpoint, WorkerRequest, WorkerResponse } from './protocol'
@@ -109,5 +110,62 @@ describe('worker server request serialization', () => {
     )
 
     expect(fake.installCalls()).toBe(1)
+  })
+})
+
+/**
+ * The two tests above pin one interleaving each. This property drives the
+ * real dispatcher against *every* ordering fast-check's scheduler picks:
+ * the pool install (the async boundary where the race lives) resolves
+ * whenever the scheduler decides, so any interleaving that double-installs
+ * or double-opens is found and shrunk to a minimal counterexample. It
+ * passes only because requests are serialized; against a dispatcher that
+ * forks a chain per request, some ordering violates the invariants.
+ */
+describe('worker server request serialization (property)', () => {
+  it('no interleaving double-installs the pool or double-opens a name', async () => {
+    await fc.assert(
+      fc.asyncProperty(fc.scheduler(), async (s) => {
+        let installs = 0
+        class FakeDb {
+          constructor(readonly name: string) {}
+          selectValue(): number {
+            return 0
+          }
+          close(): void {}
+        }
+        const poolUtil = {
+          OpfsSAHPoolDb: FakeDb,
+          getFileNames: (): string[] => [],
+          unlink: (): void => {},
+        }
+        const sqlite3 = {
+          // the scheduler owns when the install resolves, so it can slot
+          // other requests into the await window in any order
+          installOpfsSAHPoolVfs: () => {
+            installs += 1
+            return s.schedule(Promise.resolve(poolUtil), 'installOpfsSAHPoolVfs')
+          },
+          oo1: { DB: FakeDb },
+        } as unknown as Sqlite3Static
+
+        const send = serveWith(sqlite3)
+        // waitFor drives the scheduler until the opens settle, picking up
+        // tasks (the pool install) that only appear once queued messages
+        // reach the dispatcher — waitAll would return early on the initial
+        // gap before any task exists.
+        const results = await s.waitFor(
+          Promise.all([
+            send({ id: 1, op: 'open', name: 'x.db', storage: 'opfs' }),
+            send({ id: 2, op: 'open', name: 'x.db', storage: 'opfs' }),
+          ]),
+        )
+
+        // must hold under EVERY ordering the scheduler explores:
+        expect(installs).toBeLessThanOrEqual(1)
+        expect(results.filter((r) => r.ok)).toHaveLength(1)
+      }),
+      { numRuns: 200 },
+    )
   })
 })
