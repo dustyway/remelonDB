@@ -149,6 +149,24 @@ describe('Model layer', () => {
     expect(viaJoin).toEqual([task])
   })
 
+  it('related() is null when the foreign key points at a record that is gone', async () => {
+    const { task, deleted } = await db.write(async () => {
+      await db.get(Project).create({ id: 'p1', name: 'proj' })
+      const task = await db
+        .get(Task)
+        .create({ id: 't1', name: 'a', project_id: 'p1' })
+      const deleted = await db
+        .get(Task)
+        .create({ id: 't2', name: 'b', project_id: 'never-existed' })
+      return { task, deleted }
+    })
+
+    expect(await deleted.related<Project>('projects')).toBeNull()
+
+    await db.write(() => db.get(Project).markAsDeleted('p1'))
+    expect(await task.related<Project>('projects')).toBeNull()
+  })
+
   it('observes a single record until deletion', async () => {
     const task = await db.write(() => db.get(Task).create({ id: 't1' }))
     const emissions: (Task | null)[] = []

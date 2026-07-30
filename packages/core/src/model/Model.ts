@@ -193,7 +193,11 @@ export class Model {
       .query(Q.where(association.foreignKey, this.id))
   }
 
-  /** The belongs_to parent in the given table, or null if unset. */
+  /**
+   * The belongs_to parent in the given table, or null when the key is
+   * unset or points at a record that is gone (sync can delete a parent
+   * while a child still references it).
+   */
   async related<M = unknown>(table: string): Promise<M | null> {
     const association = this.association(table)
     if (association.type !== 'belongs_to') {
@@ -203,7 +207,11 @@ export class Model {
     if (foreignId === null || foreignId === undefined) {
       return null
     }
-    return this.collection.database.get<M>(table).find(String(foreignId))
+    const [record] = await this.collection.database
+      .get<M>(table)
+      .query(Q.where('id', String(foreignId)))
+      .fetch()
+    return record ?? null
   }
 }
 
