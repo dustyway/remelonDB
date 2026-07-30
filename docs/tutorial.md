@@ -136,9 +136,11 @@ class Review extends ModelFor(reviews) {
 
 ## 4. Open the database
 
-The manager owns the open — it deduplicates concurrent inits, keeps a
-failed open retryable, and (on the web) handles takeover. Section 11
-shows what that buys in an app; here it is one extra line:
+Apps open the database through a manager instead of calling
+`Database.open` directly. The manager makes sure there is only ever
+one open in flight, lets a failed open be retried, and on the web
+reacts when another tab takes the database over. Section 11 goes into
+the details; for now it is one extra line:
 
 ```js
 import { createDatabaseManager, Database } from '@remelondb/core'
