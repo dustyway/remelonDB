@@ -39,6 +39,8 @@ export type WorkerRequest = { readonly id: number } & (
     }
   | { readonly op: 'setUserVersion'; readonly name: string; readonly version: number }
   | { readonly op: 'destroy'; readonly name: string }
+  /** Liveness probe (the broker checks its compute channel with it). */
+  | { readonly op: 'ping' }
 )
 
 export type WorkerResponse =

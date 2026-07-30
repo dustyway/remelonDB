@@ -16,7 +16,7 @@ declare const Worker: new (
   url: URL,
   options: { type: 'module' },
 ) => {
-  postMessage(message: unknown): void
+  postMessage(message: unknown, transfer?: readonly unknown[]): void
   addEventListener(type: 'message', listener: (event: { data: unknown }) => void): void
   terminate(): void
 }
@@ -109,10 +109,31 @@ export class WebSqliteDriver implements SqliteDriver {
       return {
         postMessage: (message) => shared.port.postMessage(message),
         addMessageListener: (listener) =>
-          shared.port.addEventListener('message', (event) =>
-            listener((event as MessageEvent).data),
-          ),
-        // closing OUR port must not kill the shared owner — other tabs
+          shared.port.addEventListener('message', (event) => {
+            const data = (event as MessageEvent).data as
+              | { control?: string }
+              | null
+            if (data?.control === 'spawnWorker') {
+              // The broker cannot spawn workers (no Worker constructor in
+              // SharedWorkerGlobalScope on Chromium/WebKit) — this tab
+              // hosts the compute worker and bridges a channel to the
+              // broker. The worker lives and dies with this tab.
+              const compute = new Worker(
+                new URL('./worker.ts', import.meta.url),
+                { type: 'module' },
+              )
+              const channel = new MessageChannel()
+              compute.postMessage({ __remelondbAdoptPort: true }, [
+                channel.port2,
+              ])
+              shared.port.postMessage({ control: 'adoptWorkerPort' }, [
+                channel.port1,
+              ])
+              return
+            }
+            listener(data)
+          }),
+        // closing OUR port must not kill the shared broker — other tabs
         // may be using it; the browser reclaims it with the last tab.
         terminate: () => shared.port.close(),
       }

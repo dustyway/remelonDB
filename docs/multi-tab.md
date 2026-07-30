@@ -23,21 +23,41 @@ concurrent connections at the cost of COOP/COEP headers and lower
 throughput) still leaves every other tab blind to changes. That route
 is rejected: it pays a real cost and solves the wrong half.
 
-## Design: a SharedWorker owns the database
+## Design: a SharedWorker brokers, a tab hosts the compute
 
 A `SharedWorker` is instantiated once per origin; every tab that asks
 for it connects to the same instance over its own `MessagePort`. Its
-lifetime is exactly the ownership semantics we want: it starts with the
-first tab and dies with the last. Ownership is a fact of the platform,
-not a protocol we run — there is no election, no handoff on tab death,
-and no frozen-owner case, because no tab hosts the owner.
+lifetime is exactly the coordination semantics we want: it starts with
+the first tab and dies with the last. Coordination is a fact of the
+platform, not a protocol we run — there is no election and no
+frozen-coordinator case, because no tab hosts the broker.
 
-**Structure: tabs → SharedWorker → dedicated worker.** OPFS
-sync-access handles exist only in dedicated workers, so the
-SharedWorker cannot run SQLite itself. It spawns the existing
-`worker.ts` as a nested dedicated worker and routes to it. The
-SharedWorker is owner, router, and write arbiter; SQLite and the SAH
-pool stay where they are.
+**Why the broker cannot run or spawn SQLite itself.** OPFS sync-access
+handles exist only in dedicated workers, and Chromium's
+`SharedWorkerGlobalScope` has no `Worker` constructor at all
+(`typeof Worker === 'undefined'` there; WebKit behaves the same,
+Firefox does expose it) — verified empirically after a first
+implementation attempt hung silently on exactly this. So the
+SharedWorker can neither host the SAH pool nor spawn the worker that
+does.
+
+**Structure: tabs → SharedWorker (broker) ⇄ compute worker hosted by a
+tab.** The broker owns all coordination state: routing, id namespacing,
+open refcounts, write arbitration. When it first needs SQLite it asks a
+connected tab to spawn the existing `worker.ts` (pages can always spawn
+dedicated workers); the tab creates a `MessageChannel`, hands one port
+to the broker and the other into the spawned worker. The broker then
+talks to SQLite over a direct channel — no per-message hop through the
+host tab.
+
+**Host death.** The host tab dying takes the compute worker with it,
+but never the state: the broker survives, detects the loss passively
+(a request unanswered past a timeout — no heartbeats), asks another
+connected tab to spawn a fresh worker, reopens the held names, and
+fails in-flight requests loudly, the same error surface takeover has
+today. This is the one fragment of the leader design that survives;
+election, lock ceremony, and follower re-pointing do not, because
+identity never moves.
 
 **Tab driver = the same protocol over a different transport.** The web
 driver already speaks a postMessage RPC (`protocol.ts`) of
@@ -86,10 +106,13 @@ mode; its takeover UI simply becomes reachable again.
 
 `SharedWorker`: Chrome and Edge desktop, Firefox, Safari 16+ (desktop
 and iOS). Missing on Chrome for Android and Android WebView. Nested
-dedicated workers are required for the SQLite worker; Chrome and
-Firefox have them long-standing, Safari gained them recently — the
-verification suite checks this first, it is the design's riskiest
-platform assumption.
+workers inside a SharedWorker are NOT part of the design: Chromium and
+WebKit do not expose `Worker` in `SharedWorkerGlobalScope` (Firefox
+does), which is what forced the broker/port-handoff structure. The
+compute worker is spawned by a page, where dedicated workers work
+everywhere. `MessagePort` transfer into a SharedWorker — the one
+capability the design leans on — is long-standing in all supported
+browsers.
 
 ## What does not change
 
@@ -120,9 +143,12 @@ tabs.
   flag on the existing batch-commit path (skip the driver writes, keep
   the cache update and notifications).
 - Backpressure on forwarded statements from a very chatty tab.
-- The SharedWorker's error story when the nested worker dies: restart
-  it transparently (retrying like takeover does today) or surface the
-  error to every tab.
+- Whether a frozen (not dead) host tab freezes its dedicated worker
+  with it. If it does, passive detection covers it the same as death:
+  respawn elsewhere, fail in-flight loudly. Verify empirically before
+  relying on it.
+- The respawn timeout value, and whether the broker should proactively
+  re-host when the host tab reports `pagehide`.
 - Debugging ergonomics: SharedWorkers are inspected via
   `chrome://inspect/#workers`, not the page devtools — worth a note in
   the driver README when this ships.

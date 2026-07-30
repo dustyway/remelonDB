@@ -1,27 +1,37 @@
 /**
- * The SharedWorker owner (docs/multi-tab.md): one instance per origin,
- * every tab connects over its own port. It spawns the existing worker.ts
- * as a NESTED dedicated worker (OPFS sync-access handles are
- * dedicated-worker-only) and routes each tab's RPC to it.
+ * The SharedWorker broker (docs/multi-tab.md): one instance per origin,
+ * every tab connects over its own port. Chromium and WebKit expose no
+ * `Worker` constructor in SharedWorkerGlobalScope, so the broker cannot
+ * spawn SQLite itself — it asks a connected tab to spawn worker.ts and
+ * hand back a MessagePort (the tab bridges one MessageChannel between
+ * us and the spawned worker). The broker then talks to SQLite directly.
  *
- * Responsibilities here, and nothing more (write arbitration and change
- * broadcast are later slices):
+ * The broker owns coordination state, nothing else:
  * - id namespacing: every tab numbers its requests from 1, so ids are
- *   rewritten to router-unique ids on the way in and mapped back on the
- *   way out.
- * - refcounted opens: the first open of a name really opens; later opens
- *   join as holders and get the CURRENT user_version via a synthesized
- *   pragma query. close only reaches SQLite when the last holder leaves;
- *   destroy always forwards.
+ *   rewritten to broker-unique ids inbound and mapped back outbound.
+ * - refcounted opens: the first open of a name really opens; later
+ *   opens join as holders and get the CURRENT user_version via a
+ *   synthesized pragma query. close reaches SQLite only when the last
+ *   holder leaves; destroy always forwards.
+ * - compute liveness: the host tab dying kills the compute worker but
+ *   never the broker. Each new tab connection probes the compute
+ *   channel with a ping; no answer within the deadline resets the
+ *   epoch (pending requests fail loudly, holders clear) and the next
+ *   request triggers a respawn via whichever tab sent it.
  *
- * Typed structurally instead of via lib "WebWorker" so the workspace can
- * typecheck without conflicting global libs (same approach as worker.ts).
+ * Typed structurally instead of via lib "WebWorker" so the workspace
+ * can typecheck without conflicting global libs (same as worker.ts).
  */
 import type { WorkerRequest, WorkerResponse } from './protocol'
 
+const PING_DEADLINE_MS = 1000
+
 interface PortLike {
-  postMessage(message: unknown): void
-  addEventListener(type: 'message', listener: (event: { data: unknown }) => void): void
+  postMessage(message: unknown, transfer?: readonly unknown[]): void
+  addEventListener(
+    type: 'message',
+    listener: (event: { data: unknown; ports?: readonly PortLike[] }) => void,
+  ): void
   start?(): void
 }
 
@@ -39,38 +49,63 @@ const scope = globalThis as unknown as {
   ): void
 }
 
-let sqliteWorker: Worker | null = null
+let computePort: PortLike | null = null
+let spawnRequested = false
 let nextRouteId = 1
 const routes = new Map<number, Route>()
 const holders = new Map<string, Set<PortLike>>()
+const backlog: Array<{
+  port: PortLike
+  request: WorkerRequest
+  transform?: (result: unknown) => unknown
+}> = []
 
-const worker = (): Worker => {
-  if (!sqliteWorker) {
-    sqliteWorker = new Worker(new URL('./worker.ts', import.meta.url), {
-      type: 'module',
-    })
-    sqliteWorker.addEventListener('message', (event) => {
-      const response = (event as { data: unknown }).data as WorkerResponse
-      const route = routes.get(response.id)
-      if (!route) {
-        return
-      }
-      routes.delete(response.id)
-      if (response.ok && route.transform) {
-        route.port.postMessage({
-          id: route.originalId,
-          ok: true,
-          result: route.transform(response.result),
-        } satisfies WorkerResponse)
-      } else {
-        route.port.postMessage({ ...response, id: route.originalId })
-      }
-    })
+/** The compute channel is gone: fail everything pending, start over. */
+const resetEpoch = (reason: string): void => {
+  computePort = null
+  spawnRequested = false
+  for (const route of routes.values()) {
+    route.port.postMessage({
+      id: route.originalId,
+      ok: false,
+      error: `WebSqliteDriver: ${reason}`,
+    } satisfies WorkerResponse)
   }
-  return sqliteWorker
+  routes.clear()
+  holders.clear()
 }
 
-const forward = (
+const adoptComputePort = (port: PortLike): void => {
+  computePort = port
+  spawnRequested = false
+  port.addEventListener('message', (event) => {
+    const response = event.data as WorkerResponse
+    const route = routes.get(response.id)
+    if (!route) {
+      return
+    }
+    routes.delete(response.id)
+    if (response.ok && route.transform) {
+      route.port.postMessage({
+        id: route.originalId,
+        ok: true,
+        result: route.transform(response.result),
+      } satisfies WorkerResponse)
+    } else {
+      route.port.postMessage({ ...response, id: route.originalId })
+    }
+  })
+  port.start?.()
+  const queued = backlog.splice(0)
+  for (const item of queued) {
+    // replay the SEND, not the routing decision — holder bookkeeping
+    // already happened when the request was first handled
+    send(item.port, item.request, item.transform)
+  }
+}
+
+/** Post to the compute channel (requires computePort to be live). */
+const send = (
   port: PortLike,
   request: WorkerRequest,
   transform?: (result: unknown) => unknown,
@@ -78,7 +113,24 @@ const forward = (
   const routeId = nextRouteId++
   const base = { port, originalId: request.id }
   routes.set(routeId, transform ? { ...base, transform } : base)
-  worker().postMessage({ ...request, id: routeId })
+  computePort!.postMessage({ ...request, id: routeId })
+}
+
+const forward = (
+  port: PortLike,
+  request: WorkerRequest,
+  transform?: (result: unknown) => unknown,
+): void => {
+  if (!computePort) {
+    const entry = { port, request }
+    backlog.push(transform ? { ...entry, transform } : entry)
+    if (!spawnRequested) {
+      spawnRequested = true
+      port.postMessage({ control: 'spawnWorker' })
+    }
+    return
+  }
+  send(port, request, transform)
 }
 
 const answer = (port: PortLike, id: number, result: unknown): void => {
@@ -89,7 +141,7 @@ const handle = (port: PortLike, request: WorkerRequest): void => {
   switch (request.op) {
     case 'open': {
       const existing = holders.get(request.name)
-      if (existing && existing.size > 0) {
+      if (existing && existing.size > 0 && computePort) {
         existing.add(port)
         // joiner: the connection is live — report its current version
         forward(
@@ -109,7 +161,9 @@ const handle = (port: PortLike, request: WorkerRequest): void => {
         )
         return
       }
-      holders.set(request.name, new Set([port]))
+      const set = holders.get(request.name) ?? new Set<PortLike>()
+      set.add(port)
+      holders.set(request.name, set)
       forward(port, request)
       return
     }
@@ -134,13 +188,49 @@ const handle = (port: PortLike, request: WorkerRequest): void => {
   }
 }
 
+/** Probe the compute channel; reset the epoch when it stopped answering. */
+const probeCompute = (): void => {
+  const target = computePort
+  if (!target) {
+    return
+  }
+  const routeId = nextRouteId++
+  let answered = false
+  routes.set(routeId, {
+    // a self-addressed route: mark answered, deliver to nobody
+    port: {
+      postMessage: () => {
+        answered = true
+      },
+      addEventListener: () => {},
+    },
+    originalId: -1,
+  })
+  target.postMessage({ id: routeId, op: 'ping' } satisfies WorkerRequest)
+  setTimeout(() => {
+    routes.delete(routeId)
+    if (!answered && computePort === target) {
+      resetEpoch('the database worker went away (its host tab closed?) — retry')
+    }
+  }, PING_DEADLINE_MS)
+}
+
 scope.addEventListener('connect', (event) => {
   const port = event.ports[0]
   if (!port) {
     return
   }
   port.addEventListener('message', (messageEvent) => {
+    const data = messageEvent.data as { control?: string } | null
+    if (data?.control === 'adoptWorkerPort') {
+      const transferred = messageEvent.ports?.[0]
+      if (transferred) {
+        adoptComputePort(transferred)
+      }
+      return
+    }
     handle(port, messageEvent.data as WorkerRequest)
   })
   port.start?.()
+  probeCompute()
 })

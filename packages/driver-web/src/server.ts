@@ -187,6 +187,8 @@ export class SqliteWorkerServer {
         }
         return null
       }
+      case 'ping':
+        return null
       case 'open':
         throw new Error('open is handled asynchronously') // see serve()
     }
@@ -194,34 +196,47 @@ export class SqliteWorkerServer {
 }
 
 /**
- * Wire a server to an endpoint. Requests arriving before sqlite-wasm has
+ * One server, any number of endpoints (the broker's adopted port serves
+ * alongside the worker scope). Requests arriving before sqlite-wasm has
  * loaded are answered once it has (promise chaining preserves order).
  */
+export function createSqliteWorkerServing(
+  loadSqlite: () => Promise<Sqlite3Static>,
+): (endpoint: Endpoint) => void {
+  const serverPromise = loadSqlite().then(
+    (sqlite3) => new SqliteWorkerServer(sqlite3),
+  )
+  return (endpoint) => {
+    endpoint.addMessageListener((message) => {
+      const request = message as WorkerRequest
+      if (typeof (request as { op?: unknown }).op !== 'string') {
+        return // control traffic (port adoption), not a request
+      }
+      void serverPromise
+        .then(async (server) => {
+          const result =
+            request.op === 'open'
+              ? await server.open(request.name, request.storage)
+              : server.handle(request)
+          const response: WorkerResponse = { id: request.id, ok: true, result }
+          endpoint.postMessage(response)
+        })
+        .catch((error: unknown) => {
+          const response: WorkerResponse = {
+            id: request.id,
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+          }
+          endpoint.postMessage(response)
+        })
+    })
+  }
+}
+
+/** Wire a server to a single endpoint (see createSqliteWorkerServing). */
 export function serveSqliteWorker(
   endpoint: Endpoint,
   loadSqlite: () => Promise<Sqlite3Static>,
 ): void {
-  const serverPromise = loadSqlite().then(
-    (sqlite3) => new SqliteWorkerServer(sqlite3),
-  )
-  endpoint.addMessageListener((message) => {
-    const request = message as WorkerRequest
-    void serverPromise
-      .then(async (server) => {
-        const result =
-          request.op === 'open'
-            ? await server.open(request.name, request.storage)
-            : server.handle(request)
-        const response: WorkerResponse = { id: request.id, ok: true, result }
-        endpoint.postMessage(response)
-      })
-      .catch((error: unknown) => {
-        const response: WorkerResponse = {
-          id: request.id,
-          ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        }
-        endpoint.postMessage(response)
-      })
-  })
+  createSqliteWorkerServing(loadSqlite)(endpoint)
 }
