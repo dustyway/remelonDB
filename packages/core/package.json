@@ -1,6 +1,6 @@
 {
   "name": "@remelondb/core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -70,6 +70,11 @@
         "types": "./dist/zod/index.d.mts",
         "import": "./dist/zod/index.mjs",
         "default": "./dist/zod/index.mjs"
+      },
+      "./react": {
+        "types": "./dist/react/index.d.mts",
+        "import": "./dist/react/index.mjs",
+        "default": "./dist/react/index.mjs"
       }
     },
     "access": "public"
