@@ -57,7 +57,7 @@ jobs:
               continue
             fi
             echo "publishing $PKG@$VER"
-            npm publish "$t"
+            npm publish "$t" || FAIL=1
           done
           exit $FAIL
       - name: Create GitHub Release
