@@ -17,5 +17,11 @@ for (const worker of ['shared-worker', 'worker']) {
   after = patched
 }
 
+// any worker added later must be handled above, or the build fails here
+const leftover = after.match(/\.\/[\w-]+\.ts(?=['"], import\.meta\.url)/g)
+if (leftover) {
+  throw new Error(`fix-worker-url: unhandled worker URLs in dist: ${leftover.join(', ')}`)
+}
+
 writeFileSync(path, after)
 console.log('fix-worker-url: dist/index.mjs now references ./worker.mjs and ./shared-worker.mjs')
