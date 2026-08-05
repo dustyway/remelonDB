@@ -75,6 +75,14 @@ export interface WebSqliteDriverOptions {
    * this only matters after the holder goes away. Default 10s.
    */
   readonly syncLeaseMs?: number
+  /**
+   * Shared mode: deadline for the broker to answer the open request,
+   * after which open() rejects instead of hanging. The default (15s)
+   * clears the slowest honest startup — a first visit fetching the
+   * sqlite-wasm binary over a slow network — with margin; a genuine
+   * hang then reports in seconds instead of never.
+   */
+  readonly openTimeoutMs?: number
   /** Override the transport — used by tests to run in-process. */
   readonly createEndpoint?: () => Endpoint
 }
@@ -120,6 +128,18 @@ export class WebSqliteDriver implements SqliteDriver {
         new URL('./shared-worker.ts', import.meta.url),
         { type: 'module' },
       )
+      // A broker script that fails to load or parse dies silently; without
+      // this handler every request would hang instead of failing.
+      shared.onerror = () => {
+        this.failAllPending(
+          new Error(
+            'WebSqliteDriver: the shared worker failed to start (its script ' +
+              'did not load or crashed on startup). With Vite, add ' +
+              "'@remelondb/driver-web' to optimizeDeps.exclude — see the " +
+              'driver README, Bundlers section.',
+          ),
+        )
+      }
       shared.port.start()
       return {
         postMessage: (message) => shared.port.postMessage(message),
@@ -282,6 +302,15 @@ export class WebSqliteDriver implements SqliteDriver {
     }
   }
 
+  /** Reject every in-flight request — the transport itself is dead. */
+  private failAllPending(error: Error): void {
+    const entries = [...this.pending.values()]
+    this.pending.clear()
+    for (const entry of entries) {
+      entry.reject(error)
+    }
+  }
+
   async open(name: string): Promise<{ userVersion: number }> {
     if (this.name !== null) {
       throw new Error('WebSqliteDriver: database is already open')
@@ -303,11 +332,34 @@ export class WebSqliteDriver implements SqliteDriver {
     let attempts = coordinated ? 20 : 1
     for (;;) {
       try {
-        const result = await this.request<{ userVersion: number }>({
+        const openRequest = this.request<{ userVersion: number }>({
           op: 'open',
           name,
           storage,
         })
+        // A dead broker answers nothing; the deadline turns a hang into
+        // an actionable error.
+        const deadlineMs = this.options.openTimeoutMs ?? 15_000
+        const result = this.sharedMode
+          ? await Promise.race([
+              openRequest,
+              new Promise<never>((_, timeoutReject) =>
+                setTimeout(
+                  () =>
+                    timeoutReject(
+                      new Error(
+                        'WebSqliteDriver: the shared worker did not answer ' +
+                          `the open request within ${deadlineMs}ms. Its ` +
+                          'script may have failed to load — with Vite, add ' +
+                          "'@remelondb/driver-web' to optimizeDeps.exclude; " +
+                          'see the driver README, Bundlers section.',
+                      ),
+                    ),
+                  deadlineMs,
+                ),
+              ),
+            ])
+          : await openRequest
         this.name = name
         return result
       } catch (error) {
