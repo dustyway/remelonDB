@@ -77,18 +77,41 @@ const schema = appSchema({ version: 1, tables: [tasks] })
 class Task extends ModelFor(tasks) {}
 
 const el = document.getElementById('result')
+const sharedMode = new URLSearchParams(location.search).get('shared') === '1'
 try {
   const db = await Database.open({
-    driver: new WebSqliteDriver(), // storage: 'opfs' — the point of the test
+    driver: new WebSqliteDriver(
+      sharedMode ? { shared: true, takeover: true } : {},
+    ), // storage: 'opfs' — the point of the test
     schema,
     modelClasses: [Task],
-    name: 'vite-smoke.db',
+    name: sharedMode ? 'vite-smoke-shared.db' : 'vite-smoke.db',
   })
   await db.write(() => db.get(Task).create({ name: 'from production build' }))
-  const rows = await db.get(Task).query(Q.where('name', 'from production build')).fetch()
-  el.textContent = 'SMOKE PASS rows=' + rows.length
+  const query = db.get(Task).query(Q.where('name', 'from production build'))
+  if (sharedMode) {
+    // live observation: other tabs' writes must arrive via the broker
+    query.observe((records) => {
+      el.textContent = 'SHARED rows=' + records.length
+    })
+  } else {
+    const rows = await query.fetch()
+    el.textContent = 'SMOKE PASS rows=' + rows.length
+  }
 } catch (e) {
   el.textContent = 'SMOKE FAIL: ' + e
+}
+`,
+)
+
+writeFileSync(
+  join(appDir, 'vite.config.js'),
+  `export default {
+  // the documented consumer config (driver README, Bundlers section):
+  // dev prebundling would relocate the worker URLs into .vite/deps
+  optimizeDeps: {
+    exclude: ['@remelondb/driver-web', '@remelondb/core', '@sqlite.org/sqlite-wasm'],
+  },
 }
 `,
 )
@@ -114,7 +137,8 @@ try {
   const { createRequire } = await import('node:module')
   const { chromium } = createRequire(join(pkgDir, 'package.json'))('playwright')
   const browser = await chromium.launch()
-  const page = await browser.newPage()
+  const context = await browser.newContext()
+  const page = await context.newPage()
 
   const expectResult = async (want) => {
     await page.waitForFunction(
@@ -131,6 +155,50 @@ try {
   await expectResult('SMOKE PASS rows=1')
   await page.reload()
   await expectResult('SMOKE PASS rows=2') // OPFS persisted across reload
+
+  // shared mode: two tabs in one context, broker-routed. Tab A observes;
+  // tab B's write must reach A without a reload.
+  const expectOn = async (p, want) => {
+    await p.waitForFunction(
+      (w) => document.getElementById('result').textContent === w,
+      want,
+      { timeout: 30_000 },
+    )
+    console.log('#', want)
+  }
+  await page.goto('http://localhost:4174/?shared=1')
+  await expectOn(page, 'SHARED rows=1')
+  const pageB = await context.newPage()
+  await pageB.goto('http://localhost:4174/?shared=1')
+  await expectOn(pageB, 'SHARED rows=2')
+  await expectOn(page, 'SHARED rows=2') // broadcast reached tab A live
+
+  // the same shared scenario through `vite dev` — the pipeline where
+  // optimizeDeps applies, running exactly the documented config
+  console.log('# vite dev + headless Chromium')
+  const dev = spawn('npx', ['vite', '--port', '4175', '--strictPort'], {
+    cwd: appDir,
+    stdio: ['ignore', 'pipe', 'inherit'],
+  })
+  try {
+    await new Promise((resolvePort, reject) => {
+      dev.stdout.on('data', (d) => {
+        if (String(d).includes('4175')) resolvePort()
+      })
+      dev.on('exit', (c) => reject(new Error(`vite dev exited: ${c}`)))
+      setTimeout(() => reject(new Error('vite dev: timeout')), 30_000)
+    })
+    const devContext = await browser.newContext()
+    const devA = await devContext.newPage()
+    await devA.goto('http://localhost:4175/?shared=1')
+    await expectOn(devA, 'SHARED rows=1')
+    const devB = await devContext.newPage()
+    await devB.goto('http://localhost:4175/?shared=1')
+    await expectOn(devB, 'SHARED rows=2')
+    await expectOn(devA, 'SHARED rows=2')
+  } finally {
+    dev.kill()
+  }
 
   await browser.close()
   console.log('VITE SMOKE: PASS')
