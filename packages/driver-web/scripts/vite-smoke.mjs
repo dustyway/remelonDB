@@ -30,6 +30,16 @@ const mark = (msg) => console.log(`# [${new Date().toISOString().slice(11, 19)}]
 const sh = (cmd, args, opts = {}) =>
   execFileSync(cmd, args, { stdio: ['ignore', 'inherit', 'inherit'], ...opts })
 
+const spawnServer = (args) =>
+  spawn('npx', args, { cwd: appDir, stdio: ['ignore', 'pipe', 'inherit'], detached: true })
+// npx wraps the real server in a child; killing the group gets both,
+// and nothing keeps our stdout pipe (and the event loop) alive.
+const killTree = (child) => {
+  try {
+    process.kill(-child.pid, 'SIGTERM')
+  } catch {}
+}
+
 mark('packing core and driver-web (prepack builds dist)')
 sh('pnpm', ['--filter', '@remelondb/core', 'pack', '--pack-destination', tarballDir], { cwd: repoRoot })
 sh('pnpm', ['--filter', '@remelondb/driver-web', 'pack', '--pack-destination', tarballDir], { cwd: repoRoot })
@@ -123,10 +133,7 @@ mark('vite build')
 sh('npx', ['vite', 'build'], { cwd: appDir })
 
 mark('vite preview + headless Chromium')
-const preview = spawn('npx', ['vite', 'preview', '--port', '4174', '--strictPort'], {
-  cwd: appDir,
-  stdio: ['ignore', 'pipe', 'inherit'],
-})
+const preview = spawnServer(['vite', 'preview', '--port', '4174', '--strictPort'])
 try {
   await new Promise((resolvePort, reject) => {
     preview.stdout.on('data', (d) => {
@@ -178,10 +185,7 @@ try {
   // the same shared scenario through `vite dev` — the pipeline where
   // optimizeDeps applies, running exactly the documented config
   mark('vite dev + headless Chromium')
-  const dev = spawn('npx', ['vite', '--port', '4175', '--strictPort'], {
-    cwd: appDir,
-    stdio: ['ignore', 'pipe', 'inherit'],
-  })
+  const dev = spawnServer(['vite', '--port', '4175', '--strictPort'])
   try {
     await new Promise((resolvePort, reject) => {
       dev.stdout.on('data', (d) => {
@@ -199,12 +203,15 @@ try {
     await expectOn(devB, 'SHARED rows=2')
     await expectOn(devA, 'SHARED rows=2')
   } finally {
-    dev.kill()
+    killTree(dev)
   }
 
   await browser.close()
   console.log('VITE SMOKE: PASS')
+  killTree(preview)
+  rmSync(work, { recursive: true, force: true })
+  process.exit(0)
 } finally {
-  preview.kill()
+  killTree(preview)
   rmSync(work, { recursive: true, force: true })
 }
