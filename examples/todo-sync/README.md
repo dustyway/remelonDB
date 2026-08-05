@@ -224,7 +224,10 @@ npm install @remelondb/core @remelondb/driver-web @remelondb/server zod
 
 The published packages ship compiled JavaScript with type
 declarations, so no TypeScript-aware runner is needed beyond your
-normal build.
+normal build. With Vite, copy the `optimizeDeps` block from this
+example's `frontend/vite.config.ts` (why: the driver README's
+Bundlers section), and shared mode needs `@remelondb/driver-web`
+0.1.2 or newer.
 
 One thing not to copy verbatim: the two-second sync interval in
 `App.tsx`. Replace it with the arrival triggers described in

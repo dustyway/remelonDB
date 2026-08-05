@@ -5,7 +5,8 @@ export default defineConfig({
   plugins: [react()],
   // The driver chain must not be pre-bundled: dev pre-bundling relocates
   // driver-web's worker URL into .vite/deps where the worker file does
-  // not exist, and the database open never resolves.
+  // not exist, and the database open never resolves. Canonical notes:
+  // driver-web README, Bundlers section.
   optimizeDeps: {
     exclude: [
       '@remelondb/driver-web',

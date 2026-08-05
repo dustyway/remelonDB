@@ -127,6 +127,29 @@ the holder closes), so a naive per-tab sync interval is correct. The
 remaining sharp edges before shared mode becomes the default are the
 open questions in docs/multi-tab.md.
 
+## Bundlers (Vite)
+
+When consuming this package from npm with Vite, exclude it from
+dependency prebundling, or the worker URLs resolve into `.vite/deps`
+where the worker files do not exist:
+
+```ts
+// vite.config.ts
+export default defineConfig({
+  optimizeDeps: {
+    // prebundling rewrites the driver's worker URLs into .vite/deps,
+    // where the worker files do not exist
+    exclude: ["@remelondb/driver-web", "@remelondb/core", "@sqlite.org/sqlite-wasm"],
+  },
+})
+```
+
+Shared mode needs `@remelondb/driver-web` 0.1.2 or newer.
+
+A complete minimal consumer (registry tarballs, Vite, single-tab and
+shared mode) is scaffolded by `scripts/vite-smoke.mjs` — it runs in CI
+against every change and doubles as the reference setup.
+
 ## The RPC protocol
 
 Every request carries an `id`; the answering side replies with
