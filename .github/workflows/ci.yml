@@ -233,6 +233,7 @@ jobs:
       # the packed tarball consumed by a real vite app, single-tab and
       # shared two-tab
       - run: pnpm --filter @remelondb/driver-web smoke:vite
+        timeout-minutes: 8
 
   # WebKit and real Safari. Both need macOS: Linux WebKit (GTK port)
   # doesn't ship the OPFS sync-access-handle APIs at all ("Missing

@@ -26,17 +26,18 @@ const appDir = join(work, 'app')
 mkdirSync(tarballDir)
 mkdirSync(appDir)
 
+const mark = (msg) => console.log(`# [${new Date().toISOString().slice(11, 19)}] ${msg}`)
 const sh = (cmd, args, opts = {}) =>
   execFileSync(cmd, args, { stdio: ['ignore', 'inherit', 'inherit'], ...opts })
 
-console.log('# packing core and driver-web (prepack builds dist)')
+mark('packing core and driver-web (prepack builds dist)')
 sh('pnpm', ['--filter', '@remelondb/core', 'pack', '--pack-destination', tarballDir], { cwd: repoRoot })
 sh('pnpm', ['--filter', '@remelondb/driver-web', 'pack', '--pack-destination', tarballDir], { cwd: repoRoot })
 const tgz = (name) => join(tarballDir, readdirSync(tarballDir).find((f) => f.startsWith(name)))
 const coreTgz = tgz('remelondb-core-')
 const webTgz = tgz('remelondb-driver-web-')
 
-console.log('# scaffolding the Vite app in', appDir)
+mark('scaffolding the Vite app in ' + appDir)
 writeFileSync(
   join(appDir, 'package.json'),
   JSON.stringify(
@@ -116,11 +117,12 @@ writeFileSync(
 `,
 )
 
-console.log('# npm install + vite build')
+mark('npm install')
 sh('npm', ['install', '--no-audit', '--no-fund'], { cwd: appDir })
+mark('vite build')
 sh('npx', ['vite', 'build'], { cwd: appDir })
 
-console.log('# vite preview + headless Chromium')
+mark('vite preview + headless Chromium')
 const preview = spawn('npx', ['vite', 'preview', '--port', '4174', '--strictPort'], {
   cwd: appDir,
   stdio: ['ignore', 'pipe', 'inherit'],
@@ -175,7 +177,7 @@ try {
 
   // the same shared scenario through `vite dev` — the pipeline where
   // optimizeDeps applies, running exactly the documented config
-  console.log('# vite dev + headless Chromium')
+  mark('vite dev + headless Chromium')
   const dev = spawn('npx', ['vite', '--port', '4175', '--strictPort'], {
     cwd: appDir,
     stdio: ['ignore', 'pipe', 'inherit'],
