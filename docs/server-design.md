@@ -19,12 +19,13 @@ its obligations:
 | Commit-ordered revisions | store: revisions assigned so that pushes for one scope commit in revision order (`transaction(scope, 'push', …)` MUST serialize per scope — the advisory-lock obligation) |
 | Cursor encoding, opacity, floor checks | engine (revision-based reference mechanism) |
 | Conflict detection and ordering vs rejection | engine (ownership rejections first — foreign revisions are incomparable to a scope's cursor — then whole-push conflict) |
-| Per-record validation | engine, via per-table `validate` + optional `crossValidate` (referential checks) |
+| Per-record validation | engine, via per-table `validate`/`appendOnly` + optional `crossValidate` (referential checks) |
+| Tombstoned-write rejection | engine, via the store's `tombstonedIds` |
 | Upsert discipline (never touch creation stamps, never resurrect tombstones), tombstoning, retention | store |
 | Interleave computation, the both-or-neither package rule, mandatory degrade below the floor | engine |
 
 `MemoryStore` ships as the executable illustration and test double;
-adapters for real databases implement the same eight methods and
+adapters for real databases implement the same nine methods and
 inherit the engine's conformance (the suite runs against
 engine-over-memory in CI; run it against engine-over-your-store to
 prove an adapter).

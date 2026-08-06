@@ -1,7 +1,7 @@
 /**
  * The storage seam (docs/server-design.md): the server-side sibling of
  * SqliteDriver. A store knows rows, revisions, and scopes — nothing
- * about cursors, conflicts, or the wire. Eight methods; every protocol
+ * about cursors, conflicts, or the wire. Nine methods; every protocol
  * semantic lives in the engine above.
  */
 import type { DirtyRaw } from '@remelondb/core'
@@ -33,6 +33,12 @@ export interface SyncStoreTx<Scope> {
   ): Promise<ReadonlyMap<string, number>>
   /** Ids among `ids` that exist but belong outside the scope. */
   foreignIds(
+    table: string,
+    scope: Scope,
+    ids: readonly string[],
+  ): Promise<readonly string[]>
+  /** Ids among `ids` that are tombstones within the scope. */
+  tombstonedIds(
     table: string,
     scope: Scope,
     ids: readonly string[],

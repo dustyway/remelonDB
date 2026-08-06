@@ -39,7 +39,9 @@ transport that delivers these values conforms.
 Strict `created`/`updated` classification is not required: the client
 applies `updated` for a locally-missing record as a create (and vice
 versa, logging an anomaly). Servers SHOULD classify when cheap and MAY
-report all live rows as `updated`.
+report all live rows as `updated`. A ChangeSet naming one id in both
+arrays states the record twice; the receiver MUST apply the last
+statement (`updated` over `created`) rather than fail.
 
 ## 2. Pull
 
@@ -117,6 +119,12 @@ Semantics:
   MUST NOT be applied. The client keeps them dirty — they retry on the
   next push — and marks everything else synced. Rejection is per
   record, not per column.
+- **Refusals are never silent.** Any write the server declines to apply
+  for a record-specific reason MUST be visible in the response: named
+  in `rejected`, or covered by `conflict`. In particular a write to a
+  tombstoned id whose deletion the cursor already covers MUST land in
+  `rejected` — accepting it while applying nothing strands the pushing
+  device on a state no future pull corrects.
 - **Cursor and interleaved changes are a package.** A non-null `cursor`
   MUST identify the push transaction's snapshot and MUST be accompanied
   by `changes`: everything committed between the request cursor and

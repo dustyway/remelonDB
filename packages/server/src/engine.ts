@@ -36,6 +36,12 @@ export class SyncProtocolError extends Error {
 export interface TableConfig {
   /** Per-record validation; false lands the id in `rejected`. */
   readonly validate?: (row: WireRow) => boolean
+  /**
+   * Rows may only be created: a write naming an id that already exists
+   * in the scope (live or tombstoned) is rejected by id. Deletes still
+   * apply, so parent cascades keep working.
+   */
+  readonly appendOnly?: boolean
 }
 
 export interface SyncEngineOptions<Scope> {
@@ -205,12 +211,40 @@ export function createSyncEngine<Scope>(
         }
 
         // conflict dominates what remains (the contract's MUST)
+        const revsByTable = new Map<string, ReadonlyMap<string, number>>()
         for (const entry of parsed) {
           const ids = [...entry.rows.map((r) => r.id), ...entry.deletes]
           if (ids.length === 0) continue
           const revs = await tx.currentRevs(entry.table, scope, ids)
+          revsByTable.set(entry.table, revs)
           for (const rev of revs.values()) {
             if (rev > since) return { conflict: true }
+          }
+        }
+
+        // past the conflict check every named rev is <= cursor, so a
+        // write aimed at a tombstone would silently no-op in the store
+        // (upsert MUST NOT resurrect) and an append-only table would
+        // swallow the change; both must be visible in `rejected` or the
+        // client marks a refused write as synced and diverges for good
+        for (const entry of parsed) {
+          if (entry.rows.length === 0) continue
+          const drop = new Set(
+            await tx.tombstonedIds(
+              entry.table,
+              scope,
+              entry.rows.map((r) => r.id),
+            ),
+          )
+          if (options.tables[entry.table]?.appendOnly) {
+            const revs = revsByTable.get(entry.table)
+            for (const row of entry.rows) {
+              if (revs?.has(row.id)) drop.add(row.id)
+            }
+          }
+          if (drop.size > 0) {
+            ;(rejected[entry.table] ??= []).push(...drop)
+            entry.rows = entry.rows.filter((r) => !drop.has(r.id))
           }
         }
 

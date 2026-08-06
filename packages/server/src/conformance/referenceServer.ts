@@ -154,7 +154,11 @@ export function createReferenceServer(
             continue
           }
           const existing = rows.get(row.id)
-          if (existing?.deleted) continue // tombstones stay dead
+          if (existing?.deleted) {
+            // tombstones stay dead, and the refusal must be visible
+            ;(rejected[table] ??= []).push(row.id)
+            continue
+          }
           rows.set(row.id, { row, rev: batchRev, deleted: false })
         }
         for (const id of change.deleted) {

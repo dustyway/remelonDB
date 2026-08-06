@@ -24,6 +24,11 @@ export interface TableOverrides<Scope> {
     ids: readonly string[],
   ): Promise<ReadonlyMap<string, number>>
   foreignIds?(tx: DrizzleTx, scope: Scope, ids: readonly string[]): Promise<readonly string[]>
+  tombstonedIds?(
+    tx: DrizzleTx,
+    scope: Scope,
+    ids: readonly string[],
+  ): Promise<readonly string[]>
   /** This table's contribution to the scope's highest revision. */
   maxRev?(tx: DrizzleTx, scope: Scope): Promise<number>
   upsert?(tx: DrizzleTx, scope: Scope, rows: readonly WireRow[]): Promise<void>
@@ -258,6 +263,22 @@ export function createDrizzleStore<Scope>(options: DrizzleStoreOptions<Scope>): 
         .select({ id: p.cfg.id })
         .from(p.cfg.table)
         .where(and(inArray(p.cfg.id, [...ids] as never[]), ne(p.cfg.scope!, txScope as never)))
+      return rows.map((row) => String(row.id))
+    },
+    tombstonedIds: async (name, txScope, ids) => {
+      const p = tableOf(name)
+      if (p.cfg.overrides?.tombstonedIds) return p.cfg.overrides.tombstonedIds(tx, txScope, ids)
+      if (ids.length === 0) return []
+      const rows = await tx
+        .select({ id: p.cfg.id })
+        .from(p.cfg.table)
+        .where(
+          and(
+            inArray(p.cfg.id, [...ids] as never[]),
+            isNotNull(p.cfg.deletedAt),
+            p.cfg.scope ? eq(p.cfg.scope, txScope as never) : undefined,
+          ),
+        )
       return rows.map((row) => String(row.id))
     },
     upsert: async (name, txScope, wireRows) => {

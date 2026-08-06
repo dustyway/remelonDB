@@ -69,6 +69,10 @@ export function createMemoryStore(): MemoryStore {
       }
       return revs
     },
+    tombstonedIds: async (table, txScope, ids) => {
+      const rows = tableOf(txScope, table)
+      return ids.filter((id) => rows.get(id)?.deleted === true)
+    },
     foreignIds: async (table, txScope, ids) => {
       const foreign: string[] = []
       for (const [otherScope, tables] of scopes) {

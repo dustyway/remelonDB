@@ -398,5 +398,35 @@ export function registerServerConformance(
       expect(stored).toHaveLength(1)
       expect(stored[0]).toMatchObject(edited)
     })
+
+    it('12. a write to a tombstoned id is rejected by id, never silently dropped', async () => {
+      const { handlers } = await options.makeContext()
+      const row = fixture.validRow()
+      const start = pulled(await pullNull(handlers))
+      accepted(
+        await handlers.push({ changes: changesWith([row]), cursor: start.cursor }),
+      )
+      const afterCreate = pulled(await pullNull(handlers))
+      accepted(
+        await handlers.push({
+          changes: changesWith([], [row.id]),
+          cursor: afterCreate.cursor,
+        }),
+      )
+      // the cursor advances past the tombstone, so the rewrite below is
+      // not a conflict - the store will refuse to resurrect, and that
+      // refusal must be visible in `rejected`
+      const afterDelete = pulled(await pullNull(handlers))
+      const result = accepted(
+        await handlers.push({
+          changes: changesWith([fixture.mutate(row)]),
+          cursor: afterDelete.cursor,
+        }),
+      )
+      expect(result.rejected?.[table] ?? []).toContain(row.id)
+
+      const state = pulled(await pullNull(handlers))
+      expect(liveIds(state.changes, table)).not.toContain(row.id)
+    })
   })
 }
