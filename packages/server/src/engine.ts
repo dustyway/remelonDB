@@ -147,7 +147,10 @@ export function createSyncEngine<Scope>(
       const rejected: Record<string, string[]> = {}
       const parsed = tableNames.map((table) => {
         const change = args.changes[table]
-        const rows: WireRow[] = []
+        // created/updated are advisory labels over the same upsert, so a
+        // changeset stating one id twice means the last statement wins —
+        // batch stores cannot touch the same row twice in one upsert
+        const byId = new Map<string, WireRow>()
         for (const raw of [
           ...(change?.created ?? []),
           ...(change?.updated ?? []),
@@ -156,9 +159,12 @@ export function createSyncEngine<Scope>(
           if (typeof id !== 'string' || id.length === 0) {
             throw new SyncProtocolError('unusable-id', 'sync push: record without a usable id')
           }
-          const row = raw as WireRow
+          byId.set(id, raw as WireRow)
+        }
+        const rows: WireRow[] = []
+        for (const row of byId.values()) {
           if (options.tables[table]?.validate?.(row) === false) {
-            ;(rejected[table] ??= []).push(id)
+            ;(rejected[table] ??= []).push(row.id)
           } else {
             rows.push(row)
           }

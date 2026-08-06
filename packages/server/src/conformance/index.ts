@@ -372,5 +372,31 @@ export function registerServerConformance(
         expect(liveIds(result.changes, table)).not.toContain(mine.id)
       }
     })
+
+    it('11. a push naming one id in both created and updated applies the last statement', async () => {
+      const { handlers } = await options.makeContext()
+      const row = fixture.validRow()
+      const edited = fixture.mutate(row)
+      const start = pulled(await pullNull(handlers))
+      // created/updated are advisory labels over the same upsert (spec:
+      // strict classification is not required), so a changeset stating a
+      // record twice means the last statement wins - never a store error
+      const result = accepted(
+        await handlers.push({
+          changes: {
+            [table]: { created: [row], updated: [edited], deleted: [] },
+          },
+          cursor: start.cursor,
+        }),
+      )
+      expect(result.rejected?.[table] ?? []).toEqual([])
+
+      const state = pulled(await pullNull(handlers))
+      const stored = (state.changes[table]?.updated ?? []).filter(
+        (r) => r.id === row.id,
+      )
+      expect(stored).toHaveLength(1)
+      expect(stored[0]).toMatchObject(edited)
+    })
   })
 }
