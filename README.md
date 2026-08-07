@@ -205,6 +205,7 @@ side of the wire. Everything else ships as a core or server subpath
 - Reference: [database & observation](docs/reference/database.md) ·
   [models](docs/reference/models.md) ·
   [queries](docs/reference/queries.md) ·
+  [react bindings](docs/reference/react.md) ·
   [sync](docs/reference/sync.md) ·
   [building a backend](docs/reference/backend.md) ·
   [schema & migrations](docs/reference/schema.md) ·
