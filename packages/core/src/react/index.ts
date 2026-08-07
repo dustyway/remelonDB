@@ -14,6 +14,7 @@ import {
   createElement,
   useContext,
   useMemo,
+  useRef,
   useSyncExternalStore,
   type ReactNode,
 } from 'react'
@@ -188,9 +189,31 @@ function sharedStore<T>(
  *     const db = useDatabase()
  *     const { data: decks, isLoading } = useQuery(db && getDecksQuery(db))
  */
+export interface SelectedResult<T> {
+  readonly data: T
+  readonly isLoading: boolean
+  readonly error: Error | null
+}
+
 export function useQuery<M>(
   query: Query<M> | null | undefined,
-): QueryResult<M> {
+): QueryResult<M>
+export function useQuery<M, T>(
+  query: Query<M> | null | undefined,
+  options: {
+    /**
+     * Derive the rendered value from the rows. Runs when the rows
+     * change (per consumer, so different components can select
+     * differently from one shared subscription); must be pure. The
+     * function's identity may change every render without cost.
+     */
+    select: (rows: M[]) => T
+  },
+): SelectedResult<T>
+export function useQuery<M, T>(
+  query: Query<M> | null | undefined,
+  options?: { select?: (rows: M[]) => T },
+): QueryResult<M> | SelectedResult<T> {
   const database = query ? query.collection.database : null
   const key = query ? queryKey(query) : null
   // The first structurally-equal query instance is captured for the
@@ -204,7 +227,20 @@ export function useQuery<M>(
       ),
     )
   }, [database, key])
-  return useSyncExternalStore(store.subscribe, store.snapshot, store.snapshot)
+  const raw = useSyncExternalStore(
+    store.subscribe,
+    store.snapshot,
+    store.snapshot,
+  ) as QueryResult<M>
+  // Keep the latest select without keying the memo on its identity:
+  // inline lambdas are the common case and must not recompute.
+  const selectRef = useRef(options?.select)
+  selectRef.current = options?.select
+  return useMemo<QueryResult<M> | SelectedResult<T>>(() => {
+    const select = selectRef.current
+    if (!select) return raw
+    return { isLoading: raw.isLoading, error: raw.error, data: select(raw.data) }
+  }, [raw])
 }
 
 /**

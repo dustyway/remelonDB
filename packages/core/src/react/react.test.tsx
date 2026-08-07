@@ -191,6 +191,29 @@ describe('useQuery', () => {
   })
 })
 
+describe('useQuery select', () => {
+  it('derives per consumer from one shared subscription', () => {
+    const db = fakeDb()
+    const q1 = fakeQuery<{ len: number }>(db, 'decks', { where: 'a' })
+    const q2 = fakeQuery<{ len: number }>(db, 'decks', { where: 'a' })
+
+    const { result: count } = renderHook(() =>
+      useQuery(q1.query, { select: (rows) => rows.length }),
+    )
+    const { result: first } = renderHook(() =>
+      useQuery(q2.query, { select: (rows) => rows[0] ?? null }),
+    )
+
+    expect(q1.observe).toHaveBeenCalledTimes(1)
+    expect(q2.observe).not.toHaveBeenCalled()
+
+    act(() => q1.emit([{ len: 1 }, { len: 2 }]))
+    expect(count.current.data).toBe(2)
+    expect(first.current.data).toEqual({ len: 1 })
+    expect(count.current.isLoading).toBe(false)
+  })
+})
+
 describe('useQueryCount', () => {
   it('follows the count observation and defaults to zero', () => {
     const db = fakeDb()
