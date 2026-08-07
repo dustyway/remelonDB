@@ -82,6 +82,6 @@
   "files": [
     "dist",
     "src",
-    "!src/**/*.test.ts"
+    "!src/**/*.test.*"
   ]
 }

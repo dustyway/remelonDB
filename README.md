@@ -111,10 +111,11 @@ db.get(Task)
   .observe((open) => console.log('open tasks:', open.length))
 ```
 
-In an app, wrap the open in `createDatabaseManager` (and
-`useDatabaseState` from `@remelondb/core/react`): concurrent inits
-share one open, failures stay retryable, and web takeover is handled —
-see the driver-web README and the todo-sync example.
+In an app, wrap the open in `createDatabaseManager` (and the React
+bindings in `@remelondb/core/react` — `useDatabaseState`, `useQuery`,
+see [docs/reference/react.md](docs/reference/react.md)): concurrent
+inits share one open, failures stay retryable, and web takeover is
+handled — see the driver-web README and the todo-sync example.
 
 (No Zod in your stack? The `table()`/`column` builders in core define
 the same tables by hand — [schema reference](docs/reference/schema.md).)
@@ -204,6 +205,7 @@ side of the wire. Everything else ships as a core or server subpath
 - Reference: [database & observation](docs/reference/database.md) ·
   [models](docs/reference/models.md) ·
   [queries](docs/reference/queries.md) ·
+  [react bindings](docs/reference/react.md) ·
   [sync](docs/reference/sync.md) ·
   [building a backend](docs/reference/backend.md) ·
   [schema & migrations](docs/reference/schema.md) ·

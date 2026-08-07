@@ -12,8 +12,11 @@
     "check:backend-tutorial": "node scripts/check-backend-tutorial.mjs"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^24.13.3",
     "fast-check": "^4.9.0",
+    "jsdom": "^30.0.1",
+    "react-dom": "^19.2.7",
     "tsdown": "^0.22.7",
     "typedoc": "^0.28.20",
     "typescript": "^5.8.3",

@@ -51,6 +51,7 @@ they track the code and are updated with it.
 | [reference/database.md](reference/database.md) | `Database.open`, the writer queue, CRUD, the batch contract, observation, change buses, local storage. |
 | [reference/models.md](reference/models.md) | The Model layer: declare-field accessors (no decorators), update builders, identity, relations, per-record observation. |
 | [reference/queries.md](reference/queries.md) | The Q DSL: every operator with its SQL and semantics, joins, LIKE escaping, unsafe escape hatches, compilation. |
+| [reference/react.md](reference/react.md) | The React bindings: provider and manager hooks, `useQuery`/`useQueryCount` with structural subscription keys, shared observations, `select`. |
 | [sync-tour.md](sync-tour.md) | The wire protocol in eight real requests and responses — the hands-on companion to the spec, with a clickable .http version in the example. |
 | [reference/sync.md](reference/sync.md) | Using `synchronize`: wire shapes, conflict semantics, resync, migration pulls, testing a backend. |
 | [sync-triggering.md](sync-triggering.md) | When to call `synchronize`: the trigger set, server-signalled sync and why signals carry no data, battery, and why background sync works on mobile but not on web. |
