@@ -41,10 +41,22 @@ const { status, error } = useDatabaseState()  // lifecycle transitions
 const db = useDatabase()                      // Database | null until ready
 ```
 
-`useDatabaseState` re-renders exactly on manager state transitions
-(`idle`, `loading`, `ready`, `taken-over`, `error`). `useDatabase` is
-the 90%-case sugar: null until the manager is ready, then the open
-database, with the null flowing naturally into the query hooks below.
+The two hooks answer different questions. `useDatabaseState` is for
+the component that reacts to lifecycle. That can be a blocking gate
+(spinner, error screen, or app), but the shape that fits offline-first
+better is a banner: render the UI immediately, and mount one component
+that shows nothing while the manager is healthy and surfaces
+`taken-over` or `error` with a retry button. It re-renders exactly on
+manager state transitions (`idle`, `loading`, `ready`, `taken-over`,
+`error`).
+
+Every other component only needs the database itself. Deriving it by
+hand (`state.status === 'ready' ? manager.database : null`) invites a
+crash, since `manager.database` throws before ready. `useDatabase` is
+that derivation done once: null until ready, then the open database,
+re-rendering only when readiness changes. Its null flows into the
+query hooks below, which idle until the database arrives; that
+null-flow is what makes the non-blocking shape work.
 Both take an optional explicit manager and otherwise read the provider;
 calling them with neither throws immediately with instructions.
 
@@ -91,6 +103,12 @@ where a header badge, a list, and a footer all watch the same query
 costs one observation, not three. Sharing is per database instance, so
 independent databases never cross.
 
+This also sets the default for app structure: subscribe in the
+component that renders the data, rather than funneling every query
+through one aggregate store hook. An aggregate hook re-renders all its
+consumers when any of its queries changes; fine-grained hooks cost the
+same single observation per distinct query and re-render less.
+
 ### Deriving values: `select`
 
 ```tsx
@@ -110,6 +128,39 @@ evaluates them and one subscription covers the composed result (see
 deliberately ship no stream operators — combining, debouncing, and
 switching between live results is a job for a dedicated reactive
 library on top, not for this module.
+
+## Migrating from a hand-rolled bridge
+
+If you already wrote a `useState`/`useEffect` bridge over `observe()`,
+these hooks replace it wholesale, and call sites barely change: the
+result shape here is the same `{ data, isLoading, error }`, so the
+usual diff is one line per site.
+
+```tsx
+// before: factory plus dependency array
+const { data } = useQuery(() => (db ? getDecksQuery(db) : null), [db])
+
+// after: plain expression, no deps
+const { data } = useQuery(db && getDecksQuery(db))
+```
+
+What to delete along with the bridge file:
+
+- Query factories and dependency arrays. Structural keying makes a
+  rebuilt query free, so the plain expression is enough (see above).
+- The by-hand database derivation
+  (`status === 'ready' ? manager.database : null`) and any effect that
+  calls `manager.init()` when idle. `useDatabase()` covers the first;
+  calling `manager.init()` once at app start covers the second.
+- Aggregate store hooks whose job was letting components share query
+  results. Sharing is built in, so subscribe where you render (see
+  Shared subscriptions above).
+
+Behavior differences to expect, all in the migration's favor: equal
+queries across components share one observation instead of one per
+mount, the hooks are tear-safe under StrictMode's double-mounting and
+concurrent rendering, and a component mounting into an already-live
+subscription gets data on first render instead of a loading flash.
 
 ## Loading and error shape
 
