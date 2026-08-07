@@ -225,7 +225,10 @@ whenever the count changes. `query(...).observe(cb)` does the same for
 the full result list, re-emitting when membership, order, or the
 content of listed records changes — an edit arriving via sync repaints
 a sorted list like a local one does. Call the returned function to
-unsubscribe.
+unsubscribe. In React, don't wire this by hand: the bindings in
+[reference/react.md](reference/react.md) wrap observation into
+`useQuery`/`useQueryCount` with subscription sharing and no dependency
+arrays.
 
 ## 8. Record a review
 

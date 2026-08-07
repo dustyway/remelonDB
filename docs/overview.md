@@ -66,6 +66,7 @@ part which is easy to get wrong is written once.
 | Model classes and generated accessors | `core/src/model/` | [reference/models.md](reference/models.md) |
 | Query AST, builders, SQL compiler | `core/src/query/` | [reference/queries.md](reference/queries.md) |
 | Database, collections, work queue, cache, observation | `core/src/database/` | [reference/database.md](reference/database.md) |
+| React bindings: provider, query hooks | `core/src/react/` | [reference/react.md](reference/react.md) |
 | Client sync engine | `core/src/sync/` | [reference/sync.md](reference/sync.md) |
 | The driver contract | `core/src/driver/`, `core/src/conformance/` | [reference/driver.md](reference/driver.md) |
 | Server protocol engine and storage seam | `server/src/` | [reference/backend.md](reference/backend.md) |

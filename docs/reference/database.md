@@ -103,6 +103,10 @@ Notes that follow from the design:
   when the number changed. No throttling (upstream's was knowingly buggy);
   add debouncing in the UI layer if you need it.
 
+In React, don't wire `observe()` by hand: the hooks in
+[react.md](react.md) wrap these observations with shared subscriptions
+and structural query keys.
+
 Lower-level buses, mostly for infrastructure:
 
 - `db.onChange(tables, handler)` — batched changes touching any listed
