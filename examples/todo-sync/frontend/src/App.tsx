@@ -1,15 +1,14 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { Q, type Database } from '@remelondb/core'
+import { useQuery } from '@remelondb/core/react'
 import { TodoModel } from 'example-todo-sync/schema'
-import { useQuery } from 'example-todo-sync/client'
 import { getSyncNote, getSyncStatus, runSync, subscribeSyncStatus } from './sync'
 
 export function App({ db }: { db: Database }) {
-  const todos = useQuery(
-    useMemo(
-      () => db.get(TodoModel).query(Q.sortBy('created_at', Q.desc)),
-      [db],
-    ),
+  // No memo needed: useQuery keys on the query's structure, so
+  // rebuilding it every render reuses the same live subscription.
+  const { data: todos } = useQuery(
+    db.get(TodoModel).query(Q.sortBy('created_at', Q.desc)),
   )
   const [text, setText] = useState('')
   const [editing, setEditing] = useState<string | null>(null)

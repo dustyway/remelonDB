@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar'
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import {
   FlatList,
   Pressable,
@@ -10,8 +10,7 @@ import {
 } from 'react-native'
 import { Q, type Database } from '@remelondb/core'
 import { TodoModel } from 'example-todo-sync/schema'
-import { useQuery } from 'example-todo-sync/client'
-import { useDatabaseState } from '@remelondb/core/react'
+import { useDatabaseState, useQuery } from '@remelondb/core/react'
 import { TodoItem } from './components/TodoItem'
 import { manager } from './src/db'
 import {
@@ -48,11 +47,10 @@ const dotColors: Record<string, string> = {
 }
 
 function Todos({ db }: { db: Database }) {
-  const todos = useQuery(
-    useMemo(
-      () => db.get(TodoModel).query(Q.sortBy('created_at', Q.desc)),
-      [db],
-    ),
+  // Structural keying: no memo, the rebuilt query reuses the
+  // subscription.
+  const { data: todos } = useQuery(
+    db.get(TodoModel).query(Q.sortBy('created_at', Q.desc)),
   )
   const [text, setText] = useState('')
   const syncStatus = useSyncExternalStore(subscribeSyncStatus, getSyncStatus)
