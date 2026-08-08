@@ -162,6 +162,37 @@ describe('useQuery', () => {
     expect(result.current).toEqual({ data: [], isLoading: false, error })
   })
 
+  it('clears the error on the next successful emission', () => {
+    const db = fakeDb()
+    const q = fakeQuery<string>(db, 'decks', { where: 'a' })
+    const { result } = renderHook(() => useQuery(q.query))
+
+    act(() => q.fail(new Error('transient')))
+    expect(result.current.error).not.toBeNull()
+
+    act(() => q.emit(['recovered']))
+    expect(result.current).toEqual({
+      data: ['recovered'],
+      isLoading: false,
+      error: null,
+    })
+  })
+
+  it('delivers a failure to every consumer of a shared subscription', () => {
+    const db = fakeDb()
+    const q1 = fakeQuery<string>(db, 'decks', { where: 'a' })
+    const q2 = fakeQuery<string>(db, 'decks', { where: 'a' })
+
+    const { result: a } = renderHook(() => useQuery(q1.query))
+    const { result: b } = renderHook(() => useQuery(q2.query))
+    expect(q2.observe).not.toHaveBeenCalled()
+
+    const error = new Error('database unavailable')
+    act(() => q1.fail(error))
+    expect(a.current.error).toBe(error)
+    expect(b.current.error).toBe(error)
+  })
+
   it('retains the last successful data after an observation failure', () => {
     const db = fakeDb()
     const q = fakeQuery<string>(db, 'decks', { where: 'a' })

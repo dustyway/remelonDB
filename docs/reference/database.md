@@ -90,6 +90,13 @@ const unsub = db.get(Task)
 const unsub2 = db.get(Task).query().observeCount((n) => setBadge(n))
 ```
 
+The second argument is why observation failures are survivable: a
+re-fetch can fail (database gone, driver error), and without the
+callback that failure is an unhandled rejection — the list simply stops
+updating with nothing in the UI to say so. With it, the failure reaches
+the code that can show it. A subscriber that itself throws is an app bug
+and is deliberately not routed here.
+
 One strategy for every query: re-fetch when any of the query's tables
 change, emit the initial results and then whenever the result list
 differs — by membership, order, or visible-column content.

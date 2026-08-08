@@ -1,4 +1,4 @@
-import { synchronize, type Database } from '@remelondb/core'
+import { synchronize, type Database, type SyncPullResult, type SyncPushResult } from '@remelondb/core'
 import { wire } from './schema'
 
 // The entire React bridge: observe() is the reactivity, this hook only
@@ -70,10 +70,13 @@ export function createSync(base: string) {
               setNote(message.replace(/^sync: /, ''))
             }
           },
-          pullChanges: async (args) =>
-            wire.pullResult.parse(await post('pull', args)),
-          pushChanges: async (args) =>
-            wire.pushResult.parse(await post('push', args)),
+          // the casts are type-level claims only: every server response
+          // is untrusted input, and the validators below are what
+          // actually check it before core inspects or applies anything
+          pullChanges: async (args) => (await post('pull', args)) as SyncPullResult,
+          pushChanges: async (args) => (await post('push', args)) as SyncPushResult,
+          validatePullResult: (value) => wire.pullResult.parse(value),
+          validatePushResult: (value) => wire.pushResult.parse(value),
         })
         setStatus('synced')
       } catch {

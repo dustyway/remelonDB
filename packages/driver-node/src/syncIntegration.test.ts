@@ -165,6 +165,36 @@ describe('sync engine', () => {
     expect(await db.localStorage.get(CURSOR_KEY)).toBeNull()
   })
 
+  it('validates the resync re-pull, not just the initial pull', async () => {
+    server.seed('keep', { name: 'kept', position: 1 })
+    await sync()
+
+    // the re-pull after resyncRequired is a fresh untrusted response and
+    // must pass through the same validator; a bad one leaves local state
+    // (including the pre-resync cursor) untouched
+    const cursorBefore = await db.localStorage.get(CURSOR_KEY)
+    const invalid = { changes: null, cursor: 'x' }
+    const validatePullResult = vi.fn((value: unknown) => {
+      if (value === invalid) throw new Error('invalid resync response')
+      return value as never
+    })
+    let first = true
+    await expect(sync({
+      pullChanges: async (args) => {
+        if (first && args.cursor !== null) {
+          first = false
+          return { resyncRequired: true }
+        }
+        return invalid as never
+      },
+      validatePullResult,
+    })).rejects.toThrow('invalid resync response')
+
+    expect(validatePullResult).toHaveBeenCalledWith(invalid)
+    expect(await db.localStorage.get(CURSOR_KEY)).toBe(cursorBefore)
+    expect((await db.get('tasks').find('keep'))._status).toBe('synced')
+  })
+
   it('validates untrusted push results before adopting them', async () => {
     await db.write(() => db.get('tasks').create({ id: 't1', name: 'local' }))
     const invalid = { cursor: '1' }

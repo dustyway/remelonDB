@@ -57,6 +57,19 @@ the engine inspects a variant, writes records, marks local changes synced,
 or adopts a cursor. A validation failure rejects the sync with local state
 untouched. `syncSchemas()` supplies validators derived from the same Zod
 row schemas used to declare the client tables.
+
+Parsing inside your own `pullChanges` wrapper works too, but covers only
+the call sites you remember: the push acknowledgement (with its
+`rejected` list and `conflict` variant) and the re-pull after
+`resyncRequired` are the responses DIY validation tends to skip, and an
+unvalidated response there writes straight into local records. Declaring
+the validators once hands all of those paths to core, and keeps the
+adapters pure transport.
+
+Validators are parse-shaped: core adopts their **return value**, so they
+may narrow or transform (Zod's `.parse` slots in as-is). An assert-style
+validator that returns nothing makes core consume `undefined` — return
+the value.
 `pushChanges` is optional (pull-only replicas). Also exported:
 `hasUnsyncedChanges(db)`, and the lower-level phases
 (`fetchLocalChanges`, `applyRemoteChanges`, `markLocalChangesAsSynced`)
