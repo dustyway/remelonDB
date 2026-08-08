@@ -23,12 +23,20 @@ import { z } from 'zod'
 import type { SyncPullArgs, SyncPullResult, SyncPushArgs, SyncPushResult } from '@remelondb/core'
 import { syncSchemas } from '@remelondb/core/zod'
 import { createSyncEngine, SyncProtocolError } from '@remelondb/server'
-import type { SyncEngineOptions, SyncStore } from '@remelondb/server'
+import type { SyncEngineOptions, SyncStore, TableConfig } from '@remelondb/server'
 
 export interface RemelonSyncOptions<Scope> {
   readonly store: SyncStore<Scope>
   /** Per-table Zod objects — the same ones the client's zodTable uses. */
   readonly tables: { readonly [table: string]: z.ZodObject<z.ZodRawShape> }
+  /**
+   * Per-table engine config beyond validation (e.g. `appendOnly`).
+   * Validation always comes from {@link tables}; it cannot be
+   * overridden here.
+   */
+  readonly tableOptions?: {
+    readonly [table: string]: Omit<TableConfig, 'validate'>
+  }
   /**
    * The authenticated principal for a request (e.g. the session's user
    * id); null/undefined answers 401. Auth itself stays the app's.
@@ -68,7 +76,10 @@ const prepare = <Scope>(options: RemelonSyncOptions<Scope>): SyncRuntime => {
     tables: Object.fromEntries(
       Object.keys(options.tables).map((name) => [
         name,
-        { validate: (row: unknown) => wire.rows[name]!.safeParse(row).success },
+        {
+          ...options.tableOptions?.[name],
+          validate: (row: unknown) => wire.rows[name]!.safeParse(row).success,
+        },
       ]),
     ),
     ...(options.crossValidate ? { crossValidate: options.crossValidate } : {}),

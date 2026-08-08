@@ -28,6 +28,10 @@ const Deck = z.object({ name: z.string().min(1), source_lang: z.string(), target
       useFactory: (db: Db) => ({
         store: createDrizzleStore<string>({ db, tables: { /* ... */ } }),
         tables: { decks: Deck },
+        // engine table config beyond validation. The module builds its
+        // own engine, so config not passed here does not exist on the
+        // served endpoints.
+        tableOptions: { review_events: { appendOnly: true } },
         // the authenticated principal; null answers 401
         scopeFrom: async (request) => {
           const session = await auth.api.getSession({ headers: (request as Request).headers })

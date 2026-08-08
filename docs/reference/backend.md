@@ -70,7 +70,11 @@ HTTP 200 with the variant in the body, 400 is a malformed request, 401
 an unauthenticated one. Auth stays the app's — `scopeFrom` maps a
 request to its scope (a session lookup, a JWT claim); null answers 401.
 An invalid record is rejected **by id** while the rest of the push
-applies; the push envelope only checks shape and usable ids. Setup is in
+applies; the push envelope only checks shape and usable ids. Engine
+table config beyond validation goes through `tableOptions` (e.g.
+`tableOptions: { review_events: { appendOnly: true } }`): the module
+builds its own engine, so config not passed here does not exist on the
+served endpoints. Setup is in
 the [package README](../../packages/nestjs/README.md); without NestJS,
 the engine's handlers bind to any HTTP server in a few lines (the
 [example server](../../examples/todo-sync/backend/server.ts) is the
