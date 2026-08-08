@@ -69,11 +69,39 @@ export class Query<M = RawRecord> {
    * every relevant change. The emitted array is a fresh copy; the records
    * inside are the canonical cached instances.
    */
-  observe(subscriber: (records: M[]) => void): Unsubscribe {
+  observe(
+    subscriber: (records: M[]) => void,
+    onError?: (error: Error) => void,
+  ): Unsubscribe {
     const columns = ['id', ...Object.keys(this.collection.schema.columns)]
     let unsubscribed = false
     let previous: { raw: RawRecord; content: RawRecord }[] | null = null
     let generation = 0
+    const diagnostics = this.collection.database.onObservation
+
+    const report = (
+      started: number,
+      trigger: 'initial' | 'change',
+      outcome: 'success' | 'error' | 'discarded',
+      resultCount?: number,
+      error?: Error,
+    ) => {
+      if (!diagnostics) return
+      try {
+        diagnostics({
+          kind: 'records',
+          trigger,
+          outcome,
+          table: this.collection.table,
+          description: this.description,
+          durationMs: Date.now() - started,
+          ...(resultCount === undefined ? {} : { resultCount }),
+          ...(error ? { error } : {}),
+        })
+      } catch {
+        // Diagnostics are passive and must never affect query behavior.
+      }
+    }
 
     const differs = (records: readonly RawRecord[]): boolean => {
       if (previous === null || previous.length !== records.length) {
@@ -88,22 +116,48 @@ export class Query<M = RawRecord> {
       })
     }
 
-    const refetch = () => {
+    const refetch = (trigger: 'initial' | 'change') => {
       const current = ++generation
-      void this.fetchRaws().then((records) => {
-        if (unsubscribed || current !== generation) {
-          return
-        }
-        if (!differs(records)) {
-          return
-        }
-        previous = records.map((raw) => ({ raw, content: { ...raw } }))
-        subscriber(records.map((raw) => this.collection._recordFor(raw)))
-      })
+      const started = diagnostics ? Date.now() : 0
+      // Two-argument then: the failure handler sees only fetch rejections.
+      // A subscriber that throws is an app bug and stays a loud unhandled
+      // rejection rather than masquerading as a query error.
+      void this.fetchRaws().then(
+        (records) => {
+          if (unsubscribed || current !== generation) {
+            report(started, trigger, 'discarded')
+            return
+          }
+          report(started, trigger, 'success', records.length)
+          if (!differs(records)) {
+            return
+          }
+          previous = records.map((raw) => ({ raw, content: { ...raw } }))
+          subscriber(records.map((raw) => this.collection._recordFor(raw)))
+        },
+        onError || diagnostics
+          ? (cause: unknown) => {
+              if (unsubscribed || current !== generation) {
+                report(started, trigger, 'discarded')
+                return
+              }
+              const error =
+                cause instanceof Error ? cause : new Error(String(cause))
+              report(started, trigger, 'error', undefined, error)
+              if (onError) {
+                onError(error)
+              } else {
+                throw error
+              }
+            }
+          : undefined,
+      )
     }
 
-    const unsubscribe = this.collection.database.onChange(this.allTables, refetch)
-    refetch()
+    const unsubscribe = this.collection.database.onChange(this.allTables, () =>
+      refetch('change'),
+    )
+    refetch('initial')
     return () => {
       unsubscribed = true
       unsubscribe()
@@ -111,24 +165,80 @@ export class Query<M = RawRecord> {
   }
 
   /** Observe the result count. Emits initially and whenever it changes. */
-  observeCount(subscriber: (count: number) => void): Unsubscribe {
+  observeCount(
+    subscriber: (count: number) => void,
+    onError?: (error: Error) => void,
+  ): Unsubscribe {
     let unsubscribed = false
     let previous: number | null = null
     let generation = 0
+    const diagnostics = this.collection.database.onObservation
 
-    const refetch = () => {
-      const current = ++generation
-      void this.fetchCount().then((count) => {
-        if (unsubscribed || current !== generation || count === previous) {
-          return
-        }
-        previous = count
-        subscriber(count)
-      })
+    const report = (
+      started: number,
+      trigger: 'initial' | 'change',
+      outcome: 'success' | 'error' | 'discarded',
+      resultCount?: number,
+      error?: Error,
+    ) => {
+      if (!diagnostics) return
+      try {
+        diagnostics({
+          kind: 'count',
+          trigger,
+          outcome,
+          table: this.collection.table,
+          description: this.description,
+          durationMs: Date.now() - started,
+          ...(resultCount === undefined ? {} : { resultCount }),
+          ...(error ? { error } : {}),
+        })
+      } catch {
+        // Diagnostics are passive and must never affect query behavior.
+      }
     }
 
-    const unsubscribe = this.collection.database.onChange(this.allTables, refetch)
-    refetch()
+    const refetch = (trigger: 'initial' | 'change') => {
+      const current = ++generation
+      const started = diagnostics ? Date.now() : 0
+      // Two-argument then, for the same reason as observe(): only fetch
+      // rejections reach the failure handler, never subscriber throws.
+      void this.fetchCount().then(
+        (count) => {
+          if (unsubscribed || current !== generation) {
+            report(started, trigger, 'discarded')
+            return
+          }
+          report(started, trigger, 'success', count)
+          if (count === previous) {
+            return
+          }
+          previous = count
+          subscriber(count)
+        },
+        onError || diagnostics
+          ? (cause: unknown) => {
+              if (unsubscribed || current !== generation) {
+                report(started, trigger, 'discarded')
+                return
+              }
+              const error =
+                cause instanceof Error ? cause : new Error(String(cause))
+              report(started, trigger, 'error', undefined, error)
+              if (onError) {
+                onError(error)
+              } else {
+                throw error
+              }
+            }
+          : undefined,
+      )
+    }
+
+    const unsubscribe = this.collection.database.onChange(this.allTables, () =>
+      refetch('change'),
+    )
+    refetch('initial')
     return () => {
       unsubscribed = true
       unsubscribe()

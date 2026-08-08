@@ -68,12 +68,15 @@ const { data: decks, isLoading, error } = useQuery(
   db && db.get(Deck).query(Q.sortBy('created_at', Q.desc)),
 )
 const due = useQueryCount(db && dueCardsQuery(db, now))
+const dueState = useQueryCountResult(db && dueCardsQuery(db, now))
 ```
 
 `useQuery` subscribes to a query's results and re-renders whenever
 matching local data changes — user writes and applied sync pulls alike.
 `useQueryCount` does the same through the engine's cheaper count
-observation and returns a plain number. Both accept `null`/`undefined`
+observation and returns a plain number. `useQueryCountResult` exposes the
+same count as `{ data, isLoading, error }`; the two hooks share one
+underlying observation. All accept `null`/`undefined`
 for the not-ready phase: `useQuery(null)` is `{ data: [], isLoading:
 false, error: null }`, `useQueryCount(null)` is `0`.
 
@@ -117,9 +120,11 @@ const { data: newest } = useQuery(q, { select: (rows) => rows[0] ?? null })
 ```
 
 `select` derives the rendered value from the rows, per consumer — two
-components can select differently from one shared subscription. It runs
-when the rows change and is memoized on them, so passing an inline
-lambda costs nothing. Selectors must be pure.
+components can select differently from one shared subscription. It
+recomputes when either the rows or selector identity changes, so a selector
+that closes over changing props stays correct without restarting the query
+observation. Selectors must be pure; memoize an expensive selector if its
+inputs are stable.
 
 For anything richer than per-row derivation, reach for the query
 language first: joins and conditions belong in Q, where the engine
@@ -167,9 +172,10 @@ subscription gets data on first render instead of a loading flash.
 `useQuery` resolves to one of three shapes, in order: `{ data: [],
 isLoading: true }` until the first emission for this subscription
 (instant when a shared subscription already has data), then `{ data,
-isLoading: false, error: null }` on every emission. If starting the
-observation throws, the error lands in `error` with `isLoading: false`
-and an empty `data` — the component decides how to present it.
+isLoading: false, error: null }` on every emission. If a refetch fails,
+the error lands in `error` with `isLoading: false` while `data` retains
+the last successful rows. `useQueryCountResult` follows the same rule,
+retaining its last successful count.
 
 ## Server-side rendering
 

@@ -13,6 +13,7 @@ import {
   schemaMigrations,
   column as c,
   table,
+  type ObservationDiagnostic,
   type QueryAssociation,
   type RawRecord,
 } from '@remelondb/core'
@@ -40,10 +41,18 @@ const associations: QueryAssociation[] = [
 describe('Database core', () => {
   let driver: NodeSqliteDriver
   let db: Database
+  let diagnostics: ObservationDiagnostic[]
 
   beforeEach(async () => {
     driver = new NodeSqliteDriver()
-    db = await Database.open({ driver, schema, associations, name: ':memory:' })
+    diagnostics = []
+    db = await Database.open({
+      driver,
+      schema,
+      associations,
+      name: ':memory:',
+      onObservation: (event) => diagnostics.push(event),
+    })
   })
 
   afterEach(async () => {
@@ -222,6 +231,83 @@ describe('Database core', () => {
 
   describe('observation', () => {
     const flush = () => new Promise((resolve) => setTimeout(resolve, 10))
+
+    it('reports opt-in query diagnostics without changing observation', async () => {
+      const unsubscribe = db.get('tasks').query().observe(() => {})
+      await flush()
+      expect(diagnostics).toHaveLength(1)
+      expect(diagnostics[0]).toMatchObject({
+        kind: 'records',
+        trigger: 'initial',
+        outcome: 'success',
+        table: 'tasks',
+        resultCount: 0,
+      })
+      expect(diagnostics[0]!.durationMs).toBeGreaterThanOrEqual(0)
+
+      await db.write(() => db.get('tasks').create({ id: 't1' }))
+      await flush()
+      expect(diagnostics.at(-1)).toMatchObject({
+        kind: 'records',
+        trigger: 'change',
+        outcome: 'success',
+        resultCount: 1,
+      })
+      unsubscribe()
+    })
+
+    it('delivers query failures and reports them to diagnostics', async () => {
+      const failure = new Error('read failed')
+      driver.query = async () => {
+        throw failure
+      }
+      const errors: Error[] = []
+
+      const unsubscribe = db.get('tasks').query().observe(
+        () => {},
+        (error) => errors.push(error),
+      )
+      await flush()
+
+      expect(errors).toEqual([failure])
+      expect(diagnostics).toHaveLength(1)
+      expect(diagnostics[0]).toMatchObject({
+        kind: 'records',
+        trigger: 'initial',
+        outcome: 'error',
+        table: 'tasks',
+        error: failure,
+      })
+      unsubscribe()
+    })
+
+    it('a throwing subscriber is an app bug: loud, never delivered to onError', async () => {
+      const boom = new Error('subscriber bug')
+      const errors: Error[] = []
+      const unhandled: unknown[] = []
+      // The throw must surface as an unhandled rejection, not as a query
+      // error; capture it so the assertion can see it without failing the run.
+      const prior = process.listeners('unhandledRejection')
+      process.removeAllListeners('unhandledRejection')
+      process.on('unhandledRejection', (reason) => unhandled.push(reason))
+      try {
+        const unsubscribe = db.get('tasks').query().observe(
+          () => {
+            throw boom
+          },
+          (error) => errors.push(error),
+        )
+        await flush()
+        unsubscribe()
+        expect(errors).toEqual([]) // not mislabeled as a query error
+        expect(unhandled).toEqual([boom]) // still loud
+        // Diagnostics saw one successful fetch and no error report.
+        expect(diagnostics.map((d) => d.outcome)).toEqual(['success'])
+      } finally {
+        process.removeAllListeners('unhandledRejection')
+        for (const listener of prior) process.on('unhandledRejection', listener)
+      }
+    })
 
     it('flat queries: membership and content changes emit, others do not', async () => {
       const emissions: RawRecord[][] = []

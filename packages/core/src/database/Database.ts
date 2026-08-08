@@ -24,6 +24,7 @@ import {
 } from '../schema/migrations'
 import { encodeMigrationSteps, encodeSchema } from '../schema/encodeSchema'
 import type { QueryAssociation } from '../query/encodeQuery'
+import type { QueryDescription } from '../query/ast'
 import {
   Collection,
   type CollectionChange,
@@ -56,6 +57,19 @@ export interface DatabaseOptions {
   readonly associations?: readonly QueryAssociation[]
   /** Database name/path passed to driver.open. */
   readonly name: string
+  /** Optional, passive instrumentation for reactive query refetches. */
+  readonly onObservation?: (event: ObservationDiagnostic) => void
+}
+
+export interface ObservationDiagnostic {
+  readonly kind: 'records' | 'count'
+  readonly trigger: 'initial' | 'change'
+  readonly outcome: 'success' | 'error' | 'discarded'
+  readonly table: string
+  readonly description: QueryDescription
+  readonly durationMs: number
+  readonly resultCount?: number
+  readonly error?: Error
 }
 
 export type DatabaseChangeSet = { readonly [table: string]: CollectionChangeSet }
@@ -93,6 +107,7 @@ export class Database {
     readonly schema: AppSchema,
     associations: readonly QueryAssociation[],
     readonly migrations?: SchemaMigrations,
+    readonly onObservation?: (event: ObservationDiagnostic) => void,
   ) {
     this.associations = associations
     this.localStorage = new LocalStorage(driver)
@@ -135,7 +150,13 @@ export class Database {
         associations.push({ from: modelClass.table, to, info })
       }
     }
-    const database = new Database(driver, schema, associations, migrations)
+    const database = new Database(
+      driver,
+      schema,
+      associations,
+      migrations,
+      options.onObservation,
+    )
     for (const modelClass of options.modelClasses ?? []) {
       database.get(modelClass.table)._bindModelClass(modelClass)
     }

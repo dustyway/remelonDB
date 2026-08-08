@@ -14,7 +14,6 @@ import {
   createElement,
   useContext,
   useMemo,
-  useRef,
   useSyncExternalStore,
   type ReactNode,
 } from 'react'
@@ -94,6 +93,12 @@ export function useDatabase(manager?: DatabaseManager): Database | null {
 
 export interface QueryResult<M> {
   readonly data: M[]
+  readonly isLoading: boolean
+  readonly error: Error | null
+}
+
+export interface QueryCountResult {
+  readonly data: number
   readonly isLoading: boolean
   readonly error: Error | null
 }
@@ -205,7 +210,8 @@ export function useQuery<M, T>(
      * Derive the rendered value from the rows. Runs when the rows
      * change (per consumer, so different components can select
      * differently from one shared subscription); must be pure. The
-     * function's identity may change every render without cost.
+     * Changing the function recomputes the selected value without
+     * restarting the shared query observation.
      */
     select: (rows: M[]) => T
   },
@@ -221,52 +227,78 @@ export function useQuery<M, T>(
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const store = useMemo(() => {
     if (!query || !database || !key) return noStore
-    return sharedStore<QueryResult<M>>(database, `q:${key}`, () =>
-      createStore<QueryResult<M>>(LOADING as QueryResult<M>, (set) =>
-        query.observe((data) => set({ data, isLoading: false, error: null })),
-      ),
-    )
+    return sharedStore<QueryResult<M>>(database, `q:${key}`, () => {
+      let latest: M[] = []
+      return createStore<QueryResult<M>>(LOADING as QueryResult<M>, (set) =>
+        query.observe(
+          (data) => {
+            latest = data
+            set({ data, isLoading: false, error: null })
+          },
+          (error) => set({ data: latest, isLoading: false, error }),
+        ),
+      )
+    })
   }, [database, key])
   const raw = useSyncExternalStore(
     store.subscribe,
     store.snapshot,
     store.snapshot,
   ) as QueryResult<M>
-  // Keep the latest select without keying the memo on its identity:
-  // inline lambdas are the common case and must not recompute.
-  const selectRef = useRef(options?.select)
-  selectRef.current = options?.select
+  const select = options?.select
   return useMemo<QueryResult<M> | SelectedResult<T>>(() => {
-    const select = selectRef.current
     if (!select) return raw
     return { isLoading: raw.isLoading, error: raw.error, data: select(raw.data) }
-  }, [raw])
+  }, [raw, select])
 }
 
 /**
  * Subscribe to a query's result count via the engine's cheaper count
- * observation. Same structural keying as `useQuery`; returns 0 while
- * loading or without a query.
+ * observation, including loading and error state. Same structural keying
+ * and retained-last-success behavior as `useQuery`.
  *
- *     const due = useQueryCount(db && getDueCardsQuery(db, now))
+ *     const { data: due, error } = useQueryCountResult(query)
  */
-export function useQueryCount(
+export function useQueryCountResult(
   query: Query<unknown> | null | undefined,
-): number {
+): QueryCountResult {
   const database = query ? query.collection.database : null
   const key = query ? queryKey(query) : null
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const store = useMemo(() => {
     if (!query || !database || !key) return null
-    return sharedStore<number>(database, `c:${key}`, () =>
-      createStore<number>(0, (set) =>
-        query.observeCount((count) => set(count)),
-      ),
-    )
+    return sharedStore<QueryCountResult>(database, `c:${key}`, () => {
+      let latest = 0
+      return createStore<QueryCountResult>(
+        { data: 0, isLoading: true, error: null },
+        (set) =>
+          query.observeCount(
+            (data) => {
+              latest = data
+              set({ data, isLoading: false, error: null })
+            },
+            (error) => set({ data: latest, isLoading: false, error }),
+          ),
+      )
+    })
   }, [database, key])
   return useSyncExternalStore(
     store ? store.subscribe : noStore.subscribe,
-    store ? store.snapshot : () => 0,
-    store ? store.snapshot : () => 0,
-  )
+    store ? store.snapshot : () => NO_COUNT,
+    store ? store.snapshot : () => NO_COUNT,
+  ) as QueryCountResult
+}
+
+const NO_COUNT: QueryCountResult = {
+  data: 0,
+  isLoading: false,
+  error: null,
+}
+
+/** Backward-compatible convenience form; use `useQueryCountResult` when
+ * loading and error state matter. */
+export function useQueryCount(
+  query: Query<unknown> | null | undefined,
+): number {
+  return useQueryCountResult(query).data
 }

@@ -7,13 +7,14 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import { act, render, renderHook } from '@testing-library/react'
-import { createElement } from 'react'
+import { createElement, StrictMode } from 'react'
 import {
   DatabaseProvider,
   useDatabase,
   useDatabaseState,
   useQuery,
   useQueryCount,
+  useQueryCountResult,
 } from './index'
 import type { Database, DatabaseManager, DatabaseManagerState } from '../index'
 import type { Query } from '../database/Query'
@@ -55,14 +56,24 @@ const fakeDb = () => ({ tag: 'db' }) as unknown as Database
 
 const fakeQuery = <M,>(db: Database, table: string, description: unknown) => {
   const subscribers = new Set<(records: M[]) => void>()
+  const errorSubscribers = new Set<(error: Error) => void>()
   const countSubscribers = new Set<(count: number) => void>()
-  const observe = vi.fn((cb: (records: M[]) => void) => {
+  const countErrorSubscribers = new Set<(error: Error) => void>()
+  const observe = vi.fn((cb: (records: M[]) => void, onError?: (error: Error) => void) => {
     subscribers.add(cb)
-    return () => subscribers.delete(cb)
+    if (onError) errorSubscribers.add(onError)
+    return () => {
+      subscribers.delete(cb)
+      if (onError) errorSubscribers.delete(onError)
+    }
   })
-  const observeCount = vi.fn((cb: (count: number) => void) => {
+  const observeCount = vi.fn((cb: (count: number) => void, onError?: (error: Error) => void) => {
     countSubscribers.add(cb)
-    return () => countSubscribers.delete(cb)
+    if (onError) countErrorSubscribers.add(onError)
+    return () => {
+      countSubscribers.delete(cb)
+      if (onError) countErrorSubscribers.delete(onError)
+    }
   })
   const query = {
     collection: { schema: { name: table }, database: db },
@@ -77,8 +88,14 @@ const fakeQuery = <M,>(db: Database, table: string, description: unknown) => {
     emit: (records: M[]) => {
       for (const cb of subscribers) cb(records)
     },
+    fail: (error: Error) => {
+      for (const cb of errorSubscribers) cb(error)
+    },
     emitCount: (count: number) => {
       for (const cb of countSubscribers) cb(count)
+    },
+    failCount: (error: Error) => {
+      for (const cb of countErrorSubscribers) cb(error)
     },
     live: () => subscribers.size,
   }
@@ -132,6 +149,33 @@ describe('useQuery', () => {
   it('is idle without a query', () => {
     const { result } = renderHook(() => useQuery(null))
     expect(result.current).toMatchObject({ data: [], isLoading: false, error: null })
+  })
+
+  it('exposes observation failures', () => {
+    const db = fakeDb()
+    const q = fakeQuery<string>(db, 'decks', { where: 'a' })
+    const { result } = renderHook(() => useQuery(q.query))
+    const error = new Error('database unavailable')
+
+    act(() => q.fail(error))
+
+    expect(result.current).toEqual({ data: [], isLoading: false, error })
+  })
+
+  it('retains the last successful data after an observation failure', () => {
+    const db = fakeDb()
+    const q = fakeQuery<string>(db, 'decks', { where: 'a' })
+    const { result } = renderHook(() => useQuery(q.query))
+    act(() => q.emit(['cached']))
+    const error = new Error('temporarily unavailable')
+
+    act(() => q.fail(error))
+
+    expect(result.current).toEqual({
+      data: ['cached'],
+      isLoading: false,
+      error,
+    })
   })
 
   it('ignores structurally equal rebuilds and resubscribes on real change', () => {
@@ -189,6 +233,17 @@ describe('useQuery', () => {
     renderHook(() => useQuery(q4.query))
     expect(q4.observe).toHaveBeenCalledTimes(1)
   })
+
+  it('does not restart an observation during the StrictMode effect probe', () => {
+    const db = fakeDb()
+    const q = fakeQuery<string>(db, 'decks', { where: 'a' })
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      createElement(StrictMode, null, children)
+
+    renderHook(() => useQuery(q.query), { wrapper })
+
+    expect(q.observe).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('useQuery select', () => {
@@ -212,6 +267,23 @@ describe('useQuery select', () => {
     expect(first.current.data).toEqual({ len: 1 })
     expect(count.current.isLoading).toBe(false)
   })
+
+  it('recomputes when a selector captures changed inputs', () => {
+    const db = fakeDb()
+    const q = fakeQuery<string>(db, 'decks', { where: 'a' })
+    const { result, rerender } = renderHook(
+      ({ limit }) =>
+        useQuery(q.query, { select: (rows) => rows.slice(0, limit) }),
+      { initialProps: { limit: 1 } },
+    )
+
+    act(() => q.emit(['a', 'b', 'c']))
+    expect(result.current.data).toEqual(['a'])
+
+    rerender({ limit: 2 })
+    expect(result.current.data).toEqual(['a', 'b'])
+    expect(q.observe).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('useQueryCount', () => {
@@ -225,5 +297,27 @@ describe('useQueryCount', () => {
     expect(result.current).toBe(7)
     expect(q.observeCount).toHaveBeenCalledTimes(1)
     expect(q.observe).not.toHaveBeenCalled()
+  })
+
+  it('offers loading and recoverable error state without changing the number hook', () => {
+    const db = fakeDb()
+    const q = fakeQuery<string>(db, 'cards', { due: true })
+    const { result } = renderHook(() => ({
+      count: useQueryCount(q.query),
+      result: useQueryCountResult(q.query),
+    }))
+
+    expect(result.current).toEqual({
+      count: 0,
+      result: { data: 0, isLoading: true, error: null },
+    })
+    act(() => q.emitCount(7))
+    const error = new Error('count failed')
+    act(() => q.failCount(error))
+    expect(result.current).toEqual({
+      count: 7,
+      result: { data: 7, isLoading: false, error },
+    })
+    expect(q.observeCount).toHaveBeenCalledTimes(1)
   })
 })

@@ -62,7 +62,11 @@ export type {
   DatabaseManagerState,
   DatabaseManagerStatus,
 } from './database/DatabaseManager'
-export type { DatabaseOptions, DatabaseChangeSet } from './database/Database'
+export type {
+  DatabaseOptions,
+  DatabaseChangeSet,
+  ObservationDiagnostic,
+} from './database/Database'
 export { Collection } from './database/Collection'
 export type {
   ChangeType,

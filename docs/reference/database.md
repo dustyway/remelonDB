@@ -82,7 +82,10 @@ error propagates out of the write block.
 ```ts
 const unsub = db.get(Task)
   .query(Q.where('is_done', false))
-  .observe((records) => render(records))
+  .observe(
+    (records) => render(records),
+    (error) => showDatabaseError(error),
+  )
 
 const unsub2 = db.get(Task).query().observeCount((n) => setBadge(n))
 ```
@@ -99,6 +102,7 @@ Notes that follow from the design:
   re-emit.
 - Observers discard stale in-flight results (generation counter)
   and re-emit only when the fetched list actually differs.
+- Both `observe` and `observeCount` accept an optional second error callback.
 - `observeCount` re-queries `count(*)` on relevant changes and emits only
   when the number changed. No throttling (upstream's was knowingly buggy);
   add debouncing in the UI layer if you need it.
@@ -106,6 +110,33 @@ Notes that follow from the design:
 In React, don't wire `observe()` by hand: the hooks in
 [react.md](react.md) wrap these observations with shared subscriptions
 and structural query keys.
+
+### Diagnostics and cancellation
+
+Pass `onObservation` to `Database.open` for opt-in instrumentation:
+
+```ts
+const db = await Database.open({
+  driver,
+  schema,
+  name: 'app.db',
+  onObservation: (event) => metrics.record(event),
+})
+```
+
+Each event names the table and query description, records/count mode,
+initial/change trigger, duration, result count, and whether the request
+succeeded, failed, or was discarded as stale. The callback is passive:
+exceptions it throws are ignored, and no timing is collected when it is
+absent.
+
+Unsubscribing invalidates an in-flight result, so it can never emit into a
+dead subscription. It does not interrupt SQLite work already executing.
+The driver seam intentionally has no cancellation method: Node SQLite is
+synchronous once entered, while worker and native interruption have
+different guarantees. Generation-based stale-result suppression is the
+portable contract; an `AbortSignal` that only stopped some drivers would be
+misleading.
 
 Lower-level buses, mostly for infrastructure:
 
