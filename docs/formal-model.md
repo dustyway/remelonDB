@@ -81,6 +81,8 @@ What it does include is the hostile stuff:
   floor; clients whose cursor falls below it must resync.
 - **The push-response contract as a switch** (`PUSH_MODE`), which is
   where the interesting results live.
+- **Whether refusals are visible** (`SILENT_DROP`), a fault switch: a
+  server that applies less than it reports as accepted.
 
 ## What "correct" means: the invariants
 
@@ -108,6 +110,18 @@ skip the changes. Flip the constant and run the checker; it produces a
 client permanently skips another device's committed write. That trace
 is the *reason* the spec makes cursor-plus-changes a package, kept in
 executable form.
+
+**Refusals must be visible, and that is checkable.** A server can
+decline a row for many reasons (validation, a tombstoned id, an
+append-only table). What it may not do is decline *quietly*: apply less
+than it reports as accepted. `SILENT_DROP = true` models that fault —
+the response names fewer rejections than the server actually dropped —
+and the invariants fall within a second. The trace is the phantom
+record: the client flips the row to synced, the server never stored it,
+the cursor advances past the revision, and no later pull mentions the
+row again, so the divergence is permanent. This is the class three
+shipped bugs belonged to (releases 0.1.3 and 0.1.5); the model now
+holds the reason they were bugs, not just the fixes.
 
 **The GC-floor obligation — discovered by the model.** The fast path
 (server answers a push with cursor + interleave) is only lawful when
@@ -183,6 +197,7 @@ npx @informalsystems/quint@0.32.0 run docs/sync_model.qnt \
 Then open the file, change `PUSH_MODE` to `"naive"`, run the same
 command, and read the counterexample trace it prints: a
 step-by-step reenactment of the lost-write race, ending in the state
-the invariant forbids. Changing the protocol? Model the change here
+the invariant forbids. `SILENT_DROP = true` does the same for the
+phantom-record fault. Changing the protocol? Model the change here
 first — an invariant violation at this stage costs minutes instead of
 a corrupted database in the field.

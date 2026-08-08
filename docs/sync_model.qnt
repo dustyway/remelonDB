@@ -40,6 +40,13 @@ module sync_model {
   pure val VALS = Set(1, 2)
   pure val MAX_REV = 6
   pure val PUSH_MODE = "full" // "full" | "degraded" | "naive"
+  // When true, the server may apply less than it reports as accepted —
+  // the "silent drop" fault (a write to a tombstoned id, or a rewrite of
+  // an append-only row, discarded but answered clean). Flipping this on
+  // must break convergence: that is what makes "refusals are never
+  // silent" a load-bearing rule rather than a stylistic one, the same
+  // way PUSH_MODE = "naive" makes the interleave rule load-bearing.
+  pure val SILENT_DROP = false
   pure val NO_VAL = 0
 
   pure val DIRTY_STATUSES = Set("created", "updated", "deleted")
@@ -180,16 +187,25 @@ module sync_model {
   // whole push. A fully-rejected push commits nothing, so it MUST NOT
   // mint a revision — its fast-path response identifies the current
   // snapshot instead.
+  //
+  // `reported` is what the response names as rejected, `dropped` is what
+  // the server additionally failed to apply without saying so. They are
+  // equal unless SILENT_DROP is on: applying and reporting are one
+  // decision, and that identity is the property under test.
   action pushAccepted = {
     nondet c = oneOf(CLIENTS)
-    nondet rejected = oneOf(dirty(c).powerset())
+    nondet reported = oneOf(dirty(c).powerset())
+    nondet dropped = oneOf(dirty(c).exclude(reported).powerset())
+    val unapplied = if (SILENT_DROP) reported.union(dropped) else reported
     all {
       pushGuard(c),
-      sRows' = serverAfterPush(c, dirty(c).exclude(rejected)),
-      sRev' = if (rejected == dirty(c)) sRev else sRev + 1,
-      cRows' = cRows.set(c, clientAfterPush(c, dirty(c).exclude(rejected))),
+      sRows' = serverAfterPush(c, dirty(c).exclude(unapplied)),
+      sRev' = if (unapplied == dirty(c)) sRev else sRev + 1,
+      // the client trusts the response: everything not *reported*
+      // rejected flips to synced, silently dropped rows included
+      cRows' = cRows.set(c, clientAfterPush(c, dirty(c).exclude(reported))),
       cursor' = {
-        val snapshot = if (rejected == dirty(c)) sRev else sRev + 1
+        val snapshot = if (unapplied == dirty(c)) sRev else sRev + 1
         if (PUSH_MODE == "naive") cursor.set(c, snapshot)
         else if (fullPathOk(c)) cursor.set(c, snapshot)
         else cursor // degraded response: cursor null, keep the old one
