@@ -150,6 +150,37 @@ describe('sync engine', () => {
     expect(await db.localStorage.get(CURSOR_KEY)).toBe('1')
   })
 
+  it('validates untrusted pull results before applying them', async () => {
+    const invalid = { changes: 'not a change set', cursor: '1' }
+    const validatePullResult = vi.fn(() => {
+      throw new Error('invalid pull response')
+    })
+
+    await expect(sync({
+      pullChanges: async () => invalid as never,
+      validatePullResult,
+    })).rejects.toThrow('invalid pull response')
+
+    expect(validatePullResult).toHaveBeenCalledWith(invalid)
+    expect(await db.localStorage.get(CURSOR_KEY)).toBeNull()
+  })
+
+  it('validates untrusted push results before adopting them', async () => {
+    await db.write(() => db.get('tasks').create({ id: 't1', name: 'local' }))
+    const invalid = { cursor: '1' }
+    const validatePushResult = vi.fn(() => {
+      throw new Error('invalid push response')
+    })
+
+    await expect(sync({
+      pushChanges: async () => invalid as never,
+      validatePushResult,
+    })).rejects.toThrow('invalid push response')
+
+    expect(validatePushResult).toHaveBeenCalledWith(invalid)
+    expect((await db.get('tasks').find('t1'))._status).toBe('created')
+  })
+
   it('pushes local changes, marks them synced, and never re-receives its own writes', async () => {
     await db.write(() => db.get('tasks').create({ id: 't1', name: 'local' }))
     await sync()

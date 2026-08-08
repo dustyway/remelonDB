@@ -13,6 +13,9 @@ server-signalled sync, battery, background sync per platform — is
 
 ```ts
 import { synchronize } from '@remelondb/core'
+import { syncSchemas } from '@remelondb/core/zod'
+
+const wire = syncSchemas({ tasks: TaskRow })
 
 await synchronize({
   database: db,
@@ -34,6 +37,10 @@ await synchronize({
     if (!response.ok) throw new Error(`push: HTTP ${response.status}`)
     return response.json() // { cursor, changes, rejected? } | { conflict: true }
   },
+
+  // Optional but recommended at an untrusted network boundary:
+  validatePullResult: (value) => wire.pullResult.parse(value),
+  validatePushResult: (value) => wire.pushResult.parse(value),
 })
 ```
 
@@ -45,6 +52,11 @@ transport-level failures (401, 5xx) throw, and the sync reports as
 failed with local state untouched. A server may encode outcomes in
 status codes instead — the adapter then translates, and the engine
 never knows the difference.
+When validators are supplied, every response passes through them before
+the engine inspects a variant, writes records, marks local changes synced,
+or adopts a cursor. A validation failure rejects the sync with local state
+untouched. `syncSchemas()` supplies validators derived from the same Zod
+row schemas used to declare the client tables.
 `pushChanges` is optional (pull-only replicas). Also exported:
 `hasUnsyncedChanges(db)`, and the lower-level phases
 (`fetchLocalChanges`, `applyRemoteChanges`, `markLocalChangesAsSynced`)

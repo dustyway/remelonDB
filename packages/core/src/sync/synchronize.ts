@@ -30,6 +30,10 @@ export interface SynchronizeOptions {
   readonly database: Database
   readonly pullChanges: (args: SyncPullArgs) => Promise<SyncPullResult>
   readonly pushChanges?: (args: SyncPushArgs) => Promise<SyncPushResult>
+  /** Validate each untrusted pull response before core inspects or applies it. */
+  readonly validatePullResult?: (result: unknown) => SyncPullResult
+  /** Validate each untrusted push response before core inspects or applies it. */
+  readonly validatePushResult?: (result: unknown) => SyncPushResult
   readonly conflictResolver?: ConflictResolver
   readonly sendCreatedAsUpdated?: boolean
   /** Opt into migration pulls; the version before your first synced migration. */
@@ -150,7 +154,13 @@ async function runSynchronize(options: SynchronizeOptions): Promise<void> {
       options.migrationsEnabledAtVersion,
       pullCursor === null,
     )
-    let pullResult = await options.pullChanges({
+    const pull = async (args: SyncPullArgs): Promise<SyncPullResult> => {
+      const result: unknown = await options.pullChanges(args)
+      return options.validatePullResult
+        ? options.validatePullResult(result)
+        : (result as SyncPullResult)
+    }
+    let pullResult = await pull({
       cursor: pullCursor,
       schemaVersion: database.schema.version,
       migration,
@@ -158,7 +168,7 @@ async function runSynchronize(options: SynchronizeOptions): Promise<void> {
     let replacement = false
     if ('resyncRequired' in pullResult) {
       log('sync: server requires a full resync — re-pulling from scratch')
-      pullResult = await options.pullChanges({
+      pullResult = await pull({
         cursor: null,
         schemaVersion: database.schema.version,
         migration: null,
@@ -201,10 +211,13 @@ async function runSynchronize(options: SynchronizeOptions): Promise<void> {
     if (localChanges.isEmpty) {
       return
     }
-    const pushResult = await options.pushChanges({
+    const unvalidatedPushResult: unknown = await options.pushChanges({
       changes: localChanges.changes,
       cursor: pulled.cursor,
     })
+    const pushResult = options.validatePushResult
+      ? options.validatePushResult(unvalidatedPushResult)
+      : (unvalidatedPushResult as SyncPushResult)
     if ('conflict' in pushResult) {
       log(`sync: push conflict (attempt ${attempt}/${retries}) — re-pulling`)
       continue
