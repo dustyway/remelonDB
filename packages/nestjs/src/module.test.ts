@@ -14,23 +14,22 @@ import { RemelonSyncModule } from './module'
 // fetch as the client, MemoryStore underneath. What the suite passes
 // in-process must survive the transport unchanged.
 const Task = z.object({ name: z.string().min(1), done: z.boolean() })
+const Event = z.object({ note: z.string() })
 
 const apps: INestApplication[] = []
 afterAll(async () => {
   await Promise.all(apps.map((app) => app.close()))
 })
 
-const makeBase = async (
-  extra: Partial<Parameters<typeof RemelonSyncModule.forRoot<string>>[0]> = {},
-): Promise<string> => {
+const makeBase = async (): Promise<string> => {
   const moduleRef = await Test.createTestingModule({
     imports: [
       RemelonSyncModule.forRoot<string>({
         store: createMemoryStore(),
-        tables: { tasks: Task },
+        tables: { tasks: Task, events: Event },
+        tableOptions: { events: { appendOnly: true } },
         scopeFrom: (request) =>
           (request as { headers: Record<string, string | undefined> }).headers['x-scope'] ?? null,
-        ...extra,
       }),
     ],
   }).compile()
@@ -85,45 +84,15 @@ registerServerConformance({
       invalidRow: () => ({ id: newId(), name: '', done: false }),
     },
   },
-})
-
-describe('per-table options', () => {
-  it('passes appendOnly through to the engine behind /sync/push', async () => {
-    const base = await makeBase({ tableOptions: { tasks: { appendOnly: true } } })
-    const row = { id: 'append-1', name: 'a task', done: false }
-
-    const pull = await call(base, '/sync/pull', 'scope-a', {
-      cursor: null,
-      schemaVersion: 1,
-      migration: null,
-    })
-    expect(pull.status).toBe(200)
-    const { cursor } = (await pull.json()) as { cursor: string }
-
-    const first = await call(base, '/sync/push', 'scope-a', {
-      cursor,
-      changes: { tasks: { created: [row], updated: [], deleted: [] } },
-    })
-    expect(first.status).toBe(200)
-    expect(((await first.json()) as { rejected?: unknown }).rejected).toBeUndefined()
-
-    const repull = await call(base, '/sync/pull', 'scope-a', {
-      cursor,
-      schemaVersion: 1,
-      migration: null,
-    })
-    const { cursor: fresh } = (await repull.json()) as { cursor: string }
-
-    const second = await call(base, '/sync/push', 'scope-a', {
-      cursor: fresh,
-      changes: {
-        tasks: { created: [], updated: [{ ...row, name: 'rewritten' }], deleted: [] },
-      },
-    })
-    expect(second.status).toBe(200)
-    const body = (await second.json()) as { rejected?: { tasks?: string[] } }
-    expect(body.rejected?.tasks).toEqual(['append-1'])
-  })
+  // the module builds its own engine: case 13 proves tableOptions
+  // actually reaches it, over real HTTP
+  appendOnly: {
+    table: 'events',
+    fixture: {
+      validRow: () => ({ id: newId(), note: 'happened' }),
+      mutate: (row) => ({ ...row, note: 'rewritten' }),
+    },
+  },
 })
 
 describe('http binding', () => {

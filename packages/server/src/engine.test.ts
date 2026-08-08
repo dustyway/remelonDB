@@ -14,6 +14,7 @@ registerServerConformance({
       store: createMemoryStore(),
       tables: {
         tasks: { validate: (row) => row['name'] !== '' },
+        events: { validate: () => true, appendOnly: true },
       },
     })
     return {
@@ -26,6 +27,13 @@ registerServerConformance({
       validRow: () => ({ id: newId(), name: 'a task', done: false }),
       mutate: (row) => ({ ...row, name: `${String(row['name'])} (edited)` }),
       invalidRow: () => ({ id: newId(), name: '', done: false }),
+    },
+  },
+  appendOnly: {
+    table: 'events',
+    fixture: {
+      validRow: () => ({ id: newId(), note: 'happened' }),
+      mutate: (row) => ({ ...row, note: 'rewritten' }),
     },
   },
 })

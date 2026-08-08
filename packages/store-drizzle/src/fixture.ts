@@ -14,6 +14,15 @@ export const tasks = pgTable('tasks', {
   done: boolean('done').notNull(),
 })
 
+// A second table used only by conformance case 13 (appendOnly).
+export const events = pgTable('events', {
+  id: text('id').primaryKey(),
+  rev: bigint('rev', { mode: 'number' }).notNull(),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  owner: text('owner').notNull(),
+  note: text('note').notNull(),
+})
+
 export const freshDb = async (): Promise<{ client: PGlite; db: DrizzleDb }> => {
   const client = new PGlite()
   await client.exec(`
@@ -26,6 +35,13 @@ export const freshDb = async (): Promise<{ client: PGlite; db: DrizzleDb }> => {
       owner text not null,
       name text not null,
       done boolean not null
+    );
+    create table events (
+      id text primary key,
+      rev bigint not null,
+      deleted_at timestamptz,
+      owner text not null,
+      note text not null
     );
   `)
   return { client, db: drizzle(client) as unknown as DrizzleDb }

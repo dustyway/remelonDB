@@ -66,6 +66,17 @@ export interface ServerConformanceOptions {
   /** Fresh context per test: clean server state, authenticated handlers. */
   readonly makeContext: () => Promise<ServerConformanceContext>
   readonly fixtures: { readonly [table: string]: TableFixture }
+  /**
+   * A table this backend has declared `appendOnly`, with its fixture.
+   * Opt-in config is invisible to the rest of the suite, so declare it
+   * here and case 13 checks that the refusal actually reaches the wire
+   * through *this* backend's own registration — the layer where a
+   * transport can silently drop engine config.
+   */
+  readonly appendOnly?: {
+    readonly table: string
+    readonly fixture: TableFixture
+  }
 }
 
 const only = (changes: SyncChanges, table: string) =>
@@ -427,6 +438,47 @@ export function registerServerConformance(
 
       const state = pulled(await pullNull(handlers))
       expect(liveIds(state.changes, table)).not.toContain(row.id)
+    })
+
+    const appendOnly = options.appendOnly
+    const case13 = appendOnly ? it : it.skip
+    case13('13. a write to an existing id in an appendOnly table is rejected by id', async () => {
+      const { table: aoTable, fixture: aoFixture } = appendOnly!
+      const { handlers } = await options.makeContext()
+      const row = aoFixture.validRow()
+      const changes = (rows: WireRow[], asUpdated = false): SyncChanges => ({
+        [aoTable]: {
+          created: asUpdated ? [] : rows,
+          updated: asUpdated ? rows : [],
+          deleted: [],
+        },
+      })
+
+      const start = pulled(await pullNull(handlers))
+      const create = accepted(
+        await handlers.push({ changes: changes([row]), cursor: start.cursor }),
+      )
+      expect(create.rejected?.[aoTable] ?? []).not.toContain(row.id)
+
+      // the rewrite is not a conflict: the cursor is current, so a
+      // silent drop here would be reported as accepted and the pushing
+      // device would fork from the server forever
+      const afterCreate = pulled(await pullNull(handlers))
+      const rewrite = accepted(
+        await handlers.push({
+          changes: changes([aoFixture.mutate(row)], true),
+          cursor: afterCreate.cursor,
+        }),
+      )
+      expect(rewrite.rejected?.[aoTable] ?? []).toContain(row.id)
+
+      // and the stored row is untouched
+      const state = pulled(await pullNull(handlers))
+      const stored = [
+        ...only(state.changes, aoTable).created,
+        ...only(state.changes, aoTable).updated,
+      ].find((r) => String(r['id']) === row.id)
+      expect(stored).toEqual(row)
     })
   })
 }

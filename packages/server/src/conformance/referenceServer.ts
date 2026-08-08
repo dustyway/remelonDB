@@ -30,6 +30,8 @@ export interface ReferenceServerOptions {
   readonly validate?: {
     readonly [table: string]: (row: DirtyRaw) => boolean
   }
+  /** Tables whose existing ids refuse rewrites (creates and deletes still apply). */
+  readonly appendOnly?: readonly string[]
 }
 
 export interface SyncHandlers {
@@ -156,6 +158,11 @@ export function createReferenceServer(
           const existing = rows.get(row.id)
           if (existing?.deleted) {
             // tombstones stay dead, and the refusal must be visible
+            ;(rejected[table] ??= []).push(row.id)
+            continue
+          }
+          if (existing && options.appendOnly?.includes(table)) {
+            // history is not editable; the client must see the refusal
             ;(rejected[table] ??= []).push(row.id)
             continue
           }

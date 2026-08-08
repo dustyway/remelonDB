@@ -1,7 +1,7 @@
 import { createReferenceServer, registerServerConformance } from './index'
 
 // The suite proven against its own reference implementation: a server
-// known to satisfy the wire spec passes all ten scenarios.
+// known to satisfy the wire spec passes every scenario.
 let counter = 0
 const newId = (): string => `row-${++counter}`
 
@@ -10,6 +10,7 @@ registerServerConformance({
   makeContext: async () => {
     const server = createReferenceServer({
       validate: { tasks: (row) => row['name'] !== '' },
+      appendOnly: ['events'],
     })
     return {
       handlers: server.as('user-a'),
@@ -21,6 +22,13 @@ registerServerConformance({
       validRow: () => ({ id: newId(), name: 'a task', done: false }),
       mutate: (row) => ({ ...row, name: `${String(row['name'])} (edited)` }),
       invalidRow: () => ({ id: newId(), name: '', done: false }),
+    },
+  },
+  appendOnly: {
+    table: 'events',
+    fixture: {
+      validRow: () => ({ id: newId(), note: 'happened' }),
+      mutate: (row) => ({ ...row, note: 'rewritten' }),
     },
   },
 })

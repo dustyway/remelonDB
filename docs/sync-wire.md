@@ -214,6 +214,15 @@ For a server test suite; each item is one scenario or property test.
 9. Expired cursor → `resyncRequired`; a full re-pull then converges to
    server state.
 10. Nothing of another user's data ever crosses, in any response.
+11. A ChangeSet naming one id twice resolves to the last statement.
+12. A write to a tombstoned id is rejected by id, never silently
+    dropped.
+13. In a table declared `appendOnly`, a write to an existing id is
+    rejected by id and the stored row is unchanged. Opt-in, so the
+    suite runs it only when the backend declares such a table — and it
+    must be declared through the backend's *own* registration, which is
+    what catches a transport that drops engine config on the way to its
+    endpoints.
 
 ## Versioning
 

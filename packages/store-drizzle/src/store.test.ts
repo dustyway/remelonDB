@@ -1,6 +1,6 @@
 import { createSyncEngine } from '@remelondb/server'
 import { registerServerConformance } from '@remelondb/server/conformance'
-import { freshDb, tasks } from './fixture'
+import { events, freshDb, tasks } from './fixture'
 import { createDrizzleStore } from './store'
 
 // The drizzle store over real Postgres (pglite, in-process) must pass
@@ -25,12 +25,20 @@ registerServerConformance({
           deletedAt: tasks.deletedAt,
           scope: tasks.owner,
         },
+        events: {
+          table: events,
+          id: events.id,
+          rev: events.rev,
+          deletedAt: events.deletedAt,
+          scope: events.owner,
+        },
       },
     })
     const engine = createSyncEngine({
       store,
       tables: {
         tasks: { validate: (row) => row['name'] !== '' },
+        events: { validate: () => true, appendOnly: true },
       },
     })
     return { handlers: engine.as('scope-a'), secondUser: engine.as('scope-b') }
@@ -40,6 +48,13 @@ registerServerConformance({
       validRow: () => ({ id: newId(), name: 'a task', done: false }),
       mutate: (row) => ({ ...row, name: `${String(row['name'])} (edited)` }),
       invalidRow: () => ({ id: newId(), name: '', done: false }),
+    },
+  },
+  appendOnly: {
+    table: 'events',
+    fixture: {
+      validRow: () => ({ id: newId(), note: 'happened' }),
+      mutate: (row) => ({ ...row, note: 'rewritten' }),
     },
   },
 })
