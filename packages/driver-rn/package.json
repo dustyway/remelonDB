@@ -1,6 +1,6 @@
 {
   "name": "@remelondb/driver-rn",
-  "version": "0.1.7-dev.3",
+  "version": "0.1.7-dev.4",
   "exports": {
     ".": "./src/index.ts"
   },
