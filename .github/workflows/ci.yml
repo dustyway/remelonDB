@@ -355,3 +355,25 @@ jobs:
           # module is silently absent at runtime
           grep -q "RemelonDriver" \
             /tmp/WmHarness/android/app/build/generated/autolinking/src/main/jni/autolinking.cpp
+
+  browser-tests:
+    name: browser suite (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    # webkit is advisory until its linux deps prove stable
+    continue-on-error: ${{ matrix.browser == 'webkit' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @remelondb/driver-web exec playwright install ${{ matrix.browser }} --with-deps
+      - run: BROWSER=${{ matrix.browser }} pnpm --filter @remelondb/driver-web test:browser

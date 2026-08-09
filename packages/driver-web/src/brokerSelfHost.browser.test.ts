@@ -112,4 +112,31 @@ describe('broker-hosted compute (remelonDB#4)', () => {
     tabB.hostedComputeWorker?.terminate()
     await new Promise((resolve) => setTimeout(resolve, 200))
   }, 30_000)
+
+  it('heals when connect-probe pings race ahead of the pending opens', async () => {
+    // the discovered flake ordering: a dead compute, then two fresh
+    // connections whose probe pings enter the route table before their
+    // opens. the respawn asker must never be a ping's self-addressed
+    // fake port — pre-fix, spawnWorker vanished into it and both opens
+    // timed out.
+    const name = `pingorder-${Date.now()}.db`
+    const seed = new WebSqliteDriver({ shared: true })
+    await seed.open(name)
+    await seed.close()
+    // kill whatever hosts the compute, silently
+    seed.hostedComputeWorker?.terminate()
+
+    const tabA = new WebSqliteDriver({ shared: true })
+    const tabB = new WebSqliteDriver({ shared: true })
+    const [a, b] = await Promise.all([tabA.open(name), tabB.open(name)])
+    expect(a.userVersion).toBe(0)
+    expect(b.userVersion).toBe(0)
+    expect(await tabA.query('select 1 as one', [])).toEqual([{ one: 1 }])
+
+    await tabA.close()
+    await tabB.destroy()
+    tabA.hostedComputeWorker?.terminate()
+    tabB.hostedComputeWorker?.terminate()
+    await new Promise((resolve) => setTimeout(resolve, 200))
+  }, 40_000)
 })
