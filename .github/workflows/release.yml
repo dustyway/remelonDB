@@ -41,6 +41,11 @@ jobs:
       - name: Pack and publish (skip versions already on the registry)
         run: |
           TAG="${GITHUB_REF_NAME#v}"
+          # prerelease versions (anything with a hyphen) go to the dev
+          # dist-tag so `latest` always points at a blessed release
+          DIST_TAG="latest"
+          case "$TAG" in *-*) DIST_TAG="dev";; esac
+          echo "dist-tag: $DIST_TAG"
           mkdir -p /tmp/tarballs
           pnpm -r --filter './packages/*' pack --pack-destination /tmp/tarballs
           FAIL=0
@@ -57,7 +62,7 @@ jobs:
               continue
             fi
             echo "publishing $PKG@$VER"
-            npm publish "$t" || FAIL=1
+            npm publish "$t" --tag "$DIST_TAG" || FAIL=1
           done
           exit $FAIL
       - name: Create GitHub Release
