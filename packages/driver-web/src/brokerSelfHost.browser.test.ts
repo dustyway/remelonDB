@@ -92,4 +92,24 @@ describe('broker-hosted compute (remelonDB#4)', () => {
     tabC.hostedComputeWorker?.terminate()
     await new Promise((resolve) => setTimeout(resolve, 200))
   }, 40_000)
+
+  it('two tabs cold-opening simultaneously both succeed (first-open race)', async () => {
+    const name = `race-${Date.now()}.db`
+    const tabA = new WebSqliteDriver({ shared: true })
+    const tabB = new WebSqliteDriver({ shared: true })
+
+    // neither open may fail with "already open" or a DDL collision
+    const [a, b] = await Promise.all([tabA.open(name), tabB.open(name)])
+    expect(a.userVersion).toBe(0)
+    expect(b.userVersion).toBe(0)
+
+    await tabA.execute('create table t ("id" primary key)', [])
+    expect(await tabB.query('select count(*) as n from t', [])).toEqual([{ n: 0 }])
+
+    await tabA.close()
+    await tabB.destroy()
+    tabA.hostedComputeWorker?.terminate()
+    tabB.hostedComputeWorker?.terminate()
+    await new Promise((resolve) => setTimeout(resolve, 200))
+  }, 30_000)
 })

@@ -159,7 +159,13 @@ const resetEpoch = (reason: string): void => {
   computePort = null
   computeReady = false
   spawnRequested = false
-  const pending = [...routes.values()]
+  // ping probes are self-addressed bookkeeping, not user work: they
+  // must never be replayed, and above all never chosen as the spawn
+  // asker — their fake port swallows the spawnWorker control and the
+  // whole respawn dies silently
+  const pending = [...routes.values()].filter(
+    (route) => route.request.op !== 'ping',
+  )
   routes.clear()
   // holders are NOT cleared: they are exactly the state a fresh compute
   // must restore, so surviving tabs keep working (their queries would
@@ -400,9 +406,14 @@ const handle = (port: PortLike, request: WorkerRequest): void => {
     }
     case 'open': {
       const existing = holders.get(request.name)
-      if (existing && existing.size > 0 && computePort) {
+      if (existing && existing.size > 0) {
         existing.add(port)
-        // joiner: the connection is live — report its current version
+        // joiner — even when the compute is not up yet: the first
+        // open is already queued ahead of this pragma, so replay order
+        // serves it correctly. Gating on a live compute made two
+        // near-simultaneous cold opens both real, and the second died
+        // on the server's "already open" guard (remelonDB#3).
+        // joiner: report the connection's current version
         forward(
           port,
           {

@@ -11,7 +11,7 @@
  * user_version; core decides fresh-setup / migrate / ready / error. A
  * missing migration path is an explicit error, never a silent reset.
  */
-import type { ExternalChangeSet, SqliteDriver } from '../driver/SqliteDriver'
+import type { ExternalChangeSet, SqlArgs, SqliteDriver } from '../driver/SqliteDriver'
 import type {
   AppSchema,
   ColumnName,
@@ -122,8 +122,26 @@ export class Database {
     const { userVersion } = await driver.open(name)
 
     if (userVersion === 0) {
-      await driver.executeBatch(encodeSchema(schema).map((sql) => [sql, [[]]]))
-      await driver.setUserVersion(schema.version)
+      // DDL and the version stamp travel as ONE atomic batch: a client
+      // that loses a concurrent first-open race (two tabs, cold origin)
+      // collides on the DDL, and because the winner's batch committed
+      // whole, the version re-read below explains the collision — the
+      // loser then joins the winner's setup instead of failing.
+      const setup: Array<[string, [SqlArgs]]> = [
+        ...encodeSchema(schema).map((sql): [string, [SqlArgs]] => [sql, [[]]]),
+        [`pragma user_version = ${schema.version}`, [[]]],
+      ]
+      try {
+        await driver.executeBatch(setup)
+      } catch (error) {
+        const rows = await driver.query('pragma user_version', [])
+        const now = Number(
+          (rows as readonly { user_version?: unknown }[])[0]?.user_version ?? 0,
+        )
+        if (now !== schema.version) {
+          throw error // not a setup race — surface the real failure
+        }
+      }
     } else if (userVersion < schema.version) {
       const steps = migrations
         ? stepsForMigration(migrations, { from: userVersion, to: schema.version })
