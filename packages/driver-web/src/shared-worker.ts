@@ -38,6 +38,8 @@ interface PortLike {
 interface Route {
   readonly port: PortLike
   readonly originalId: number
+  /** The as-sent request, so an epoch reset can replay instead of fail. */
+  readonly request: WorkerRequest
   /** Reshape the worker's result before answering (synthesized requests). */
   readonly transform?: (result: unknown) => unknown
 }
@@ -51,6 +53,39 @@ const scope = globalThis as unknown as {
 
 let computePort: PortLike | null = null
 let spawnRequested = false
+let hostedWorker: { terminate(): void } | null = null
+
+/**
+ * Firefox exposes the Worker constructor in SharedWorkerGlobalScope
+ * (Chromium and WebKit do not — the reason for the tab-hosted design).
+ * Where it exists, host the compute worker HERE: it then survives every
+ * tab navigation, so its OPFS handles never orphan (remelonDB#4 — on
+ * Firefox a dead page-worker's handles are never released within the
+ * session, so the tab-hosted design breaks on any full page load).
+ */
+const spawnComputeHere = (): boolean => {
+  const scopeWithWorker = globalThis as unknown as {
+    Worker?: new (
+      url: URL,
+      options?: { type: string },
+    ) => PortLike & { terminate(): void }
+  }
+  if (typeof scopeWithWorker.Worker !== 'function') {
+    return false
+  }
+  try {
+    const worker = new scopeWithWorker.Worker(
+      new URL('./worker.ts', import.meta.url),
+      { type: 'module' },
+    )
+    hostedWorker = worker
+    adoptComputePort(worker)
+    return true
+  } catch {
+    hostedWorker = null
+    return false
+  }
+}
 let nextRouteId = 1
 const routes = new Map<number, Route>()
 const holders = new Map<string, Set<PortLike>>()
@@ -61,19 +96,51 @@ const backlog: Array<{
   transform?: (result: unknown) => unknown
 }> = []
 
-/** The compute channel is gone: fail everything pending, start over. */
+/**
+ * The compute channel is gone. Instead of failing everything pending
+ * (remelonDB#3: a fresh tab used to see "worker went away" because an
+ * unrelated tab closed), requeue the pending requests and respawn —
+ * self-hosted where possible, else via the first pending tab. Only when
+ * no respawn path exists does the failure surface.
+ */
 const resetEpoch = (reason: string): void => {
+  hostedWorker?.terminate()
+  hostedWorker = null
   computePort = null
   spawnRequested = false
-  for (const route of routes.values()) {
-    route.port.postMessage({
-      id: route.originalId,
-      ok: false,
-      error: `WebSqliteDriver: ${reason}`,
-    } satisfies WorkerResponse)
-  }
+  const pending = [...routes.values()]
   routes.clear()
   holders.clear()
+  if (pending.length > 0) {
+    for (const route of pending) {
+      backlog.push(
+        route.transform
+          ? { port: route.port, request: route.request, transform: route.transform }
+          : { port: route.port, request: route.request },
+      )
+    }
+    spawnRequested = true
+    if (!spawnComputeHere()) {
+      const asker = pending[0]!.port
+      let asked = false
+      try {
+        asker.postMessage({ control: 'spawnWorker' })
+        asked = true
+      } catch {
+        asked = false
+      }
+      if (!asked) {
+        spawnRequested = false
+        for (const item of backlog.splice(0)) {
+          item.port.postMessage({
+            id: item.request.id,
+            ok: false,
+            error: `WebSqliteDriver: ${reason}`,
+          } satisfies WorkerResponse)
+        }
+      }
+    }
+  }
 }
 
 const adoptComputePort = (port: PortLike): void => {
@@ -95,6 +162,20 @@ const adoptComputePort = (port: PortLike): void => {
     } else {
       route.port.postMessage({ ...response, id: route.originalId })
     }
+    // A self-hosted compute worker holds the SAH pool for the broker's
+    // lifetime, which outlives every tab. Release it when nothing is
+    // open and nothing is pending; the next open spawns a fresh one.
+    if (
+      hostedWorker &&
+      holders.size === 0 &&
+      routes.size === 0 &&
+      backlog.length === 0
+    ) {
+      hostedWorker.terminate()
+      hostedWorker = null
+      computePort = null
+      spawnRequested = false
+    }
   })
   port.start?.()
   const queued = backlog.splice(0)
@@ -112,7 +193,7 @@ const send = (
   transform?: (result: unknown) => unknown,
 ): void => {
   const routeId = nextRouteId++
-  const base = { port, originalId: request.id }
+  const base = { port, originalId: request.id, request }
   routes.set(routeId, transform ? { ...base, transform } : base)
   computePort!.postMessage({ ...request, id: routeId })
 }
@@ -127,7 +208,9 @@ const forward = (
     backlog.push(transform ? { ...entry, transform } : entry)
     if (!spawnRequested) {
       spawnRequested = true
-      port.postMessage({ control: 'spawnWorker' })
+      if (!spawnComputeHere()) {
+        port.postMessage({ control: 'spawnWorker' })
+      }
     }
     return
   }

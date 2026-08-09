@@ -1,0 +1,62 @@
+/**
+ * remelonDB#4: where SharedWorkerGlobalScope has the Worker constructor
+ * (Firefox), the broker hosts the compute worker itself — it survives
+ * tab navigation, so no tab is ever asked to host and no page death can
+ * orphan the OPFS handles. Chromium/WebKit keep the tab-hosted bridge.
+ * The observable is the driver's hostedComputeWorker: null means the
+ * broker never sent this tab a spawnWorker control.
+ */
+import { describe, expect, it } from 'vitest'
+import { WebSqliteDriver } from './WebSqliteDriver'
+
+const isFirefox = navigator.userAgent.includes('Firefox')
+
+describe('broker-hosted compute (remelonDB#4)', () => {
+  it('shared mode works with host-appropriate compute placement', async () => {
+    const name = `selfhost-${Date.now()}.db`
+    const tabA = new WebSqliteDriver({ shared: true })
+    const tabB = new WebSqliteDriver({ shared: true })
+
+    await tabA.open(name)
+    await tabA.execute('create table t ("id" primary key, "v")', [])
+    await tabA.execute('insert into t values (?, ?)', ['k', 'v1'])
+    await tabB.open(name)
+    expect(await tabB.query('select "v" from t', [])).toEqual([{ v: 'v1' }])
+
+    if (isFirefox) {
+      // the whole point: no tab hosts the worker
+      expect(tabA.hostedComputeWorker).toBeNull()
+      expect(tabB.hostedComputeWorker).toBeNull()
+    } else {
+      // chromium/webkit: exactly one tab was asked to host
+      expect(tabA.hostedComputeWorker ?? tabB.hostedComputeWorker).not.toBeNull()
+    }
+
+    await tabA.close()
+    await tabB.destroy()
+    // tab-hosted cleanup (no-op on firefox); the broker's idle release
+    // handles the self-hosted case on its own
+    tabA.hostedComputeWorker?.terminate()
+    tabB.hostedComputeWorker?.terminate()
+    await new Promise((resolve) => setTimeout(resolve, 200))
+  })
+
+  it('reopening after everything closed spawns fresh and sees durable data', async () => {
+    const name = `selfhost-re-${Date.now()}.db`
+    const first = new WebSqliteDriver({ shared: true })
+    await first.open(name)
+    await first.execute('create table t ("id" primary key)', [])
+    await first.setUserVersion(7)
+    await first.close() // last holder: idle release tears compute down
+
+    await new Promise((resolve) => setTimeout(resolve, 200))
+
+    const second = new WebSqliteDriver({ shared: true })
+    const { userVersion } = await second.open(name)
+    expect(userVersion).toBe(7)
+    await second.destroy()
+    first.hostedComputeWorker?.terminate()
+    second.hostedComputeWorker?.terminate()
+    await new Promise((resolve) => setTimeout(resolve, 200))
+  })
+})
