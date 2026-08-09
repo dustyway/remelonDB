@@ -1,6 +1,6 @@
 {
   "name": "@remelondb/nestjs",
-  "version": "0.1.6",
+  "version": "0.1.7-dev.0",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
