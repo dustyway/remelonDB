@@ -50,6 +50,39 @@ export class SqliteWorkerServer {
 
   constructor(private readonly sqlite3: Sqlite3Static) {}
 
+  /**
+   * Acquire the SAH pool, absorbing the holder-death race (remelonDB#3):
+   * when a worker dies holding the pool, the browser releases its
+   * handles asynchronously — seconds later under a real tab close. A
+   * NoModificationAllowedError during that window is transient, so
+   * retry with backoff before declaring storage unavailable. Other
+   * failures (no OPFS, private mode) fail fast.
+   */
+  private async installPool(): Promise<
+    Awaited<ReturnType<Sqlite3Static['installOpfsSAHPoolVfs']>>
+  > {
+    const delaysMs = [50, 100, 250, 500, 1000, 2000, 4000, 8000]
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await this.sqlite3.installOpfsSAHPoolVfs({
+          initialCapacity: 32, // db + journal per open database
+        })
+      } catch (error) {
+        const transient = String(error).includes('NoModificationAllowedError')
+        const delay = delaysMs[attempt]
+        if (!transient || delay === undefined) {
+          throw new Error(
+            `OPFS storage is unavailable here (${String(error)}) — ` +
+              `if this app is open in another tab, that tab holds the ` +
+              `storage (open with { takeover: true } to take it over); ` +
+              `pass storage: 'memory' if non-persistent storage is intended`,
+          )
+        }
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      }
+    }
+  }
+
   private connection(name: string): Connection {
     const connection = this.connections.get(name)
     if (!connection) {
@@ -85,18 +118,7 @@ export class SqliteWorkerServer {
     let db: Database
     if (storage === 'opfs') {
       if (!this.poolUtil) {
-        try {
-          this.poolUtil = await this.sqlite3.installOpfsSAHPoolVfs({
-            initialCapacity: 32, // db + journal per open database
-          })
-        } catch (error) {
-          throw new Error(
-            `OPFS storage is unavailable here (${String(error)}) — ` +
-              `if this app is open in another tab, that tab holds the ` +
-              `storage (open with { takeover: true } to take it over); ` +
-              `pass storage: 'memory' if non-persistent storage is intended`,
-          )
-        }
+        this.poolUtil = await this.installPool()
       }
       db = new this.poolUtil.OpfsSAHPoolDb(name)
     } else {
