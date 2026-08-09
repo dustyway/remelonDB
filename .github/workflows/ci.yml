@@ -136,7 +136,8 @@ jobs:
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
       - name: Install Chromium for the Vite smoke test
-        run: npx playwright install chromium --with-deps
+        # playwright is a driver-web devDependency; resolve it there
+        run: pnpm --filter @remelondb/driver-web exec playwright install chromium --with-deps
       # A real vite build + preview from packed tarballs, driven in a
       # browser: catches dist-only breakage (worker URL rewriting,
       # wasm assets) that vitest's dev pipeline can never see.
