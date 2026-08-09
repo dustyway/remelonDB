@@ -52,6 +52,34 @@ const scope = globalThis as unknown as {
 }
 
 let computePort: PortLike | null = null
+/** False while a fresh compute is re-opening held databases. */
+let computeReady = false
+/** Held databases to restore on the next adopt (set by resetEpoch). */
+let namesToRestore: string[] = []
+let lastResponseAt = 0
+let watchdogTimer: ReturnType<typeof setTimeout> | null = null
+
+/**
+ * New connections probe the compute channel, but a lone surviving tab
+ * gets no new connection: without this, its requests to a dead compute
+ * would hang forever. Any send with no response for a while triggers
+ * the same probe (which epoch-resets, respawns and replays on silence).
+ */
+const scheduleWatchdog = (): void => {
+  if (watchdogTimer !== null) {
+    return
+  }
+  watchdogTimer = setTimeout(() => {
+    watchdogTimer = null
+    if (!computePort || routes.size === 0) {
+      return
+    }
+    if (Date.now() - lastResponseAt >= 2000) {
+      probeCompute()
+    }
+    scheduleWatchdog()
+  }, 2500)
+}
 let spawnRequested = false
 let hostedWorker: { terminate(): void } | null = null
 
@@ -129,10 +157,22 @@ const resetEpoch = (reason: string): void => {
   hostedWorker?.terminate()
   hostedWorker = null
   computePort = null
+  computeReady = false
   spawnRequested = false
   const pending = [...routes.values()]
   routes.clear()
-  holders.clear()
+  // holders are NOT cleared: they are exactly the state a fresh compute
+  // must restore, so surviving tabs keep working (their queries would
+  // otherwise hit a blank worker as "database is not open"). Names
+  // whose own open is among the replayed requests are excluded — the
+  // replay opens those itself.
+  const replayedOpens = new Set(
+    pending
+      .concat(backlog.map((item) => ({ request: item.request })) as never[])
+      .filter((route) => (route as { request: WorkerRequest }).request.op === 'open')
+      .map((route) => ((route as { request: WorkerRequest }).request as { name: string }).name),
+  )
+  namesToRestore = [...holders.keys()].filter((name) => !replayedOpens.has(name))
   if (pending.length > 0) {
     for (const route of pending) {
       backlog.push(
@@ -174,6 +214,7 @@ const adoptComputePort = (port: PortLike): void => {
     if (!route) {
       return
     }
+    lastResponseAt = Date.now()
     routes.delete(response.id)
     if (response.ok && route.transform) {
       route.port.postMessage({
@@ -200,6 +241,38 @@ const adoptComputePort = (port: PortLike): void => {
     }
   })
   port.start?.()
+  const heldNames = namesToRestore
+  namesToRestore = []
+  if (heldNames.length === 0) {
+    computeReady = true
+    flushBacklog()
+    return
+  }
+  // restore held databases before anything else runs against the fresh
+  // compute; the backlog flushes when the last re-open answers
+  let reopensPending = heldNames.length
+  for (const name of heldNames) {
+    const routeId = nextRouteId++
+    const request = { id: -1, op: 'open', name, storage: 'opfs' } as const
+    routes.set(routeId, {
+      request,
+      originalId: -1,
+      port: {
+        postMessage: () => {
+          reopensPending -= 1
+          if (reopensPending === 0) {
+            computeReady = true
+            flushBacklog()
+          }
+        },
+        addEventListener: () => {},
+      },
+    })
+    port.postMessage({ ...request, id: routeId } satisfies WorkerRequest)
+  }
+}
+
+const flushBacklog = (): void => {
   const queued = backlog.splice(0)
   for (const item of queued) {
     // replay the SEND, not the routing decision — holder bookkeeping
@@ -218,6 +291,7 @@ const send = (
   const base = { port, originalId: request.id, request }
   routes.set(routeId, transform ? { ...base, transform } : base)
   computePort!.postMessage({ ...request, id: routeId })
+  scheduleWatchdog()
 }
 
 const forward = (
@@ -225,10 +299,12 @@ const forward = (
   request: WorkerRequest,
   transform?: (result: unknown) => unknown,
 ): void => {
-  if (!computePort) {
+  if (!computePort || !computeReady) {
     const entry = { port, request }
     backlog.push(transform ? { ...entry, transform } : entry)
-    if (!spawnRequested) {
+    // spawn only when there is no compute at all — during the re-open
+    // gate a live compute exists and must not get a twin
+    if (!computePort && !spawnRequested) {
       spawnRequested = true
       if (!spawnComputeHere()) {
         port.postMessage({ control: 'spawnWorker' })

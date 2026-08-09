@@ -59,4 +59,37 @@ describe('broker-hosted compute (remelonDB#4)', () => {
     second.hostedComputeWorker?.terminate()
     await new Promise((resolve) => setTimeout(resolve, 200))
   })
+
+  it('a surviving holder keeps working after the compute worker dies', async () => {
+    const name = `survivor-${Date.now()}.db`
+    const tabA = new WebSqliteDriver({ shared: true })
+    const tabB = new WebSqliteDriver({ shared: true })
+    await tabA.open(name)
+    await tabA.execute('create table t ("id" primary key, "v")', [])
+    await tabA.execute('insert into t values (?, ?)', ['k', 'kept'])
+    await tabB.open(name)
+
+    // the staging repro: the hosting context dies without ceremony
+    // (tab-hosted mode only; a broker-hosted worker cannot die this way)
+    if (tabA.hostedComputeWorker ?? tabB.hostedComputeWorker) {
+      ;(tabA.hostedComputeWorker ?? tabB.hostedComputeWorker)!.terminate()
+    }
+
+    // the survivor's next query must be answered, not "not open": the
+    // broker respawns, re-opens held databases, then replays
+    expect(await tabB.query('select "v" from t', [])).toEqual([{ v: 'kept' }])
+
+    // and a brand-new tab joins cleanly too
+    const tabC = new WebSqliteDriver({ shared: true })
+    await tabC.open(name)
+    expect(await tabC.query('select count(*) as n from t', [])).toEqual([{ n: 1 }])
+
+    await tabA.close()
+    await tabB.close()
+    await tabC.destroy()
+    tabA.hostedComputeWorker?.terminate()
+    tabB.hostedComputeWorker?.terminate()
+    tabC.hostedComputeWorker?.terminate()
+    await new Promise((resolve) => setTimeout(resolve, 200))
+  }, 40_000)
 })
