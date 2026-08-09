@@ -135,6 +135,13 @@ jobs:
       - run: pnpm check:backend-tutorial
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+      - name: Install Chromium for the Vite smoke test
+        run: npx playwright install chromium --with-deps
+      # A real vite build + preview from packed tarballs, driven in a
+      # browser: catches dist-only breakage (worker URL rewriting,
+      # wasm assets) that vitest's dev pipeline can never see.
+      - name: Vite production smoke (driver-web)
+        run: pnpm --filter @remelondb/driver-web smoke:vite
       - name: Pack and consume from plain Node
         run: |
           mkdir -p /tmp/tarballs /tmp/consume

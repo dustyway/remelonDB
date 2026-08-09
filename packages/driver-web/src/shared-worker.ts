@@ -63,21 +63,43 @@ let hostedWorker: { terminate(): void } | null = null
  * Firefox a dead page-worker's handles are never released within the
  * session, so the tab-hosted design breaks on any full page load).
  */
-const spawnComputeHere = (): boolean => {
-  const scopeWithWorker = globalThis as unknown as {
-    Worker?: new (
+declare const Worker:
+  | (new (
       url: URL,
       options?: { type: string },
-    ) => PortLike & { terminate(): void }
-  }
-  if (typeof scopeWithWorker.Worker !== 'function') {
+    ) => PortLike & {
+      terminate(): void
+      addEventListener(type: 'error', listener: () => void): void
+    })
+  | undefined
+
+const spawnComputeHere = (): boolean => {
+  if (typeof Worker !== 'function') {
     return false
   }
   try {
-    const worker = new scopeWithWorker.Worker(
-      new URL('./worker.ts', import.meta.url),
-      { type: 'module' },
-    )
+    // the literal `new Worker(new URL(...))` shape is load-bearing:
+    // bundlers statically rewrite exactly this pattern to the built
+    // chunk URL — an aliased constructor ships the raw specifier and
+    // 404s in production
+    const worker = new Worker(new URL('./worker.ts', import.meta.url), {
+      type: 'module',
+    })
+    worker.addEventListener('error', () => {
+      // the hosted worker failed to load or crashed on startup: fall
+      // back to tab-hosted compute instead of hanging every request
+      if (hostedWorker === worker) {
+        hostedWorker = null
+        computePort = null
+        spawnRequested = false
+        worker.terminate()
+        const asker = backlog[0]?.port
+        if (asker) {
+          spawnRequested = true
+          asker.postMessage({ control: 'spawnWorker' })
+        }
+      }
+    })
     hostedWorker = worker
     adoptComputePort(worker)
     return true
