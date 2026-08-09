@@ -35,6 +35,12 @@ export interface DatabaseManager {
   /** Open (or reopen after error/takeover). Concurrent calls share one
    * attempt; when ready, resolves with the existing database. */
   init(): Promise<Database>
+  /** Tear down: close the open database and return to `idle` so a
+   * later init() (another account, a re-login) starts fresh. An open
+   * still in flight is discarded when it lands — closed immediately,
+   * its init() rejecting — so a slow open can never resurrect a
+   * database after logout. Idempotent. */
+  close(): Promise<void>
   /** Listen for state changes. Emits the current state immediately.
    * Returns the unsubscribe function. */
   subscribe(listener: (state: DatabaseManagerState) => void): () => void
@@ -65,7 +71,7 @@ export function createDatabaseManager(
     }
     const attempt = ++epoch
     setState({ status: 'loading', error: null })
-    initPromise = options
+    const promise = options
       .open(() => {
         if (attempt !== epoch) {
           return // a stale life's takeover — a newer attempt owns the state
@@ -80,6 +86,14 @@ export function createDatabaseManager(
       })
       .then(
         (opened) => {
+          if (attempt !== epoch) {
+            // the manager was closed while this open was in flight: the
+            // late arrival must not become anyone's database
+            void opened.driver.close()
+            throw new Error(
+              'Database manager was closed during initialization',
+            )
+          }
           database = opened
           setState({ status: 'ready', error: null })
           return opened
@@ -87,14 +101,19 @@ export function createDatabaseManager(
         (error: unknown) => {
           const wrapped =
             error instanceof Error ? error : new Error(String(error))
-          setState({ status: 'error', error: wrapped })
+          if (attempt === epoch) {
+            setState({ status: 'error', error: wrapped })
+          }
           throw wrapped
         },
       )
       .finally(() => {
-        initPromise = null
+        if (initPromise === promise) {
+          initPromise = null
+        }
       })
-    return initPromise
+    initPromise = promise
+    return promise
   }
 
   return {
@@ -112,6 +131,18 @@ export function createDatabaseManager(
       return database
     },
     init,
+    async close() {
+      epoch++ // in-flight opens and stale takeovers are now nobody's
+      initPromise = null
+      const current = database
+      database = null
+      if (state.status !== 'idle') {
+        setState({ status: 'idle', error: null })
+      }
+      if (current) {
+        await current.driver.close()
+      }
+    },
     subscribe(listener) {
       listeners.add(listener)
       listener(state)

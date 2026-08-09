@@ -428,6 +428,39 @@ function Root() {
 The todo-sync example runs this bootstrap on web and native alike
 (`frontend/src/db.ts`, `mobile/src/db.ts`).
 
+### Multiple accounts on one device
+
+When different users share a browser, one fixed database name means
+one account can open another's local data. The pattern: derive the
+database name from the authenticated user id (encode it — never
+interpolate raw ids into filenames), create the manager only once a
+user is known, and call `manager.close()` on logout or account change.
+`close()` tears the database down and returns the manager to `idle`,
+and an open still in flight when it is called gets discarded on
+arrival — closed immediately, its `init()` rejecting — so a slow open
+can never resurrect a database after logout:
+
+```js fragment
+let manager = null
+
+function onLogin(userId) {
+  const name = `user_${hex(userId)}.db`
+  manager = createDatabaseManager({
+    open: (onTakenOver) =>
+      Database.open({
+        driver: new WebSqliteDriver({ shared: true, takeover: true, onTakenOver }),
+        schema, migrations, modelClasses, name,
+      }),
+  })
+  return manager.init()
+}
+
+async function onLogout() {
+  await manager?.close()
+  manager = null
+}
+```
+
 ## Where next
 
 - [The example app](../examples/todo-sync/README.md): everything above

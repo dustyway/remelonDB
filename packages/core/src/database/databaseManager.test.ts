@@ -118,3 +118,79 @@ describe('createDatabaseManager', () => {
     expect(manager.database).toBe(db2)
   })
 })
+
+describe('close()', () => {
+  const dbWithDriver = () => {
+    const close = vi.fn(async () => {})
+    return { db: { driver: { close } } as unknown as Database, close }
+  }
+
+  it('tears down the open database and returns to idle', async () => {
+    const { open, attempts } = fakeOpen()
+    const manager = createDatabaseManager({ open })
+    const init = manager.init()
+    const { db, close } = dbWithDriver()
+    attempts[0]!.resolve(db)
+    await init
+
+    await manager.close()
+
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(manager.state.status).toBe('idle')
+    expect(() => manager.database).toThrow(/not initialized/)
+  })
+
+  it('discards a late-resolving open with cleanup (the delayed-init race)', async () => {
+    const { open, attempts } = fakeOpen()
+    const manager = createDatabaseManager({ open })
+    const init = manager.init()
+
+    await manager.close() // logout while the open is still in flight
+    expect(manager.state.status).toBe('idle')
+
+    const { db, close } = dbWithDriver()
+    attempts[0]!.resolve(db) // ...and now it arrives
+
+    await expect(init).rejects.toThrow(/closed/)
+    expect(close).toHaveBeenCalledTimes(1) // the late arrival was cleaned up
+    expect(manager.state.status).toBe('idle')
+    expect(() => manager.database).toThrow(/not initialized/)
+  })
+
+  it('a rejection landing after close stays quiet', async () => {
+    const { open, attempts } = fakeOpen()
+    const manager = createDatabaseManager({ open })
+    const init = manager.init()
+    await manager.close()
+    attempts[0]!.reject(new Error('boom'))
+    await expect(init).rejects.toThrow('boom')
+    expect(manager.state.status).toBe('idle') // not error: nobody owns it
+  })
+
+  it('is idempotent, and a no-op when idle', async () => {
+    const { open } = fakeOpen()
+    const manager = createDatabaseManager({ open })
+    await manager.close()
+    await manager.close()
+    expect(manager.state.status).toBe('idle')
+    expect(open).not.toHaveBeenCalled()
+  })
+
+  it('re-init after close opens fresh (re-login)', async () => {
+    const { open, attempts } = fakeOpen()
+    const manager = createDatabaseManager({ open })
+    const first = manager.init()
+    const a = dbWithDriver()
+    attempts[0]!.resolve(a.db)
+    await first
+    await manager.close()
+
+    const second = manager.init()
+    expect(open).toHaveBeenCalledTimes(2)
+    const b = dbWithDriver()
+    attempts[1]!.resolve(b.db)
+    expect(await second).toBe(b.db)
+    expect(manager.database).toBe(b.db)
+    expect(manager.state.status).toBe('ready')
+  })
+})
