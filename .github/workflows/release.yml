@@ -69,6 +69,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          case "$GITHUB_REF_NAME" in *-*)
+            echo "prerelease $GITHUB_REF_NAME — no github release"
+            exit 0
+          esac
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             echo "release $GITHUB_REF_NAME already exists — skipping"
           else
