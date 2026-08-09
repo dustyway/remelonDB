@@ -362,9 +362,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        browser: [chromium, firefox, webkit]
-    # webkit is advisory until its linux deps prove stable
-    continue-on-error: ${{ matrix.browser == 'webkit' }}
+        # webkit deliberately absent: linux webkit lacks the OPFS
+        # sync-access APIs; the macOS web-browser-webkit-safari job
+        # covers webkit and real safari
+        browser: [chromium, firefox]
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
