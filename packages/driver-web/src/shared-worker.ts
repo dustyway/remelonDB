@@ -356,9 +356,12 @@ const probeCompute = (): void => {
     return
   }
   const routeId = nextRouteId++
+  const ping = { id: routeId, op: 'ping' } satisfies WorkerRequest
   let answered = false
   routes.set(routeId, {
-    // a self-addressed route: mark answered, deliver to nobody
+    // a self-addressed route: mark answered, deliver to nobody (and if
+    // an epoch reset replays it, a ping is a harmless no-op)
+    request: ping,
     port: {
       postMessage: () => {
         answered = true
@@ -367,7 +370,7 @@ const probeCompute = (): void => {
     },
     originalId: -1,
   })
-  target.postMessage({ id: routeId, op: 'ping' } satisfies WorkerRequest)
+  target.postMessage(ping)
   setTimeout(() => {
     routes.delete(routeId)
     if (!answered && computePort === target) {
