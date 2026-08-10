@@ -48,9 +48,15 @@ tests and scripts; apps should let the manager own the lifecycle. The
 todo-sync example's `frontend/src/db.ts` is the working reference.
 
 - **Persistence is never silently downgraded**: the default `storage:
-  'opfs'` fails loudly if OPFS is unavailable (old browser, sandboxed
-  iframe, Node). Pass `storage: 'memory'` only when non-persistence is
-  intended (previews, tests).
+  'opfs'` fails loudly if OPFS is unavailable. `open()` rejects with a
+  typed **`OpfsUnavailableError`** (`code: 'OPFS_UNAVAILABLE'`), refused
+  up front — before any worker/broker spawns — when OPFS is blocked: an
+  old browser, a sandboxed iframe, Node, or **Firefox private browsing /
+  "never remember history" / blocked site data**, where
+  `navigator.storage.getDirectory()` throws `SecurityError` even over
+  https. Catch it to degrade gracefully (show a message, or reopen with
+  `storage: 'memory'`). Pass `storage: 'memory'` directly when
+  non-persistence is intended (previews, tests).
 - The OPFS SAH-pool VFS needs **no COOP/COEP headers** (unlike the
   SharedArrayBuffer-based VFS).
 - The worker is spawned via
