@@ -48,6 +48,10 @@ export class SqliteWorkerServer {
     ReturnType<Sqlite3Static['installOpfsSAHPoolVfs']>
   > | null = null
 
+  // TEMPORARY (diag/firefox-macos-not-open): compute-worker step trace,
+  // posted back through the endpoint so the page can print it. Remove before merge.
+  onDiag?: (step: string, detail?: Record<string, unknown>) => void
+
   constructor(private readonly sqlite3: Sqlite3Static) {}
 
   /**
@@ -64,12 +68,21 @@ export class SqliteWorkerServer {
     const delaysMs = [50, 100, 250, 500, 1000, 2000, 4000, 8000]
     for (let attempt = 0; ; attempt++) {
       try {
-        return await this.sqlite3.installOpfsSAHPoolVfs({
+        this.onDiag?.('pool:attempt', { attempt })
+        const pool = await this.sqlite3.installOpfsSAHPoolVfs({
           initialCapacity: 32, // db + journal per open database
         })
+        this.onDiag?.('pool:installed', { attempt })
+        return pool
       } catch (error) {
         const transient = String(error).includes('NoModificationAllowedError')
         const delay = delaysMs[attempt]
+        this.onDiag?.('pool:attempt:error', {
+          attempt,
+          transient,
+          delay,
+          error: String(error),
+        })
         if (!transient || delay === undefined) {
           throw new Error(
             `OPFS storage is unavailable here (${String(error)}) — ` +
@@ -112,6 +125,7 @@ export class SqliteWorkerServer {
   }
 
   async open(name: string, storage: 'opfs' | 'memory'): Promise<{ userVersion: number }> {
+    this.onDiag?.('open:start', { name, storage, poolReady: this.poolUtil !== null })
     if (this.connections.has(name)) {
       throw new Error(`database '${name}' is already open`)
     }
@@ -121,12 +135,14 @@ export class SqliteWorkerServer {
         this.poolUtil = await this.installPool()
       }
       db = new this.poolUtil.OpfsSAHPoolDb(name)
+      this.onDiag?.('open:db-created', { name })
     } else {
       db = new this.sqlite3.oo1.DB(':memory:', 'c')
     }
     const connection: Connection = { db, statements: new Map(), storage }
     this.connections.set(name, connection)
     const userVersion = Number(db.selectValue('pragma user_version') ?? 0)
+    this.onDiag?.('open:done', { name, userVersion })
     return { userVersion }
   }
 
@@ -242,6 +258,17 @@ export function createSqliteWorkerServing(
   // step turns its own failure into an error response.
   let queue: Promise<unknown> = serverPromise
   return (endpoint) => {
+    // TEMPORARY (diag/firefox-macos-not-open): forward compute step trace to
+    // the broker/page via a control message. Remove before merge.
+    void serverPromise.then((server) => {
+      server.onDiag = (step, detail) => {
+        try {
+          endpoint.postMessage({ control: 'computeDiag', step, ...detail })
+        } catch {
+          /* endpoint gone */
+        }
+      }
+    })
     endpoint.addMessageListener((message) => {
       const request = message as WorkerRequest
       if (typeof (request as { op?: unknown }).op !== 'string') {

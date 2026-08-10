@@ -107,6 +107,7 @@ const scheduleWatchdog = (): void => {
       return
     }
     if (Date.now() - lastResponseAt >= 2000) {
+      diag('watchdog-probe', { sinceLastResponseMs: Date.now() - lastResponseAt })
       probeCompute()
     }
     scheduleWatchdog()
@@ -250,20 +251,26 @@ const adoptComputePort = (port: PortLike): void => {
   computePort = port
   spawnRequested = false
   port.addEventListener('message', (event) => {
+    const ctrl = event.data as { control?: string; step?: string } | null
+    if (ctrl?.control === 'computeDiag') {
+      const { step, ...rest } = ctrl as Record<string, unknown>
+      diag('compute:' + String(step), rest)
+      return
+    }
     const response = event.data as WorkerResponse
     const route = routes.get(response.id)
     if (!route) {
+      diag('compute-response-orphan', { id: response.id, ok: response.ok })
       return
     }
     lastResponseAt = Date.now()
     routes.delete(response.id)
-    if (!response.ok && /not open/i.test(response.error ?? '')) {
-      diag('compute-error-not-open', {
-        op: route.request.op,
-        name: (route.request as { name?: string }).name,
-        error: response.error,
-      })
-    }
+    diag('compute-response', {
+      op: route.request.op,
+      name: (route.request as { name?: string }).name,
+      ok: response.ok,
+      ...(response.ok ? {} : { error: (response as { error?: string }).error }),
+    })
     if (response.ok && route.transform) {
       route.port.postMessage({
         id: route.originalId,
@@ -341,6 +348,11 @@ const send = (
   const routeId = nextRouteId++
   const base = { port, originalId: request.id, request }
   routes.set(routeId, transform ? { ...base, transform } : base)
+  diag('send-to-compute', {
+    op: request.op,
+    name: (request as { name?: string }).name,
+    routeId,
+  })
   computePort!.postMessage({ ...request, id: routeId })
   scheduleWatchdog()
 }
