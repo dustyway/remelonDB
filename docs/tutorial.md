@@ -337,11 +337,15 @@ section 5 into the memory store:
 ```js
 import { synchronize, hasUnsyncedChanges } from '@remelondb/core'
 
-await synchronize({
+const result = await synchronize({
   database: db,
   pullChanges: (args) => handlers.pull(args),
   pushChanges: (args) => handlers.push(args),
 })
+// result says what happened — { lease, resynced, pulled, pushed,
+// rejected, retryCount } — so UI state ("recovered from a server
+// reset", "2 changes rejected") comes from data, not log parsing.
+// Ignoring it is fine too.
 
 const clean = !(await hasUnsyncedChanges(db))   // true: everything pushed
 ```

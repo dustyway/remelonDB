@@ -90,7 +90,7 @@ export type {
 } from './model/Model'
 
 export { synchronize, CURSOR_KEY, LAST_SCHEMA_VERSION_KEY } from './sync/synchronize'
-export type { SynchronizeOptions } from './sync/synchronize'
+export type { SynchronizeOptions, SynchronizeResult } from './sync/synchronize'
 export { fetchLocalChanges, hasUnsyncedChanges } from './sync/fetchLocal'
 export type { LocalChanges } from './sync/fetchLocal'
 export { applyRemoteChanges } from './sync/applyRemote'

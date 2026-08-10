@@ -463,7 +463,7 @@ describe('sync engine', () => {
               cursor: '1',
             }),
           }),
-        ).resolves.toBeUndefined()
+        ).resolves.toMatchObject({ pulled: 40_000 })
         expect(await db.get('tasks').query().fetchCount()).toBe(40_000)
       },
     )
@@ -505,5 +505,91 @@ describe('sync engine', () => {
         expect((await db.get('tasks').find('t1'))['name']).toBe('x')
       },
     )
+  })
+
+  // #9: synchronize() reports what happened instead of resolving void;
+  // callers stop parsing log lines for control flow.
+  describe('structured result', () => {
+    it('reports a denied sync lease explicitly', async () => {
+      ;(driver as { requestSyncTurn?: () => Promise<boolean> }).requestSyncTurn =
+        async () => false
+
+      const result = await sync()
+      expect(result).toEqual({
+        lease: 'unavailable',
+        resynced: false,
+        pulled: 0,
+        pushed: 0,
+        rejected: 0,
+        retryCount: 0,
+      })
+    })
+
+    it('counts pulled and pushed rows on a normal run', async () => {
+      server.seed('s1', { name: 'server one', position: 1 })
+      server.seed('s2', { name: 'server two', position: 2 })
+      await db.write(() => db.get('tasks').create({ id: 'l1', name: 'local' }))
+
+      const result = await sync()
+      expect(result).toEqual({
+        lease: 'acquired',
+        resynced: false,
+        pulled: 2,
+        pushed: 1,
+        rejected: 0,
+        retryCount: 0,
+      })
+    })
+
+    it('flags a server-demanded resync', async () => {
+      server.seed('s1', { name: 'seeded', position: 1 })
+      await sync()
+
+      const resyncOnce = vi
+        .fn(server.pull)
+        .mockResolvedValueOnce({ resyncRequired: true })
+      const result = await sync({ pullChanges: resyncOnce })
+      expect(result.resynced).toBe(true)
+      expect(result.lease).toBe('acquired')
+    })
+
+    it('separates accepted from rejected rows', async () => {
+      await db.write(async () => {
+        await db.get('tasks').create({ id: 'ok', name: 'fine' })
+        await db.get('tasks').create({ id: 'bad', name: 'rejected' })
+      })
+
+      const rejectingPush = async (args: SyncPushArgs): Promise<SyncPushResult> => {
+        const result = await server.push(args)
+        if ('conflict' in result) return result
+        return { ...result, rejected: { tasks: ['bad'] } }
+      }
+      const result = await sync({ pushChanges: rejectingPush })
+      expect(result.pushed).toBe(1)
+      expect(result.rejected).toBe(1)
+    })
+
+    it('counts conflict retries', async () => {
+      await db.write(() => db.get('tasks').create({ id: 't1', name: 'mine' }))
+
+      let conflicts = 1
+      const conflictOnce = async (args: SyncPushArgs): Promise<SyncPushResult> => {
+        if (conflicts-- > 0) return { conflict: true }
+        return server.push(args)
+      }
+      const result = await sync({ pushChanges: conflictOnce })
+      expect(result.retryCount).toBe(1)
+      expect(result.pushed).toBe(1)
+    })
+
+    it('a pull-only run reports zero pushed', async () => {
+      server.seed('s1', { name: 'seeded', position: 1 })
+      const result = await synchronize({
+        database: db,
+        pullChanges: server.pull,
+      })
+      expect(result.pulled).toBe(1)
+      expect(result.pushed).toBe(0)
+    })
   })
 })

@@ -17,6 +17,7 @@ import { markLocalChangesAsSynced } from './markAsSynced'
 import type {
   Cursor,
   MigrationSyncChanges,
+  SyncChanges,
   SyncPullArgs,
   SyncPullResult,
   SyncPushArgs,
@@ -25,6 +26,35 @@ import type {
 
 export const CURSOR_KEY = '__sync_cursor'
 export const LAST_SCHEMA_VERSION_KEY = '__sync_last_schema_version'
+
+/**
+ * What a synchronize() run did. Callers branch on this instead of
+ * parsing log lines.
+ * @category Sync
+ */
+export interface SynchronizeResult {
+  /** 'unavailable' when another context held the sync lease; nothing ran. */
+  readonly lease: 'acquired' | 'unavailable'
+  /** The server demanded a full resync and a replacement pull happened. */
+  readonly resynced: boolean
+  /** Remote rows applied locally: pull phases plus interleaved push changes. */
+  readonly pulled: number
+  /** Local rows the server accepted (sent minus per-record rejections). */
+  readonly pushed: number
+  /** Local rows the server rejected; they stay dirty. */
+  readonly rejected: number
+  /** Extra pull→push rounds forced by push conflicts. */
+  readonly retryCount: number
+}
+
+const countRows = (changes: SyncChanges | null | undefined): number => {
+  if (!changes) return 0
+  let total = 0
+  for (const table of Object.values(changes)) {
+    total += table.created.length + table.updated.length + table.deleted.length
+  }
+  return total
+}
 
 export interface SynchronizeOptions {
   readonly database: Database
@@ -100,7 +130,7 @@ async function migrationInfo(
   }
 }
 
-const inFlight = new WeakMap<Database, Promise<void>>()
+const inFlight = new WeakMap<Database, Promise<SynchronizeResult>>()
 
 /**
  * Run one full sync: pull remote changes, apply them (per-column
@@ -123,7 +153,9 @@ const inFlight = new WeakMap<Database, Promise<void>>()
  * ```
  * @category Sync
  */
-export function synchronize(options: SynchronizeOptions): Promise<void> {
+export function synchronize(
+  options: SynchronizeOptions,
+): Promise<SynchronizeResult> {
   const running = inFlight.get(options.database)
   if (running) {
     return running
@@ -135,7 +167,9 @@ export function synchronize(options: SynchronizeOptions): Promise<void> {
   return run
 }
 
-async function runSynchronize(options: SynchronizeOptions): Promise<void> {
+async function runSynchronize(
+  options: SynchronizeOptions,
+): Promise<SynchronizeResult> {
   const { database, log = () => {} } = options
   const retries = options.conflictRetries ?? 5
 
@@ -143,8 +177,18 @@ async function runSynchronize(options: SynchronizeOptions): Promise<void> {
   // a cheap no-op. Drivers without shared storage have no hook.
   if ((await database.driver.requestSyncTurn?.()) === false) {
     log('sync turn denied — another context holds the sync lease')
-    return
+    return {
+      lease: 'unavailable',
+      resynced: false,
+      pulled: 0,
+      pushed: 0,
+      rejected: 0,
+      retryCount: 0,
+    }
   }
+
+  let resynced = false
+  let pulledTotal = 0
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     // ---- pull phase ----
@@ -177,8 +221,10 @@ async function runSynchronize(options: SynchronizeOptions): Promise<void> {
         throw new Error('synchronize: server demanded resync for a null cursor')
       }
       replacement = true
+      resynced = true
     }
     const pulled = pullResult
+    pulledTotal += countRows(pulled.changes)
 
     await database.write(async () => {
       if ((await getCursor(database)) !== pullCursor) {
@@ -203,13 +249,22 @@ async function runSynchronize(options: SynchronizeOptions): Promise<void> {
       }
     })
 
+    const doneWithoutPush = (): SynchronizeResult => ({
+      lease: 'acquired',
+      resynced,
+      pulled: pulledTotal,
+      pushed: 0,
+      rejected: 0,
+      retryCount: attempt - 1,
+    })
+
     // ---- push phase ----
     if (!options.pushChanges) {
-      return
+      return doneWithoutPush()
     }
     const localChanges = await fetchLocalChanges(database)
     if (localChanges.isEmpty) {
-      return
+      return doneWithoutPush()
     }
     const unvalidatedPushResult: unknown = await options.pushChanges({
       changes: localChanges.changes,
@@ -236,10 +291,22 @@ async function runSynchronize(options: SynchronizeOptions): Promise<void> {
           return
         }
         await applyRemoteChanges(database, pushResult.changes, { log })
+        pulledTotal += countRows(pushResult.changes)
         await database.localStorage.set(CURSOR_KEY, pushResult.cursor)
       }
     })
-    return
+    const rejectedCount = Object.values(pushResult.rejected ?? {}).reduce(
+      (total, ids) => total + ids.length,
+      0,
+    )
+    return {
+      lease: 'acquired',
+      resynced,
+      pulled: pulledTotal,
+      pushed: countRows(localChanges.changes) - rejectedCount,
+      rejected: rejectedCount,
+      retryCount: attempt - 1,
+    }
   }
 
   throw new Error(
