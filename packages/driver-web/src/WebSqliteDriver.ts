@@ -31,8 +31,57 @@ declare const navigator:
           callback: (lock: object | null) => unknown,
         ): Promise<unknown>
       }
+      storage?: { getDirectory?: () => Promise<unknown> }
     }
   | undefined
+
+/**
+ * Thrown when OPFS storage is unavailable in the current browser context —
+ * Firefox private browsing / "never remember history", or blocked site data.
+ * OPFS is denied there even over https, so persistent offline mode cannot
+ * start. Callers can catch this (or check `code === 'OPFS_UNAVAILABLE'`) to
+ * degrade gracefully — surface a clear message, or reopen with
+ * `storage: 'memory'` — instead of failing opaquely.
+ * @category Driver
+ */
+export class OpfsUnavailableError extends Error {
+  readonly code = 'OPFS_UNAVAILABLE' as const
+  constructor(options?: { cause?: unknown }) {
+    super(
+      'OPFS storage is unavailable in this browser context (private ' +
+        'browsing / "never remember history", or blocked site data). ' +
+        'Persistent offline mode needs OPFS: allow site data for this site, ' +
+        "use a normal window, or open with storage: 'memory' for a " +
+        'non-persistent session.',
+    )
+    this.name = 'OpfsUnavailableError'
+    if (options?.cause !== undefined) {
+      ;(this as { cause?: unknown }).cause = options.cause
+    }
+  }
+}
+
+/**
+ * Fail fast when OPFS is blocked, before any worker/broker is spawned.
+ * `getDirectory()` throws on the main thread too in a denied context, so a
+ * cheap probe here avoids a doomed startup — and, in shared mode, the broker
+ * respawn loop that a storage-denied compute worker would otherwise trigger
+ * (it looks "gone" rather than "refused"). A no-op where OPFS can't be
+ * probed (no `navigator.storage`, e.g. Node): the worker path still reports.
+ */
+export async function probeOpfs(
+  storage: { getDirectory?: () => Promise<unknown> } | undefined,
+): Promise<void> {
+  const getDirectory = storage?.getDirectory
+  if (!getDirectory) {
+    return
+  }
+  try {
+    await getDirectory.call(storage)
+  } catch (error) {
+    throw new OpfsUnavailableError({ cause: error })
+  }
+}
 
 // Omit must distribute over the request union
 type RequestPayload = WorkerRequest extends infer R
@@ -316,6 +365,12 @@ export class WebSqliteDriver implements SqliteDriver {
       throw new Error('WebSqliteDriver: database is already open')
     }
     const storage = this.options.storage ?? 'opfs'
+    // Refuse fast when OPFS is blocked (private mode / blocked site data)
+    // rather than spawning a worker that can only fail — and, in shared
+    // mode, respawn-loop. Callers catch OpfsUnavailableError to degrade.
+    if (storage === 'opfs') {
+      await probeOpfs(navigator?.storage)
+    }
     // Shared mode has a single owner by construction — the Web Lock
     // contention this coordinates simply cannot happen there.
     const coordinated =

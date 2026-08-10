@@ -1,4 +1,4 @@
-export { WebSqliteDriver } from './WebSqliteDriver'
+export { WebSqliteDriver, OpfsUnavailableError, probeOpfs } from './WebSqliteDriver'
 export type { WebSqliteDriverOptions } from './WebSqliteDriver'
 export { serveSqliteWorker, SqliteWorkerServer } from './server'
 export type {
