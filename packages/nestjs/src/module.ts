@@ -70,9 +70,20 @@ export interface SyncRuntime {
 
 export const REMELON_SYNC = Symbol('remelondb sync runtime')
 
-const prepare = <Scope>(options: RemelonSyncOptions<Scope>): SyncRuntime => {
+/** The module's engine configuration: everything except the transport concern. */
+export type SyncEngineConfig<Scope> = Omit<RemelonSyncOptions<Scope>, 'scopeFrom'>
+
+/**
+ * Build the exact engine {@link RemelonSyncModule} would build from the
+ * same options — for tests, scripts, and non-Nest usage. Share one
+ * config object between this and `forRoot`/`forRootAsync` and the two
+ * paths cannot drift.
+ */
+export function syncEngineFromOptions<Scope>(
+  options: SyncEngineConfig<Scope>,
+): ReturnType<typeof createSyncEngine<Scope>> {
   const wire = syncSchemas(options.tables)
-  const engine = createSyncEngine<Scope>({
+  return createSyncEngine<Scope>({
     store: options.store,
     tables: Object.fromEntries(
       Object.keys(options.tables).map((name) => [
@@ -88,6 +99,11 @@ const prepare = <Scope>(options: RemelonSyncOptions<Scope>): SyncRuntime => {
       ? { crossValidateChanges: options.crossValidateChanges }
       : {}),
   })
+}
+
+const prepare = <Scope>(options: RemelonSyncOptions<Scope>): SyncRuntime => {
+  const wire = syncSchemas(options.tables)
+  const engine = syncEngineFromOptions(options)
   // The push envelope validates shape and usable ids only; the strict
   // per-table schemas run in the engine, where an invalid record is
   // rejected BY ID while the rest of the push applies (conformance

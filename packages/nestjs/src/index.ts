@@ -1,2 +1,12 @@
-export { REMELON_SYNC, RemelonSyncController, RemelonSyncModule } from './module'
-export type { RemelonSyncAsyncOptions, RemelonSyncOptions, SyncRuntime } from './module'
+export {
+  REMELON_SYNC,
+  RemelonSyncController,
+  RemelonSyncModule,
+  syncEngineFromOptions,
+} from './module'
+export type {
+  RemelonSyncAsyncOptions,
+  RemelonSyncOptions,
+  SyncEngineConfig,
+  SyncRuntime,
+} from './module'

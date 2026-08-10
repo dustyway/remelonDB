@@ -194,6 +194,25 @@ RemelonSyncModule.forRootAsync({
 })
 ```
 
+To keep integration tests and production on one configuration, define
+the engine half once and share it — `syncEngineFromOptions` builds the
+exact engine the module would, so the two paths cannot drift:
+
+```js fragment
+// sync-config.js — the single source of truth
+export const syncConfig = {
+  store: createDrizzleStore({ db, tables: { /* as above */ } }),
+  tables: { tasks: Task },
+  tableOptions: { events: { appendOnly: true } },
+}
+
+// tests / scripts: a direct engine, no Nest involved
+const handlers = syncEngineFromOptions(syncConfig).as(userId)
+
+// production: the same object, plus the transport concern
+RemelonSyncModule.forRoot({ ...syncConfig, scopeFrom })
+```
+
 Without NestJS the handlers bind to any HTTP server in a few lines — the
 [example server](../examples/todo-sync/backend/server.ts) is the whole
 thing. Either way the wire behavior is fixed by

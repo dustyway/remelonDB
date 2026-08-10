@@ -8,7 +8,7 @@ import type { SyncPullArgs, SyncPushArgs } from '@remelondb/core'
 import { createMemoryStore } from '@remelondb/server'
 import { registerServerConformance } from '@remelondb/server/conformance'
 import type { SyncHandlers } from '@remelondb/server/conformance'
-import { RemelonSyncModule } from './module'
+import { RemelonSyncModule, syncEngineFromOptions } from './module'
 
 // The full backend contract, exercised through real HTTP: NestJS app,
 // fetch as the client, MemoryStore underneath. What the suite passes
@@ -115,5 +115,86 @@ describe('http binding', () => {
       changes: { tasks: { created: [{ id: '', name: 'x', done: false }], updated: [], deleted: [] } },
     }
     expect((await call(base, '/sync/push', 'scope-a', unusable)).status).toBe(400)
+  })
+})
+
+// #11: one configuration, two consumers — the Nest module and a
+// directly constructed engine must behave identically, so tests and
+// scripts stop re-declaring tables/validation/policies.
+describe('shared engine configuration', () => {
+  const shared = {
+    store: createMemoryStore(),
+    tables: { tasks: Task, events: Event },
+    tableOptions: { events: { appendOnly: true } },
+  }
+
+  it('direct engine and module enforce the same validation and policies', async () => {
+    const direct = syncEngineFromOptions<string>(shared).as('scope-a')
+
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        RemelonSyncModule.forRoot<string>({
+          ...shared,
+          store: createMemoryStore(), // separate data, same rules
+          scopeFrom: (request) =>
+            (request as { headers: Record<string, string | undefined> })
+              .headers['x-scope'] ?? null,
+        }),
+      ],
+    }).compile()
+    const app = moduleRef.createNestApplication({ logger: false })
+    await app.listen(0)
+    apps.push(app)
+    const { port } = app.getHttpServer().address() as AddressInfo
+    const viaHttp = overHttp(`http://127.0.0.1:${port}`, 'scope-a')
+
+    for (const handlers of [direct, viaHttp]) {
+      const start = await handlers.pull({
+        cursor: null,
+        schemaVersion: 1,
+        migration: null,
+      })
+      if (!('cursor' in start)) throw new Error('unexpected resync')
+
+      // zod validation from `tables` rejects by id in both paths
+      const invalid = await handlers.push({
+        changes: {
+          tasks: {
+            created: [{ id: 'bad', name: '', done: false }],
+            updated: [],
+            deleted: [],
+          },
+        },
+        cursor: start.cursor,
+      })
+      expect(
+        (invalid as { rejected?: Record<string, readonly string[]> }).rejected
+          ?.tasks,
+      ).toEqual(['bad'])
+
+      // appendOnly from `tableOptions` blocks overwrites in both paths
+      await handlers.push({
+        changes: {
+          events: { created: [{ id: 'e1', note: 'v1' }], updated: [], deleted: [] },
+        },
+        cursor: start.cursor,
+      })
+      const seeded = await handlers.pull({
+        cursor: start.cursor,
+        schemaVersion: 1,
+        migration: null,
+      })
+      if (!('cursor' in seeded)) throw new Error('unexpected resync')
+      const overwrite = await handlers.push({
+        changes: {
+          events: { created: [], updated: [{ id: 'e1', note: 'v2' }], deleted: [] },
+        },
+        cursor: seeded.cursor,
+      })
+      expect(
+        (overwrite as { rejected?: Record<string, readonly string[]> }).rejected
+          ?.events,
+      ).toEqual(['e1'])
+    }
   })
 })
