@@ -160,7 +160,7 @@ remelonDB is a from-scratch rewrite of WatermelonDB, a well-known offline-first 
 The library ships as eight packages under the `@remelondb` scope. The bulk of the logic lives in exactly one of them. These are the non-test TypeScript line counts:
 
 | Package | Source lines | What lives there |
-|---|---:|---|
+|:--------------|----------:|:------------------------------------------------|
 | `core` | 5,082 | Everything platform-independent |
 | `driver-web` | 1,511 | SQLite-WASM + OPFS in a Worker; multi-tab broker |
 | `server` | 1,178 | The sync backend engine |
@@ -204,27 +204,45 @@ A driver knows how to run SQL and how to report a version number. It does not kn
 
 This is why `core` is about five thousand lines and each exclusive-storage driver is about a hundred. The work was *moved*, not eliminated. Every concept that used to be reimplemented per platform is now written once, above the seam. The whole stack, drawn:
 
-```
- Public API   Model · Collection · Query (Q DSL) · observation ·
-              sync · @remelondb/core/react hooks
- ─────────────────────────────────────────────────────────────────
- Core          Q → SQL compiler (one pure fn; values as ? only)
- one impl,     schema DDL + migration-step compiler
- pure TS       RecordCache (identity map; sole owner of caching)
- ~5,100 ln     WorkQueue (one writer at a time) + change bus
- (~60% of      sync engine (commit-ordered cursor; per-column merge)
-  all TS)      DatabaseManager + applyExternalChanges (multi-tab)
-              tombstones + local storage = ordinary SQL
- ══════════════════════ SqliteDriver seam ═════════════════════════
- required (7)  open · close · query · execute · executeBatch ·
-               setUserVersion · destroy
- optional (4)  acquireWorkSlot · publishChanges ·
-               onExternalChanges · requestSyncTurn        (web only)
- ─────────────────────────────────────────────────────────────────
- node          rn (expo)      rn-cpp (C++/JSI)   web (WASM + OPFS)
- ~104 ln       ~104 ln        ~105 ln            ~1,500 ln + broker
- ─────────────────────────────────────────────────────────────────
-   above the seam: written once     ·     below: × 4 platforms
+```{=typst}
+#block(width: 100%, breakable: false, inset: 9pt, radius: 3pt, fill: luma(246))[
+  #set text(size: 0.86em)
+  #table(
+    columns: (9em, 1fr),
+    stroke: none,
+    inset: (x: 5pt, y: 3.5pt),
+    align: left + top,
+    [*Public API*],
+    [Model · Collection · Query (Q DSL) · observation · sync · `@remelondb/core/react` hooks],
+    table.hline(stroke: 0.4pt + luma(160)),
+    [*Core* \ #text(size: 0.86em, fill: luma(110))[one impl, pure TS \ ≈5,100 ln \ ≈60% of all TS]],
+    [Q → SQL compiler (one pure fn; values only as bound `?` params) \
+     schema DDL + migration-step compiler \
+     RecordCache (identity map; sole owner of caching) \
+     WorkQueue (one writer at a time) + change bus \
+     sync engine (commit-ordered cursor; per-column merge) \
+     DatabaseManager + applyExternalChanges (multi-tab) \
+     tombstones + local storage = ordinary SQL],
+    table.cell(colspan: 2, inset: (top: 6pt, bottom: 6pt))[
+      #grid(columns: (1fr, auto, 1fr), align: horizon, column-gutter: 8pt,
+        line(length: 100%, stroke: 0.9pt), [*SqliteDriver seam*], line(length: 100%, stroke: 0.9pt))
+    ],
+    [*required (7)*],
+    [`open` · `close` · `query` · `execute` · `executeBatch` · `setUserVersion` · `destroy`],
+    [*optional (4)*],
+    [#text(size: 0.94em)[`acquireWorkSlot` · `publishChanges` · `onExternalChanges` · `requestSyncTurn`]#text(fill: luma(120))[  (web only)]],
+    table.hline(stroke: 0.4pt + luma(160)),
+    table.cell(colspan: 2, inset: (top: 5pt))[
+      #grid(columns: (1fr, 1fr, 1fr, 1.15fr), column-gutter: 6pt, align: left + top,
+        [*node* \ ≈104 ln],
+        [*rn (expo)* \ ≈104 ln],
+        [*rn-cpp (C++/JSI)* \ ≈105 ln],
+        [*web (WASM + OPFS)* \ ≈1,500 ln + broker])
+    ],
+    table.hline(stroke: 0.4pt + luma(160)),
+    table.cell(colspan: 2)[#align(center)[#text(fill: luma(115))[above the seam: written once  ·  below: × 4 platforms]]],
+  )
+]
 ```
 
 Read the double rule as the expensive line: everything above it is written once and tested once; everything below it is multiplied by four. The whole architecture is one long effort to keep that lower band thin.
@@ -236,10 +254,14 @@ Read the double rule as the expensive line: everything above it is written once 
 The seven methods above are the seam's required core. It also declares four *optional* methods, all in service of the browser's multi-tab capability (see `SqliteDriver` in `packages/core/src/driver/SqliteDriver.ts`):
 
 ```ts
-  acquireWorkSlot?(exclusive: boolean): Promise<() => void>   // cross-context write arbitration
-  publishChanges?(changes: ExternalChangeSet): void           // broadcast a commit to other tabs
-  onExternalChanges?(handler: (c: ExternalChangeSet) => void): void  // receive other tabs' commits
-  requestSyncTurn?(): Promise<boolean>                         // lease: may I be the one that syncs?
+  // cross-context write arbitration
+  acquireWorkSlot?(exclusive: boolean): Promise<() => void>
+  // broadcast a commit to the other tabs
+  publishChanges?(changes: ExternalChangeSet): void
+  // receive the other tabs' commits
+  onExternalChanges?(handler: (c: ExternalChangeSet) => void): void
+  // lease: may I be the one that syncs?
+  requestSyncTurn?(): Promise<boolean>
 ```
 
 The word that keeps this honest is **optional**. Core reaches for each of these only through optional-chaining (`driver.publishChanges?.(...)`), so a driver that owns its storage exclusively — Node, and both React Native drivers — implements the seven required methods and skips the four optional ones. Only `driver-web` implements them, and only in its shared mode. This is how the contract admits a capability that just one platform needs without imposing a cent of cost on the other three; Chapter 9 is the whole story of what those four methods coordinate.
@@ -262,7 +284,7 @@ Every claim is tied to a file you can open. Where prose and tests disagree, the 
 
 *Trace it yourself.* Open `packages/core/src/driver/SqliteDriver.ts` and separate the seven required methods from the four optional ones. For each optional method, predict which of the four drivers implements it, then check your prediction against `packages/driver-node/src/` and `packages/driver-web/src/`.
 
-*Recall.* (1) What single hard problem does offline-first create, and what is the lighter-than-full-CRDT strategy remelonDB uses to attack it? (2) Why does making the *whole* seam asynchronous prevent a specific class of platform-specific bug? (3) Values cross the seam as `?` placeholders — but identifiers cannot be parameterized in SQL, so what makes it safe to splice a table name straight into SQL text? (4) Roughly what fraction of the TypeScript lives in `core`, and why is that number the "point of the architecture"?
+*Recall.* (1) What single hard problem does offline-first create, and what is the lighter-than-full-CRDT strategy remelonDB uses to attack it? (2) Why does making the *whole* seam asynchronous prevent a specific class of platform-specific bug? (3) Values cross the seam as `?` placeholders — but identifiers cannot be parameterized in SQL, so what makes it safe to splice a table name straight into SQL text? (4) Why is keeping most behavior above the driver seam more important than the exact percentage of code in `core`?
 
 # The Five Moves: remelonDB From the Outside
 
@@ -393,7 +415,7 @@ Five moves, four of them a single line. What the remaining chapters do is go *un
 
 *Trace it yourself.* Follow `todo.text` from the schema to the screen: find where the column is declared (`schema.ts`), where the accessor `todo.text` is generated (`ModelFor`, Chapter 4), and where the value is read in `App.tsx`. How many times is the field name `text` written by hand across the whole application?
 
-*Recall.* (1) Why does `markAsDeleted` leave the row in place instead of deleting it — what breaks if the row simply vanishes? (2) `db.write` takes a function rather than the result of a function. What does that let the database decide? (3) The new `useQuery` needs no `useMemo` around its query; what is it keying the subscription on instead of object identity? (4) Which single line of the example is platform-specific, and what does that tell you about the seam?
+*Recall.* (1) Why does `markAsDeleted` leave the row in place instead of deleting it — what breaks if the row simply vanishes? (2) What does `db.write()` serialize, and when must operations be grouped into one `db.batch` to be atomic? (3) The new `useQuery` needs no `useMemo` around its query; what is it keying the subscription on instead of object identity? (4) Which single line of the example is platform-specific, and what does that tell you about the seam?
 
 # Schema: One Declaration, Several Consequences
 
@@ -563,7 +585,7 @@ The server engine supports *append-only tables* (Chapter 11) — tables where wr
 
 *Trace it yourself.* Write a `zodTable` for a `notes` table with a nullable `body`. Predict the exact `create table` SQL it will compile to (remember the three free columns and the always-indexed `_status`), then find `encodeCreateTable` and check. Now predict what happens if you name a column `rowid`, or make `created_at` optional.
 
-*Recall.* (1) Why does the generated DDL declare no column types? (2) `_status` is indexed on every table even if you never asked — why? (3) What is a phantom type, and what one job does `$cols?: Cols` do? (4) The Zod adapter rejects `z.string().optional()` but accepts `z.string().nullable()`. What rule is it enforcing, and where does that same rule show up in the inferred record type?
+*Recall.* (1) Why does the generated DDL declare no column types? (2) `_status` is indexed on every table even if you never asked — why? (3) How does one table declaration provide both runtime schema information and a compile-time record type? (4) The Zod adapter rejects `z.string().optional()` but accepts `z.string().nullable()`. What rule is it enforcing, and where does that same rule show up in the inferred record type?
 
 # Records and Models: Two Representations of a Row
 
@@ -655,7 +677,7 @@ It returns `null` not only when the foreign key is itself null, but also when th
 
 *Trace it yourself.* Follow a single `create({ text: 'hi', bogus: 1 })` into `sanitizedRaw`. What happens to the `bogus` key? Now follow `update` of an unchanged field: does `_changed` grow? Find the line in `prepareUpdate` that decides.
 
-*Recall.* (1) What are the two representations of a row, and which one does your application code hold? (2) Sanitization *drops and coerces* rather than throwing — why is that the right choice on the write path, and what stricter mechanism guards the network boundary instead? (3) Why must there be exactly one model instance per row id for reactivity to work? (4) `related()` returns `null` for a parent that was deleted on another device. Which of the two bookkeeping columns, and which sync behavior, makes that situation possible in the first place?
+*Recall.* (1) What are the two representations of a row, and which one does your application code hold? (2) Sanitization *drops and coerces* rather than throwing — why is that the right choice on the write path, and what stricter mechanism guards the network boundary instead? (3) Why must there be exactly one model instance per row id for reactivity to work? (4) Why must `related()` return `null` when sync has removed the referenced parent, even if the child still holds its foreign-key value?
 
 # The Database Core: Opening, Writing, Observing
 
@@ -992,7 +1014,7 @@ with two supporting types, `ExternalChange` (`{ record, type: 'created' | 'updat
 
 *Trace it yourself.* Open `SqliteDriver.ts` and, for each of the seven required methods, write one sentence on what a driver must guarantee *beyond* its type signature (atomicity? ordering? throwing on misuse?). Then find, in `packages/driver-node/src/NodeSqliteDriver.ts`, where each of those guarantees is actually made.
 
-*Recall.* (1) The driver can *write* a boolean but never *reads* one back — why, and whose job is the conversion? (2) Why is the entire seam asynchronous when three of four platforms are synchronous underneath? (3) Name two behaviors a conforming driver must uphold that the TypeScript types do not capture. (4) The seam's four optional methods are implemented only by the web driver; the Node driver ignores them entirely. What language feature and what design choice make that possible?
+*Recall.* (1) The driver can *write* a boolean but never *reads* one back — why, and whose job is the conversion? (2) Upstream's adapter had seventeen methods in the data layer's vocabulary; the `SqliteDriver` seam has seven and speaks only SQL. Why is the smaller, dumber contract the higher-leverage design? (3) Name two behaviors a conforming driver must uphold that the TypeScript types do not capture. (4) The seam's four optional methods are implemented only by the web driver; the Node driver ignores them entirely. What language feature and what design choice make that possible?
 
 # Four Drivers, One Contract
 
@@ -1044,7 +1066,7 @@ The seam did its job: three platforms cost a hundred lines each because their di
 
 *Trace it yourself.* Follow one `query('select ...')` call on the web driver from `WebSqliteDriver.request` through `protocol.ts` to `server.ts` and back. Count the boundaries the request and its result cross. Now do the same call mentally on the Node driver — how many boundaries?
 
-*Recall.* (1) Why must the browser's SQLite run in a Worker — which specific capability forces it? (2) The web driver refuses to silently fall back to in-memory storage when OPFS is unavailable. Why is a loud error the safer behavior? (3) Both React Native drivers share a class name — what does that buy an app? (4) Three drivers are ~100 lines and one is ~1,200. What does that spread demonstrate about the seam?
+*Recall.* (1) Why must the browser's SQLite run in a Worker — which specific capability forces it? (2) The web driver refuses to silently fall back to in-memory storage when OPFS is unavailable. Why is a loud error the safer behavior? (3) Both React Native drivers share a class name — what does that buy an app? (4) Why can the web driver absorb Workers, OPFS, RPC, and multi-tab coordination without making the shared database core browser-specific?
 
 # Multi-Tab and the Database Manager
 
@@ -1319,7 +1341,7 @@ On an exclusive-storage driver this hook is absent and the answer is always "yes
 
 *Trace it yourself.* Reconstruct the apply decision tree from memory — three remote kinds, three local states — and for each cell say *why*. Then take the "buy oat milk / mark done" example through `resolveConflict` and confirm both edits survive. Now change both devices to edit `text`: what happens, and who wins?
 
-*Recall.* (1) Why is a commit-ordered cursor immune to the lost-write race that a timestamp cursor suffers? (2) A remote delete wins over a local edit *and* a local tombstone — why is "resurrection" the failure mode this prioritizes against? (3) The equality gate keeps a record dirty if it changed during the push. What lost write does that prevent? (4) Where does remelonDB sit on the whole-record ↔ full-CRDT spectrum, and what are the two columns that buy it that position?
+*Recall.* (1) Why is a commit-ordered cursor immune to the lost-write race that a timestamp cursor suffers? (2) Why does a remote deletion beat a live local edit, and which resurrection failure does that prevent? (3) The equality gate keeps a record dirty if it changed during the push. What lost write does that prevent? (4) What distinct roles do `_status` and `_changed` play during synchronization?
 
 # The Server Side: Engine, Store, Transport
 
@@ -1657,7 +1679,7 @@ Its effect depends on `[query]` — the query object's *identity*. A query rebui
 
 *Trace it yourself.* Render two components that each build `db.get(TodoModel).query(Q.sortBy('created_at', Q.desc))` inline. Follow both through `queryKey` and `sharedStore` and confirm they resolve to one store and call `observe` once. Now change one component's sort to ascending — what happens to the store count?
 
-*Recall.* (1) The new `useQuery` needs no `useMemo`. What is it keying on, and why does that make an inline-rebuilt query free? (2) What is "tearing," and which hook prevents it? (3) Changing `select` recomputes the derived value but never restarts the observation — what is the derivation keyed on, and what is the subscription keyed on? (4) How does the refcounted-store design turn a StrictMode double-mount from a bug into a no-op?
+*Recall.* (1) The new `useQuery` needs no `useMemo`. What is it keying on, and why does that make an inline-rebuilt query free? (2) What is "tearing," and which hook prevents it? (3) Changing `select` recomputes the derived value but never restarts the observation — what is the derivation keyed on, and what is the subscription keyed on? (4) How do `useSyncExternalStore` and the refcounted shared store prevent StrictMode's subscription probe from leaking or duplicating a live observation?
 
 # Proving It Works: Conformance, Corpora, and a Formal Model
 
@@ -1683,7 +1705,16 @@ It lives in `packages/core/src/conformance/` (exported via `@remelondb/core/conf
 - **The schema suite** — DDL and migrations: table, column, and index creation; `local_storage`; migrations with backfilled defaults.
 - **The records suite** — the sanitization round-trip: a raw record reads back exactly what was written.
 
-A driver enrolls in one line — `registerDriverConformance({ name: 'node (better-sqlite3)', createDriver: () => new NodeSqliteDriver() })` — and the web driver enrolls *twice*, once in-process and once in a real browser against real OPFS. The query corpus is the mechanism behind Chapter 1's "one engine everywhere" claim: it is the shared fixture that proves the same `Q` produces the same rows on Node, in Chromium, in Firefox, and in Safari.
+A driver enrolls in one line:
+
+```ts
+registerDriverConformance({
+  name: 'node (better-sqlite3)',
+  createDriver: () => new NodeSqliteDriver(),
+})
+```
+
+The web driver enrolls *twice*, once in-process and once in a real browser against real OPFS. The query corpus is the mechanism behind Chapter 1's "one engine everywhere" claim: it is the shared fixture that proves the same `Q` produces the same rows on Node, in Chromium, in Firefox, and in Safari.
 
 ## The server conformance suite
 
@@ -1955,15 +1986,11 @@ The API tests start the Nest application against Postgres and exercise the shipp
 
 Together, these tests answer a different question from remelonDB's own suites. The library asks, "Does this implementation satisfy the contract?" The application asks, "Did we preserve the contract while composing authentication, React lifecycle, transport, schema, and Postgres?" A production offline path needs both answers.
 
-## The lesson that produced v0.1.8
-
-NotAnotherCards is also where a real deployment taught the library a lesson. In Firefox **private browsing / "never remember history"**, OPFS is denied even over https — `navigator.storage.getDirectory()` throws `SecurityError` — and the app first surfaced a cryptic "database not open" with a broker respawn loop. That is now handled at the seam: `open()` refuses fast with a typed `OpfsUnavailableError` before any worker spawns, and the broker answers its liveness ping out-of-band so a busy worker is never mistaken for a dead one (the driver seam and broker, Chapters 7 and 9; shipped in v0.1.8). The consumer's remaining job is the graceful last mile — catch that error and tell the user offline mode is unavailable in this browser, instead of looping.
-
 ## Checkpoint
 
 *Trace it yourself.* Start at `recordReviewEvent` in `apps/web/src/offline/queries.ts`. Follow one rating through the card update, review-event creation, reactive queries, debounced notification, push validation, and the next device's pull. Mark the exact point where the product action is complete and the later point where replication is complete. Then open `apps/api/src/sync/retention.ts`: give it a device cursor older than the selected checkpoint and follow the resulting `resyncRequired` path back through Chapter 10.
 
-*Recall.* (1) Which one package keeps the browser models and the server sync-validation from drifting? (2) What does `shared: true` change about how two tabs of the app share storage, and why is `takeover: true` pointless there? (3) Database readiness, query loading, and sync status are separate facts — give a state in which the first two are healthy and the third is not. (4) Why is `review_events` marked `appendOnly` on the server and not enforced on the client? (5) Name the four trust boundaries an incoming push crosses. (6) The `SyncController` is single-flight and triggered five ways — why must a local write never wait for it? (7) How can the server prune tombstones without silently losing returning devices, and what does a client older than the floor do? (8) In Firefox private mode, what does `open()` now do instead of looping, and whose job is the user-facing message?
+*Recall.* (1) At what point is a review action complete locally, and why must it not wait for synchronization? (2) Why are database readiness, query loading, and sync status represented separately? (3) What four trust boundaries does an incoming push cross? (4) How does single-flight plus one queued rerun prevent both duplicate syncs and stranded writes? (5) How do the retention checkpoint, GC floor, and replacement pull allow bounded server history without silently losing an old client?
 
 # Appendix A: Glossary {.unnumbered}
 
@@ -2102,35 +2129,35 @@ The shipped v0.1.8 surface a consumer touches, by subpath. This appendix records
 
 # Appendix D: Checkpoint answers {.unnumbered}
 
-**Ch. 1.** (1) Two devices edit the same data unseen by each other; remelonDB tracks *which columns* changed and merges per column, falling back to last-writer-wins only on a same-column clash. (2) Same-tick resolution works on the three synchronous platforms and breaks on the web (which crosses a thread boundary), so a uniform async seam forbids the dependency everywhere. (3) Identifiers are validated against `^[a-zA-Z_][a-zA-Z0-9_]*$` at declaration, so a name cannot contain a quote/space/semicolon and is safe to splice. (4) ~60%; it is the code written once and multiplied by zero platforms.
+**Ch. 1.** (1) Two devices edit the same data unseen by each other; remelonDB tracks *which columns* changed and merges per column, falling back to last-writer-wins only on a same-column clash. (2) Same-tick resolution works on the three synchronous platforms and breaks on the web (which crosses a thread boundary), so a uniform async seam forbids the dependency everywhere. (3) Identifiers are validated against `^[a-zA-Z_][a-zA-Z0-9_]*$` at declaration, so a name cannot contain a quote/space/semicolon and is safe to splice. (4) Because behavior above the seam is written and tested once while everything below it is paid for on every platform and must stay in agreement forever; the percentage only measures that leverage.
 
-**Ch. 2.** (1) Sync needs a tombstone to tell other devices the row is gone; a vanished row resurrects on the next pull. (2) When the callback enters the serialized writer gate; atomicity comes from each explicit `db.batch`, not automatically from the callback boundary. (3) The query's structure (table + serialized clauses). (4) The `driver` line; everything else is platform-independent — the seam seen from above.
+**Ch. 2.** (1) Sync needs a tombstone to tell other devices the row is gone; a vanished row resurrects on the next pull. (2) `db.write()` serializes the writer gate — no other read or write overlaps the block — but is not itself a transaction; several mutations are atomic only when grouped into one `db.batch`, which the driver runs as a single transaction. (3) The query's structure (table + serialized clauses). (4) The `driver` line; everything else is platform-independent — the seam seen from above.
 
-**Ch. 3.** (1) SQLite has dynamic typing and would not honour declared types anyway. (2) Every query filters on `_status is not 'deleted'`. (3) A type parameter with no runtime value; `$cols` lets one `table()` call also yield the record type. (4) The value vocabulary is null-not-undefined; `.optional()` columns union in `null` in `InferRecord`.
+**Ch. 3.** (1) SQLite has dynamic typing and would not honour declared types anyway. (2) Every query filters on `_status is not 'deleted'`. (3) The `table()` object carries the runtime column descriptors for the DDL, while a phantom `$cols?: Cols` field — present only at the type level and erased at runtime — lets `InferRecord` derive the compile-time record type from that same declaration. (4) The value vocabulary is null-not-undefined; `.optional()` columns union in `null` in `InferRecord`.
 
-**Ch. 4.** (1) The raw record (data) and the model (the object with identity/accessors); your code holds the model. (2) A bad value should degrade one field, not fail a whole sync; Zod guards the network boundary strictly. (3) So every holder of a row sees the same in-place update — reactivity depends on it. (4) `_status`/`_changed` and the fact that sync can delete a parent on another device.
+**Ch. 4.** (1) The raw record (data) and the model (the object with identity/accessors); your code holds the model. (2) A bad value should degrade one field, not fail a whole sync; Zod guards the network boundary strictly. (3) So every holder of a row sees the same in-place update — reactivity depends on it. (4) The foreign key is just a stored value; `related()` resolves it against the local rows, and sync can delete the parent independently — so a child may still hold a valid-looking `deck_id` whose row is gone, and `related()` must return `null` rather than invent a parent.
 
 **Ch. 5.** (1) That no writer runs during the block — a consistency window, not parallelism. (2) The cache mutates raws in place, so identity alone misses content edits. (3) `_status`/`_changed` are not *visible* columns, so the `differs` gate emits nothing. (4) Two tabs echo the change back and forth forever.
 
 **Ch. 6.** (1) `x = NULL` is never true in SQL; `IS` treats null as comparable. (2) A `LEFT JOIN` with the filter in `WHERE` silently becomes an inner join, dropping rows. (3) A hand-forged plain object cannot hold the module-private symbol, so it cannot masquerade as a real column/comparison node. (4) Guarantee: observed and fetched answers are definitionally identical; cost: a re-query on every relevant change.
 
-**Ch. 7.** (1) SQLite has no boolean storage class, so reads come back as 0/1; core converts because it holds the schema. (2) Because the web must be async (Worker/OPFS), and a uniform async seam stops shared code depending on same-tick resolution. (3) Any two of: batch atomicity, arrival-order execution, throw on double-open/use-before-open, WAL, loud storage failure. (4) Optional-chaining plus making the new members optional, so exclusive drivers implement none.
+**Ch. 7.** (1) SQLite has no boolean storage class, so reads come back as 0/1; core converts because it holds the schema. (2) Fewer, dumber methods below the seam keep more behavior above it, written and tested once; a seven-method SQL-only contract implements every data-layer concept — records, queries, tombstones — once in core rather than reimplementing them in each adapter, which is exactly what let two engines drift apart upstream. (3) Any two of: batch atomicity, arrival-order execution, throw on double-open / use-before-open, and persistence across reopen. (4) Optional-chaining plus making the new members optional, so exclusive drivers implement none.
 
-**Ch. 8.** (1) OPFS synchronous access handles are worker-only. (2) A silent in-memory fallback means writes stop persisting while the app looks healthy. (3) Switching RN drivers is a one-line import change. (4) The seam absorbed the web's large difficulty below itself; small-difficulty platforms cost ~100 lines each.
+**Ch. 8.** (1) OPFS synchronous access handles are worker-only. (2) A silent in-memory fallback means writes stop persisting while the app looks healthy. (3) Switching RN drivers is a one-line import change. (4) Because the seam is SQL-only: the web driver hides its Worker, OPFS, RPC, and multi-tab machinery behind the same seven-method contract, so that size lives below the seam and core never learns anything browser-specific.
 
 **Ch. 9.** (1) Storage access (one owner per origin) and change propagation (each tab's cache is separate); sharing the file fixes only storage. (2) A SharedWorker's platform lifetime is the coordinator, so there is no peer to elect or re-elect. (3) Write slots are short and released in `finally` (a lock fits); sync is long-running and must survive a crashing tab (a lease lapses on its own). (4) Re-publishing would loop two tabs forever; a duplicate broadcast is harmless because apply is idempotent (create→update, destroy-unknown→no-op).
 
-**Ch. 10.** (1) It orders by commit, so a change committed just after a snapshot is guaranteed to appear in a later pull; a timestamp cursor can place such a change permanently in the past. (2) Resurrecting a deleted row is worse than dropping a concurrent edit, so delete wins. (3) A user edit during an in-flight push would otherwise be marked synced and lost. (4) Between whole-record LWW and full CRDT; the two columns are `_status` and `_changed`.
+**Ch. 10.** (1) It orders by commit, so a change committed just after a snapshot is guaranteed to appear in a later pull; a timestamp cursor can place such a change permanently in the past. (2) A remote delete overrides a live local edit because resurrecting a row that was deleted is worse than losing one concurrent field edit — applying the delete keeps the deleted row from reappearing. (3) A user edit during an in-flight push would otherwise be marked synced and lost. (4) `_status` tracks the row's lifecycle (created / updated / synced / deleted); `_changed` lists which columns changed locally and is what drives the per-column merge — lifecycle versus changed-column set, separate jobs.
 
 **Ch. 11.** (1) A monotonic per-commit counter; it needs no clock, so "smaller = earlier" is exact. (2) A full pull is a snapshot with no deletions, so pruned tombstones cannot be missing from it. (3) The client believed a refused write succeeded and diverged forever; the engine names the id in `rejected` instead. (4) Scrub blanks column values in the tombstone statement, and since the wire never ships tombstone columns, the content is gone everywhere immediately; GC only later prunes the tombstone record.
 
 **Ch. 12.** (1) A migration and a fresh install cannot produce different tables, since one compiler builds both. (2) Never wipe/recreate on a missing path — throw; a loud failure is recoverable and the data survives, a silent reset is permanent loss. (3) A `{ from, tables, columns }` payload so the server backfills only the new tables/columns. (4) A destructive change across a fleet at mixed versions is a hard distributed problem; the hatch is a raw `sql` step.
 
-**Ch. 13.** (1) The query's structure (table + serialized description), so an inline rebuild hashes to the same shared store. (2) A component rendering inconsistent values mid-render; `useSyncExternalStore` prevents it. (3) The derivation is keyed on `[rows, select]`; the subscription on the query's structure alone — so a selector change re-runs the projection without touching the shared observation. (4) The refcount goes 1→2→1 on double-mount, so the underlying `observe` is never redundantly restarted.
+**Ch. 13.** (1) The query's structure (table + serialized description), so an inline rebuild hashes to the same shared store. (2) A component rendering inconsistent values mid-render; `useSyncExternalStore` prevents it. (3) The derivation is keyed on `[rows, select]`; the subscription on the query's structure alone — so a selector change re-runs the projection without touching the shared observation. (4) The observation lives in a refcounted shared store keyed by the query, and `useSyncExternalStore`'s subscribe/unsubscribe are balanced — so StrictMode's mount/unmount/mount probe only moves the refcount and never starts a second `observe` or leaves one running.
 
 **Ch. 14.** (1) It is the behavior defined once and imposed on every implementation, in a form that cannot drift from reality. (2) A silent pass reports an unmet obligation as met; a skip tells the truth about coverage, so the suite defines what must be true, not just what exists. (3) Either: the naive push mode reproduces the lost-write race (→ cursor+changes must ship together); or the GC-floor unsoundness (→ server must degrade to `cursor: null` below the floor). (4) The conformance suites and integration tests fill "design vs code"; the offline `quint run`/`verify` practices fill "typecheck vs exhaustive check."
 
-**Ch. 15.** (1) `@repo/offline-db`; it exports the client schema and models plus the server wire schemas from the same Zod row objects. (2) Shared mode joins tabs behind one SharedWorker-owned connection and broadcasts commits; there is no competing owner to take over from. (3) For example: the database is ready and a query has rendered local rows while sync is `offline`. (4) Immutability is a server trust rule, so a hostile or old client cannot bypass it; the local schema describes shape, not authorization policy. (5) Envelope validation, per-row Zod validation, application relationship validation, and store-enforced authenticated scope. (6) The local commit is the product action; sync is later replication, and several triggers must coalesce without putting HTTP on the write path. (7) The server advances a monotonic GC floor only to an old-enough checkpoint; an older client receives `resyncRequired` and performs a replacement pull that preserves dirty local work. (8) `open()` fails fast with `OpfsUnavailableError`; the application turns it into a useful browser-facing explanation.
+**Ch. 15.** (1) The local commit to OPFS is the product action and returns immediately; sync is later replication, so a review must never wait on the network for the UI to update. (2) They are independent facts — local storage availability, a query's first snapshot, and replication progress — so a network failure never makes local storage look unavailable, nor a storage failure look like being offline. (3) Envelope validation, per-row Zod validation, application relationship validation, and store-enforced authenticated scope. (4) A run in progress coalesces later triggers into a single queued rerun, so many writes during one slow request cause at most one follow-up and the last writes are never stranded until the next interval. (5) The server records timestamped revision checkpoints and advances the GC floor only to an old-enough one; a client whose cursor predates the floor receives `resyncRequired` and a replacement pull that preserves dirty local work — bounded history without dropping a returning device.
 
 
 # Appendix E: The security model {.unnumbered}

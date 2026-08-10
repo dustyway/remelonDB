@@ -13,6 +13,7 @@
   inset: 8pt,
   radius: 3pt,
   width: 100%,
+  breakable: false,
   text(size: 0.82em, it),
 )
 #show raw.where(block: false): it => box(
