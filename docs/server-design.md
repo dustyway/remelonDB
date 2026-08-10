@@ -19,7 +19,7 @@ its obligations:
 | Commit-ordered revisions | store: revisions assigned so that pushes for one scope commit in revision order (`transaction(scope, 'push', …)` MUST serialize per scope — the advisory-lock obligation) |
 | Cursor encoding, opacity, floor checks | engine (revision-based reference mechanism) |
 | Conflict detection and ordering vs rejection | engine (ownership rejections first — foreign revisions are incomparable to a scope's cursor — then whole-push conflict) |
-| Per-record validation | engine, via per-table `validate`/`appendOnly` + optional `crossValidate` (referential checks) |
+| Per-record validation | engine, via per-table `validate`/`appendOnly` + optional `crossValidateChanges` (referential checks over the full change set, deletions included; the rows-only `crossValidate` remains for compatibility) |
 | Tombstoned-write rejection | engine, via the store's `tombstonedIds` |
 | Upsert discipline (never touch creation stamps, never resurrect tombstones), tombstoning, retention | store |
 | Interleave computation, the both-or-neither package rule, mandatory degrade below the floor | engine |

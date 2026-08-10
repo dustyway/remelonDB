@@ -57,6 +57,22 @@ export interface SyncEngineOptions<Scope> {
     scope: Scope,
     rows: { readonly [table: string]: readonly WireRow[] },
   ) => Promise<{ readonly [table: string]: readonly string[] }>
+  /**
+   * Like `crossValidate`, but sees the FULL proposed change set —
+   * upserts and deletions — so referential rules can reject a delete.
+   * Returned ids are rejected whether they name a row or a deletion.
+   * Both hooks may be configured; their rejections merge.
+   */
+  readonly crossValidateChanges?: (
+    tx: SyncStoreTx<Scope>,
+    scope: Scope,
+    changes: {
+      readonly [table: string]: {
+        readonly rows: readonly WireRow[]
+        readonly deleted: readonly string[]
+      }
+    },
+  ) => Promise<{ readonly [table: string]: readonly string[] }>
 }
 
 const decodeCursor = (cursor: string): number | null => {
@@ -196,18 +212,36 @@ export function createSyncEngine<Scope>(
             entry.deletes = entry.deletes.filter((id) => !foreign.has(id))
           }
         }
-        if (options.crossValidate) {
-          const rowsByTable = Object.fromEntries(
-            parsed.map((entry) => [entry.table, entry.rows]),
-          )
-          const extra = await options.crossValidate(tx, scope, rowsByTable)
+        const applyExtraRejections = (extra: {
+          readonly [table: string]: readonly string[]
+        }): void => {
           for (const [table, ids] of Object.entries(extra)) {
             if (ids.length === 0) continue
             const drop = new Set(ids)
             ;(rejected[table] ??= []).push(...ids)
             const entry = parsed.find((p) => p.table === table)
-            if (entry) entry.rows = entry.rows.filter((r) => !drop.has(r.id))
+            if (entry) {
+              entry.rows = entry.rows.filter((r) => !drop.has(r.id))
+              entry.deletes = entry.deletes.filter((id) => !drop.has(id))
+            }
           }
+        }
+        if (options.crossValidate) {
+          const rowsByTable = Object.fromEntries(
+            parsed.map((entry) => [entry.table, entry.rows]),
+          )
+          applyExtraRejections(await options.crossValidate(tx, scope, rowsByTable))
+        }
+        if (options.crossValidateChanges) {
+          const changesByTable = Object.fromEntries(
+            parsed.map((entry) => [
+              entry.table,
+              { rows: entry.rows, deleted: entry.deletes },
+            ]),
+          )
+          applyExtraRejections(
+            await options.crossValidateChanges(tx, scope, changesByTable),
+          )
         }
 
         // conflict dominates what remains (the contract's MUST)

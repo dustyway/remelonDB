@@ -45,6 +45,7 @@ export interface RemelonSyncOptions<Scope> {
     request: unknown,
   ) => Scope | null | undefined | Promise<Scope | null | undefined>
   readonly crossValidate?: SyncEngineOptions<Scope>['crossValidate']
+  readonly crossValidateChanges?: SyncEngineOptions<Scope>['crossValidateChanges']
 }
 
 export interface RemelonSyncAsyncOptions<Scope> {
@@ -83,6 +84,9 @@ const prepare = <Scope>(options: RemelonSyncOptions<Scope>): SyncRuntime => {
       ]),
     ),
     ...(options.crossValidate ? { crossValidate: options.crossValidate } : {}),
+    ...(options.crossValidateChanges
+      ? { crossValidateChanges: options.crossValidateChanges }
+      : {}),
   })
   // The push envelope validates shape and usable ids only; the strict
   // per-table schemas run in the engine, where an invalid record is
