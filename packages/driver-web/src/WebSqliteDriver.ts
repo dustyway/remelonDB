@@ -148,6 +148,13 @@ export class WebSqliteDriver implements SqliteDriver {
             const data = (event as MessageEvent).data as
               | { control?: string }
               | null
+            if (data?.control === 'diag') {
+              // TEMPORARY (diag/firefox-macos-not-open): broker lifecycle
+              // trace, surfaced in the page console. Remove before merge.
+              // eslint-disable-next-line no-console
+              console.log('[remelondb-diag:page]', JSON.stringify(data))
+              return
+            }
             if (data?.control === 'externalChanges') {
               const payload = data as unknown as {
                 name: string
@@ -298,6 +305,15 @@ export class WebSqliteDriver implements SqliteDriver {
     if (response.ok) {
       pending.resolve(response.result)
     } else {
+      if (/not open/i.test(response.error ?? '')) {
+        // TEMPORARY (diag/firefox-macos-not-open): the failing op reached a
+        // compute worker with no connection for this db. Remove before merge.
+        // eslint-disable-next-line no-console
+        console.warn(
+          '[remelondb-diag:page] not-open response',
+          JSON.stringify({ name: this.name, shared: this.sharedMode, error: response.error }),
+        )
+      }
       pending.reject(new Error(response.error))
     }
   }

@@ -59,6 +59,38 @@ let namesToRestore: string[] = []
 let lastResponseAt = 0
 let watchdogTimer: ReturnType<typeof setTimeout> | null = null
 
+// --- TEMPORARY DIAGNOSTICS (branch diag/firefox-macos-not-open) ------------
+// Traces the Firefox-only self-hosted compute-worker lifecycle to pin the
+// macOS "database is not open" bug. Broker console output is hard to find
+// (Browser Console / about:debugging), so every event is ALSO broadcast to
+// page ports, where the driver prints it. Remove this whole block before merge.
+const diagPorts = new Set<PortLike>()
+let diagSeq = 0
+const diag = (event: string, detail?: Record<string, unknown>): void => {
+  const line = {
+    control: 'diag' as const,
+    seq: diagSeq++,
+    t: Date.now(),
+    event,
+    holders: holders.size,
+    routes: routes.size,
+    backlog: backlog.length,
+    hosted: hostedWorker !== null,
+    computeReady,
+    ...detail,
+  }
+  // eslint-disable-next-line no-console
+  console.log('[remelondb-diag]', event, JSON.stringify(line))
+  for (const p of diagPorts) {
+    try {
+      p.postMessage(line)
+    } catch {
+      diagPorts.delete(p)
+    }
+  }
+}
+// --- END DIAGNOSTICS -------------------------------------------------------
+
 /**
  * New connections probe the compute channel, but a lone surviving tab
  * gets no new connection: without this, its requests to a dead compute
@@ -114,6 +146,7 @@ const spawnComputeHere = (): boolean => {
       type: 'module',
     })
     worker.addEventListener('error', () => {
+      diag('hosted-worker-error', { fallbackToTab: hostedWorker === worker })
       // the hosted worker failed to load or crashed on startup: fall
       // back to tab-hosted compute instead of hanging every request
       if (hostedWorker === worker) {
@@ -129,6 +162,7 @@ const spawnComputeHere = (): boolean => {
       }
     })
     hostedWorker = worker
+    diag('spawn-compute-self-host')
     adoptComputePort(worker)
     return true
   } catch {
@@ -154,6 +188,7 @@ const backlog: Array<{
  * no respawn path exists does the failure surface.
  */
 const resetEpoch = (reason: string): void => {
+  diag('reset-epoch', { reason })
   hostedWorker?.terminate()
   hostedWorker = null
   computePort = null
@@ -222,6 +257,13 @@ const adoptComputePort = (port: PortLike): void => {
     }
     lastResponseAt = Date.now()
     routes.delete(response.id)
+    if (!response.ok && /not open/i.test(response.error ?? '')) {
+      diag('compute-error-not-open', {
+        op: route.request.op,
+        name: (route.request as { name?: string }).name,
+        error: response.error,
+      })
+    }
     if (response.ok && route.transform) {
       route.port.postMessage({
         id: route.originalId,
@@ -240,6 +282,7 @@ const adoptComputePort = (port: PortLike): void => {
       routes.size === 0 &&
       backlog.length === 0
     ) {
+      diag('idle-release-terminate', { afterOp: route.request.op })
       hostedWorker.terminate()
       hostedWorker = null
       computePort = null
@@ -249,6 +292,7 @@ const adoptComputePort = (port: PortLike): void => {
   port.start?.()
   const heldNames = namesToRestore
   namesToRestore = []
+  diag('adopt-compute', { restore: heldNames })
   if (heldNames.length === 0) {
     computeReady = true
     flushBacklog()
@@ -268,6 +312,7 @@ const adoptComputePort = (port: PortLike): void => {
           reopensPending -= 1
           if (reopensPending === 0) {
             computeReady = true
+            diag('restore-complete', { restored: heldNames })
             flushBacklog()
           }
         },
@@ -493,6 +538,7 @@ scope.addEventListener('connect', (event) => {
   if (!port) {
     return
   }
+  diagPorts.add(port) // TEMPORARY: page receives 'diag' control messages
   port.addEventListener('message', (messageEvent) => {
     const data = messageEvent.data as { control?: string } | null
     if (data?.control === 'adoptWorkerPort') {
