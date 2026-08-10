@@ -5,7 +5,7 @@
  * lock on push, and tombstones that never resurrect.
  */
 import { and, eq, getTableColumns, gt, inArray, isNotNull, isNull, lte, ne, sql } from 'drizzle-orm'
-import type { SQL } from 'drizzle-orm'
+import type { InferInsertModel, SQL } from 'drizzle-orm'
 import type { PgColumn, PgDatabase, PgQueryResultHKT, PgTable } from 'drizzle-orm/pg-core'
 import type { StoredChange, SyncStore, SyncStoreTx, WireRow } from '@remelondb/server'
 
@@ -65,6 +65,32 @@ export interface DrizzleTableConfig<Scope> {
    */
   readonly scrub?: Record<string, unknown>
   readonly overrides?: TableOverrides<Scope>
+}
+
+/** The SQL column names of a concrete Drizzle table. */
+type ColumnNamesOf<T extends PgTable> =
+  T['_']['columns'][keyof T['_']['columns']]['_']['name']
+
+/**
+ * A schema-aware {@link DrizzleTableConfig} builder: `scrub` keys and
+ * value types are checked against the table's insert model and
+ * `insertOnly` entries against its real column names, so a typo or a
+ * wrong-typed scrub value fails at compile time instead of syncing
+ * garbage. Purely a type-level helper — it returns the config as-is.
+ */
+export function drizzleSyncTable<Scope, T extends PgTable>(config: {
+  readonly table: T
+  readonly id: PgColumn
+  readonly rev: PgColumn
+  readonly deletedAt: PgColumn
+  readonly scope?: PgColumn
+  readonly toWire?: (row: Record<string, unknown>) => WireRow
+  readonly fromWire?: (row: WireRow) => Record<string, unknown>
+  readonly insertOnly?: readonly ColumnNamesOf<T>[]
+  readonly scrub?: Partial<InferInsertModel<T>>
+  readonly overrides?: TableOverrides<Scope>
+}): DrizzleTableConfig<Scope> {
+  return config
 }
 
 export interface DrizzleStoreOptions<Scope> {

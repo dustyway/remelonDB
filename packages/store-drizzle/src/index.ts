@@ -1,4 +1,4 @@
-export { createDrizzleStore } from './store'
+export { createDrizzleStore, drizzleSyncTable } from './store'
 export type {
   DrizzleDb,
   DrizzleStore,
