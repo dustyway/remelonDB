@@ -247,6 +247,16 @@ export function createSqliteWorkerServing(
       if (typeof (request as { op?: unknown }).op !== 'string') {
         return // control traffic (port adoption), not a request
       }
+      if (request.op === 'ping') {
+        // Liveness is answered out-of-band, never queued. A real op can
+        // stall the queue for seconds (e.g. an OPFS pool install retrying
+        // a transient error), and a queued ping behind it would time out
+        // — making a busy-but-alive worker look dead and tripping the
+        // broker's "went away" respawn. Answering immediately reports the
+        // truth: the worker is here.
+        endpoint.postMessage({ id: request.id, ok: true, result: null })
+        return
+      }
       queue = queue.then(async () => {
         const server = await serverPromise
         try {

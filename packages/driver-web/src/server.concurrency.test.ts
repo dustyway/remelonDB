@@ -169,3 +169,40 @@ describe('worker server request serialization (property)', () => {
     )
   })
 })
+
+/**
+ * Liveness must not queue behind real work. A stalled op (e.g. an OPFS
+ * pool install retrying a transient error for seconds) would otherwise
+ * hold up a queued `ping`, and the broker — seeing no pong — would judge
+ * a busy-but-alive worker dead and respawn-loop. `ping` is answered
+ * out-of-band so the worker always reports the truth.
+ */
+describe('worker server liveness', () => {
+  it('answers ping out-of-band while an open is stalled', async () => {
+    class FakeDb {
+      constructor(readonly name: string) {}
+      selectValue(): number {
+        return 0
+      }
+      close(): void {}
+    }
+    const sqlite3 = {
+      // install never resolves — the open sits in the queue indefinitely
+      installOpfsSAHPoolVfs: () => new Promise(() => {}),
+      oo1: { DB: FakeDb },
+    } as unknown as Sqlite3Static
+    const send = serveWith(sqlite3)
+
+    let openSettled = false
+    void send({ id: 1, op: 'open', name: 'x.db', storage: 'opfs' }).then(() => {
+      openSettled = true
+    })
+
+    const pong = await send({ id: 2, op: 'ping' })
+    expect(pong).toEqual({ id: 2, ok: true, result: null })
+    // the open is still stuck behind the never-resolving install; the ping
+    // did not wait for it (against the old queue-everything dispatcher this
+    // send would never resolve and the test would time out)
+    expect(openSettled).toBe(false)
+  })
+})
