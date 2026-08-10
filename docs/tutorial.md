@@ -186,6 +186,23 @@ await db.write(async () => {
 })
 ```
 
+`db.write()` itself is a serialized writer window, not a transaction:
+each `create`/`update`/delete inside it commits individually, and a
+failure mid-block does not undo earlier commits. When several records
+must live or die together, prepare the operations and commit them as
+one batch. Deletes have prepared builders too, so a cascade is one
+transaction:
+
+```js fragment
+await db.write(async () => {
+  const cards = await db.get(Card).query(Q.where('deck_id', deck.id)).fetch()
+  await db.batch([
+    ...cards.map((card) => card.prepareMarkAsDeleted()),
+    deck.prepareMarkAsDeleted(),
+  ])   // parent and children vanish together, or not at all
+})
+```
+
 Ids are client-generated (16 characters, sync-safe), so records never
 wait for a server to exist.
 

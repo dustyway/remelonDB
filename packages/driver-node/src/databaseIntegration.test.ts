@@ -229,6 +229,69 @@ describe('Database core', () => {
     })
   })
 
+  // #7 option 2: batch() is the atomic unit, and the delete operations
+  // get prepared builders so multi-record cascades can commit as ONE
+  // transaction instead of a partial-failure-prone sequence.
+  describe('atomic delete cascades', () => {
+    it('a failed batch rolls back its delete operations too', async () => {
+      await db.write(async () => {
+        await db.get('tasks').create({ id: 'parent', name: 'p' })
+        await db.get('tasks').create({ id: 'child', name: 'c' })
+      })
+
+      await expect(
+        db.write(async () =>
+          db.batch([
+            db.get('tasks').prepareMarkAsDeleted(
+              await db.get('tasks').find('child'),
+            ),
+            db.get('tasks').prepareMarkAsDeleted(
+              await db.get('tasks').find('parent'),
+            ),
+            db.get('tasks').prepareCreate({ id: 'parent', name: 'dup' }), // PK violation
+          ]),
+        ),
+      ).rejects.toThrow(/unique|constraint/i)
+
+      // neither delete survived the failed transaction
+      expect((await db.get('tasks').find('parent'))._status).not.toBe('deleted')
+      expect((await db.get('tasks').find('child'))._status).not.toBe('deleted')
+    })
+
+    it('a cascade commits as one batch: one notification, tombstones kept', async () => {
+      await db.write(async () => {
+        await db.get('tasks').create({ id: 'parent', name: 'p' })
+        await db.get('tasks').create({ id: 'c1', name: 'one' })
+        await db.get('tasks').create({ id: 'c2', name: 'two' })
+      })
+      let bursts = 0
+      db.get('tasks').onChange(() => bursts++)
+
+      const tasks = db.get('tasks')
+      const parent = await tasks.find('parent')
+      const c1 = await tasks.find('c1')
+      const c2 = await tasks.find('c2')
+      await db.write(() =>
+        db.batch([
+          tasks.prepareMarkAsDeleted(c1),
+          tasks.prepareMarkAsDeleted(c2),
+          tasks.prepareDestroyPermanently(parent),
+        ]),
+      )
+
+      expect(bursts).toBe(1)
+      // tombstones for sync, hard delete really gone
+      const rows = await driver.query('select "id", "_status" from tasks', [])
+      expect(rows).toEqual(
+        expect.arrayContaining([
+          { id: 'c1', _status: 'deleted' },
+          { id: 'c2', _status: 'deleted' },
+        ]),
+      )
+      expect(rows).toHaveLength(2)
+    })
+  })
+
   describe('observation', () => {
     const flush = () => new Promise((resolve) => setTimeout(resolve, 10))
 

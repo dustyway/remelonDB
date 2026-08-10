@@ -23,6 +23,7 @@
  */
 import type { RawRecord, SyncStatus } from '../rawRecord/index'
 import type { Collection, Unsubscribe } from '../database/Collection'
+import type { BatchOperation } from '../database/encodeBatch'
 import type { Query } from '../database/Query'
 import type {
   ColumnName,
@@ -154,6 +155,16 @@ export class Model {
 
   destroyPermanently(): Promise<void> {
     return this.collection.destroyPermanently(this.id)
+  }
+
+  /** Build a delete-tombstone operation for Database.batch (atomic cascades). */
+  prepareMarkAsDeleted(): BatchOperation {
+    return this.collection.prepareMarkAsDeleted(this._raw)
+  }
+
+  /** Build a permanent-delete operation for Database.batch. */
+  prepareDestroyPermanently(): BatchOperation {
+    return this.collection.prepareDestroyPermanently(this._raw)
   }
 
   /**

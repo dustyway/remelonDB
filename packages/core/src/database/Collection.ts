@@ -179,18 +179,30 @@ export class Collection<M = RawRecord, C extends string = string> {
    * in the database until sync pushes the deletion). Must be inside write.
    */
   async markAsDeleted(id: string): Promise<void> {
-    const raw = await this._findRaw(id)
     await this.database.batch([
-      { type: 'markAsDeleted', table: this.table, raw },
+      this.prepareMarkAsDeleted(await this._findRaw(id)),
     ])
   }
 
   /** Permanently delete a record's row. Must be called inside write. */
   async destroyPermanently(id: string): Promise<void> {
-    const raw = await this._findRaw(id)
     await this.database.batch([
-      { type: 'destroyPermanently', table: this.table, raw },
+      this.prepareDestroyPermanently(await this._findRaw(id)),
     ])
+  }
+
+  /**
+   * Build a delete-tombstone operation without committing it (for
+   * Database.batch) — this is how a multi-record delete cascade becomes
+   * one atomic transaction.
+   */
+  prepareMarkAsDeleted(record: RawRecord): BatchOperation {
+    return { type: 'markAsDeleted', table: this.table, raw: record }
+  }
+
+  /** Build a permanent-delete operation without committing it (for Database.batch). */
+  prepareDestroyPermanently(record: RawRecord): BatchOperation {
+    return { type: 'destroyPermanently', table: this.table, raw: record }
   }
 
   /** Subscribe to this table's committed changes (raw-level, low-level). */

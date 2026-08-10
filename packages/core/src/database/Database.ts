@@ -223,7 +223,16 @@ export class Database {
     return collection as Collection<unknown, string>
   }
 
-  /** Run exclusive write work. Mutations are only allowed inside. */
+  /**
+   * Run exclusive write work. Mutations are only allowed inside.
+   *
+   * This is a serialized writer window, NOT a transaction: each
+   * `batch()` / `create()` / `update()` / delete inside commits on its
+   * own, and an error mid-block does not roll back earlier commits.
+   * For all-or-nothing multi-record work (delete cascades, seeding),
+   * group prepared operations into ONE `db.batch()` call — that is the
+   * atomic unit.
+   */
   write<T>(work: () => Promise<T>): Promise<T> {
     return this.withWorkSlot(true, work)
   }
