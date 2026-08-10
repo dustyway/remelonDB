@@ -58,8 +58,14 @@ const countRows = (changes: SyncChanges | null | undefined): number => {
 
 export interface SynchronizeOptions {
   readonly database: Database
-  readonly pullChanges: (args: SyncPullArgs) => Promise<SyncPullResult>
-  readonly pushChanges?: (args: SyncPushArgs) => Promise<SyncPushResult>
+  readonly pullChanges: (
+    args: SyncPullArgs,
+    signal?: AbortSignal,
+  ) => Promise<SyncPullResult>
+  readonly pushChanges?: (
+    args: SyncPushArgs,
+    signal?: AbortSignal,
+  ) => Promise<SyncPushResult>
   /** Validate each untrusted pull response before core inspects or applies it. */
   readonly validatePullResult?: (result: unknown) => SyncPullResult
   /** Validate each untrusted push response before core inspects or applies it. */
@@ -70,6 +76,12 @@ export interface SynchronizeOptions {
   readonly migrationsEnabledAtVersion?: number
   /** Max pull→push rounds when the server reports push conflicts (default 5). */
   readonly conflictRetries?: number
+  /**
+   * Cancels the run between protocol phases and is handed to the
+   * transport so in-flight requests can abort. A write in progress is
+   * never interrupted; the engine stops before the next phase instead.
+   */
+  readonly signal?: AbortSignal
   readonly log?: (message: string) => void
 }
 
@@ -172,6 +184,7 @@ async function runSynchronize(
 ): Promise<SynchronizeResult> {
   const { database, log = () => {} } = options
   const retries = options.conflictRetries ?? 5
+  options.signal?.throwIfAborted()
 
   // Multi-tab: only the sync-lease holder runs; everyone else's tick is
   // a cheap no-op. Drivers without shared storage have no hook.
@@ -192,6 +205,7 @@ async function runSynchronize(
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     // ---- pull phase ----
+    options.signal?.throwIfAborted()
     const pullCursor = await getCursor(database)
     const { migration, shouldSaveVersion } = await migrationInfo(
       database,
@@ -199,7 +213,7 @@ async function runSynchronize(
       pullCursor === null,
     )
     const pull = async (args: SyncPullArgs): Promise<SyncPullResult> => {
-      const result: unknown = await options.pullChanges(args)
+      const result: unknown = await options.pullChanges(args, options.signal)
       return options.validatePullResult
         ? options.validatePullResult(result)
         : (result as SyncPullResult)
@@ -226,6 +240,8 @@ async function runSynchronize(
     const pulled = pullResult
     pulledTotal += countRows(pulled.changes)
 
+    // abort before the apply write, never inside it
+    options.signal?.throwIfAborted()
     await database.write(async () => {
       if ((await getCursor(database)) !== pullCursor) {
         throw new Error(
@@ -266,10 +282,14 @@ async function runSynchronize(
     if (localChanges.isEmpty) {
       return doneWithoutPush()
     }
-    const unvalidatedPushResult: unknown = await options.pushChanges({
-      changes: localChanges.changes,
-      cursor: pulled.cursor,
-    })
+    options.signal?.throwIfAborted()
+    const unvalidatedPushResult: unknown = await options.pushChanges(
+      {
+        changes: localChanges.changes,
+        cursor: pulled.cursor,
+      },
+      options.signal,
+    )
     const pushResult = options.validatePushResult
       ? options.validatePushResult(unvalidatedPushResult)
       : (unvalidatedPushResult as SyncPushResult)

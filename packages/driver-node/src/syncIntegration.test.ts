@@ -507,6 +507,67 @@ describe('sync engine', () => {
     )
   })
 
+  // #10: an in-flight sync must not outlive its owner — logout and
+  // dispose() pass a signal; the engine stops between phases and the
+  // transport gets the signal so fetch can cancel.
+  describe('abort', () => {
+    it('a pre-aborted signal stops the run before any traffic', async () => {
+      const pull = vi.fn(server.pull)
+      const push = vi.fn(server.push)
+      const controller = new AbortController()
+      controller.abort()
+
+      await expect(
+        sync({ pullChanges: pull, pushChanges: push, signal: controller.signal }),
+      ).rejects.toThrow()
+      expect(pull).not.toHaveBeenCalled()
+      expect(push).not.toHaveBeenCalled()
+    })
+
+    it('the transport receives the signal for request cancellation', async () => {
+      const controller = new AbortController()
+      const seen: (AbortSignal | undefined)[] = []
+      await db.write(() => db.get('tasks').create({ id: 't1', name: 'x' }))
+
+      await sync({
+        pullChanges: async (args, signal) => {
+          seen.push(signal)
+          return server.pull(args)
+        },
+        pushChanges: async (args, signal) => {
+          seen.push(signal)
+          return server.push(args)
+        },
+        signal: controller.signal,
+      })
+      expect(seen).toEqual([controller.signal, controller.signal])
+    })
+
+    it('aborting after the pull skips apply and push, leaving local state intact', async () => {
+      server.seed('s1', { name: 'server', position: 1 })
+      await db.write(() => db.get('tasks').create({ id: 'l1', name: 'local' }))
+      const controller = new AbortController()
+      const push = vi.fn(server.push)
+
+      await expect(
+        sync({
+          pullChanges: async (args) => {
+            const result = await server.pull(args)
+            controller.abort()
+            return result
+          },
+          pushChanges: push,
+          signal: controller.signal,
+        }),
+      ).rejects.toThrow()
+
+      // nothing applied, nothing pushed, cursor untouched, record still dirty
+      expect(push).not.toHaveBeenCalled()
+      expect(await db.localStorage.get(CURSOR_KEY)).toBeNull()
+      expect((await db.get('tasks').find('l1'))._status).toBe('created')
+    })
+  })
+
   // #9: synchronize() reports what happened instead of resolving void;
   // callers stop parsing log lines for control flow.
   describe('structured result', () => {
