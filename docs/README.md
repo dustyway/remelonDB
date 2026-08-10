@@ -24,6 +24,7 @@ they track the code and are updated with it.
 | Doc | Covers |
 | --- | --- |
 | [overview.md](overview.md) | How the layers fit, where each concern lives, and a write, a read, and a sync traced end to end. The entry point for working on the library. |
+| [codebase-guide.md](codebase-guide.md) | The maintainer guide: the whole codebase cover to cover with each concept taught inline, plus the NotAnotherCards consumer chapter. Renderable to PDF (command in the file header). |
 
 ## Design decisions
 

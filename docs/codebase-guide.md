@@ -1,7 +1,7 @@
 ---
 title: "remelonDB: A Guide to the Codebase"
 subtitle: "How the layers fit together, and why each one exists"
-version: "0.1.8 · 2026-08-10"
+version: "0.1.9 · 2026-08-10"
 ---
 
 <!-- Source of the maintainer guide. Render the PDF with:
@@ -11,7 +11,7 @@ version: "0.1.8 · 2026-08-10"
 
 # Preface {.unnumbered}
 
-This guide can be read cover to cover, with no repository open beside you: each time the code leans on an idea — a database transaction, an advisory lock, a SharedWorker, a CRDT-flavoured merge — a short **Background** aside explains it first, set off so your eye can slide past what you already know. It describes the shipped codebase at version **0.1.8**; roadmap work tracked only in open issues is out of scope.
+This guide can be read cover to cover, with no repository open beside you: each time the code leans on an idea — a database transaction, an advisory lock, a SharedWorker, a CRDT-flavoured merge — a short **Background** aside explains it first, set off so your eye can slide past what you already know. It describes the shipped codebase at version **0.1.9**; roadmap work tracked only in open issues is out of scope.
 
 ## What you are holding
 
@@ -370,7 +370,7 @@ Read the shape first. `db.write(...)` takes a *function* — the `() => ...` rec
 
 Two rules carry the whole move.
 
-**All mutations happen inside `db.write`. There is no other path.** Reads need no writer gate — fetching or observing works anywhere — but every change goes through the writer. Atomicity belongs to `db.batch`: each collection mutation prepares and commits a batch, and an explicit batch groups several prepared operations into one all-or-nothing unit. Chapter 5 shows the commit point after an atomic driver batch resolves, where caches are updated and then, only then, subscribers are told.
+**All mutations happen inside `db.write`. There is no other path.** Reads need no writer gate — fetching or observing works anywhere — but every change goes through the writer. Atomicity belongs to `db.batch`: each collection mutation prepares and commits a batch, and an explicit batch groups several prepared operations into one all-or-nothing unit — creates and updates via `prepareCreate`/`prepareUpdate`, and since v0.1.9 deletes too (`prepareMarkAsDeleted`/`prepareDestroyPermanently`), so a parent-and-children cascade commits as one transaction. Chapter 5 shows the commit point after an atomic driver batch resolves, where caches are updated and then, only then, subscribers are told.
 
 **Deletion is not removal.** `markAsDeleted` flags the row rather than erasing it. The flagged row is a *tombstone*, and it exists so that sync can tell other devices this todo is gone. If the row simply vanished, there would be nothing left to tell them about, and the todo would resurrect the next time another device pushed its copy. Queries hide tombstones by default, so the row is invisible to the application while remaining visible to sync. There is a blunter method, `destroyPermanently`, which really does erase the row; sync never hears about it. It is the right call for data that never left the device, and the wrong call for anything else.
 
@@ -1205,7 +1205,7 @@ This is the chapter Chapter 1 promised. Everything so far — the seam, the driv
 
 ## The shape of one cycle
 
-`synchronize({ database, pullChanges, pushChanges })` is the entry point. You supply the database and two functions that talk to *your* server; the engine decides what to send and how to merge. Two optional validators, `validatePullResult` and `validatePushResult`, run on every untrusted server response — the initial pull, the resync re-pull, and the push — before the engine inspects it; a throw fails the sync cleanly with local state untouched. This is where the Zod wire schemas from Chapter 3 plug in. One cycle always runs in this order:
+`synchronize({ database, pullChanges, pushChanges })` is the entry point. You supply the database and two functions that talk to *your* server; the engine decides what to send and how to merge. Since v0.1.9 the promise resolves to a `SynchronizeResult` — `{ lease, resynced, pulled, pushed, rejected, retryCount }` — so callers branch on data instead of parsing log lines, and an optional `signal` (AbortSignal) cancels between protocol phases, never inside a write; the signal is also passed to both transport functions so an in-flight request can abort with it. Two optional validators, `validatePullResult` and `validatePushResult`, run on every untrusted server response — the initial pull, the resync re-pull, and the push — before the engine inspects it; a throw fails the sync cleanly with local state untouched. This is where the Zod wire schemas from Chapter 3 plug in. One cycle always runs in this order:
 
 ```
 pull → apply (in a guarded write) → fetch local changes → push → mark synced
@@ -1407,7 +1407,7 @@ Push is where arbitration happens, and the order of its checks is the design. Be
 Inside the per-scope-serialized transaction, the checks run in a specific order, and each order choice has a reason:
 
 1. **Ownership first.** `foreignIds` are added to `rejected` and stripped — *before* conflict detection, because "a foreign row's revision is incomparable to this scope's cursor and must not force a conflict loop."
-2. An optional `crossValidate` hook for referential integrity across the push.
+2. An optional cross-record validation hook for referential integrity across the push: `crossValidateChanges` (v0.1.9) receives the full proposed change set per table — rows *and* deletions — and its returned ids are rejected whichever kind they name; the older rows-only `crossValidate` remains supported.
 3. **Conflict dominates.** `currentRevs` for every named id; if *any* has moved past the request cursor, the whole push returns `{ conflict: true }` and nothing applies. Conflict is all-or-nothing on purpose — a partial apply under conflict would leave the client guessing which half landed.
 4. **Tombstone and append-only rejection** (the new behavior, below).
 5. **Apply**: `upsert`, then `tombstone`.
@@ -2069,17 +2069,17 @@ Terms are listed as they were introduced in the Background asides, so you can se
 
 # Appendix B: The public API surface {.unnumbered}
 
-The shipped v0.1.8 surface a consumer touches, by subpath. This appendix records the contract; chapters may also name internal helpers when explaining the implementation.
+The shipped v0.1.9 surface a consumer touches, by subpath. This appendix records the contract; chapters may also name internal helpers when explaining the implementation.
 
 ## `@remelondb/core`
 
 - **Schema:** `table(name, cols)`, `column` / `c` (`.string()`, `.number()`, `.boolean()`, each with `.optional()`, `.indexed()`), `appSchema({ version, tables })`.
-- **Model:** `ModelFor(table)` (extend it), the generated per-column accessors, `create`, `update(builder)`, `markAsDeleted`, `destroyPermanently`, `children(table)`, `related(table)`, `observe`.
+- **Model:** `ModelFor(table)` (extend it), the generated per-column accessors, `create`, `update(builder)`, `markAsDeleted`, `destroyPermanently`, `prepareMarkAsDeleted`, `prepareDestroyPermanently`, `children(table)`, `related(table)`, `observe`.
 - **Database:** `Database.open({ driver, schema, modelClasses?, associations?, name, onObservation? })` (the last a passive per-refetch diagnostics hook, `ObservationDiagnostic`), `db.write(fn)`, `db.read(fn)`, `db.get(ModelOrTable)`, `db.onChange`.
 - **Manager:** `createDatabaseManager({ open })` → `{ state, database, init(), close(), subscribe() }`.
 - **Collection / Query:** `.query(...clauses)`, `.fetch()`, `.fetchCount()`, `.observe(cb, onError?)`, `.observeCount(cb, onError?)` — without `onError`, observation failures stay unhandled rejections.
 - **Q:** `Q.where`, `Q.and`, `Q.or`, `Q.on`, `Q.joinTables`, `Q.nestedJoin`, `Q.sortBy` (`Q.asc`/`Q.desc`), `Q.take`, `Q.skip`; operators `Q.eq`, `Q.notEq`, `Q.gt`, `Q.gte`, `Q.lt`, `Q.lte`, `Q.oneOf`, `Q.notIn`, `Q.between`, `Q.like`, `Q.notLike`, `Q.includes`, `Q.column`, `Q.escapeLike`; escape hatches `Q.unsafeSqlExpr`, `Q.unsafeSqlQuery`.
-- **Sync:** `synchronize({ database, pullChanges, pushChanges?, validatePullResult?, validatePushResult?, conflictResolver?, sendCreatedAsUpdated?, migrationsEnabledAtVersion?, conflictRetries?, log? })`.
+- **Sync:** `synchronize({ database, pullChanges, pushChanges?, validatePullResult?, validatePushResult?, conflictResolver?, sendCreatedAsUpdated?, migrationsEnabledAtVersion?, conflictRetries?, signal?, log? })` → `SynchronizeResult` (`{ lease, resynced, pulled, pushed, rejected, retryCount }`); the transport functions receive `(args, signal?)`.
 - **Migrations:** `schemaMigrations({ migrations })`, step builders (`createTable`, `addColumns`, `unsafeExecuteSql`).
 
 ## `@remelondb/core/zod`
@@ -2096,15 +2096,15 @@ The shipped v0.1.8 surface a consumer touches, by subpath. This appendix records
 
 ## `@remelondb/server`
 
-`createSyncEngine({ tables, store, ... })` → `{ as(scope) }` → `{ pull, push }`; `createMemoryStore()`; `createReferenceServer()`; `registerServerConformance(...)`; the `pulled` / `accepted` helpers; `SyncProtocolError`; `SyncStore` / `SyncStoreTx` types.
+`createSyncEngine({ tables, store, crossValidate?, crossValidateChanges?, ... })` → `{ as(scope) }` → `{ pull, push }`; `createMemoryStore()`; `createReferenceServer()`; `registerServerConformance(...)`; the `pulled` / `accepted` helpers; `SyncProtocolError`; `SyncStore` / `SyncStoreTx` types.
 
 ## `@remelondb/store-drizzle`
 
-`createDrizzleStore({ db, tables })`, `DrizzleTableConfig` (machinery columns `id`/`rev`/`deletedAt`/`scope`, `insertOnly?`, `scrub?`, `overrides?`).
+`createDrizzleStore({ db, tables })`, `DrizzleTableConfig` (machinery columns `id`/`rev`/`deletedAt`/`scope`, `insertOnly?`, `scrub?`, `overrides?`); `drizzleSyncTable<Scope, Table>(config)` — the schema-aware config builder that validates `scrub` and `insertOnly` against the concrete table at compile time.
 
 ## `@remelondb/nestjs`
 
-`RemelonSyncModule.forRoot(options)` / `.forRootAsync(...)` with `scopeFrom(request)` and `tableOptions` (per-table engine config beyond validation, e.g. `appendOnly`); the `REMELON_SYNC` runtime token.
+`RemelonSyncModule.forRoot(options)` / `.forRootAsync(...)` with `scopeFrom(request)` and `tableOptions` (per-table engine config beyond validation, e.g. `appendOnly`); `syncEngineFromOptions(config)` — the same engine the module builds, from the same options minus `scopeFrom`, for tests and non-Nest callers; the `REMELON_SYNC` runtime token.
 
 ## Drivers
 

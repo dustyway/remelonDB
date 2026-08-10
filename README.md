@@ -194,6 +194,9 @@ side of the wire. Everything else ships as a core or server subpath
   eight real requests and responses, replayed by CI on every push
 - **[docs/overview.md](docs/overview.md)** — working on the library: how
   the layers fit, and a write, a read, and a sync end to end
+- **[docs/codebase-guide.md](docs/codebase-guide.md)** — the maintainer
+  guide: the whole codebase cover to cover, each concept taught inline,
+  renderable to PDF (command in the file header)
 - **[docs/README.md](docs/README.md)** — index of all documentation
 - **[API reference](https://dustyway.github.io/remelonDB/)** — generated
   from the source on every push (all packages, grouped by task, with
