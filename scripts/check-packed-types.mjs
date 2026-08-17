@@ -9,6 +9,8 @@
 // Run: node scripts/check-packed-types.mjs <tarball-dir>
 // (pack first: pnpm -r --filter './packages/*' pack --pack-destination <dir>)
 import { execFileSync } from 'node:child_process'
+import { findPackageJSON } from 'node:module'
+import { pathToFileURL } from 'node:url'
 import {
   cpSync,
   mkdtempSync,
@@ -59,24 +61,27 @@ try {
     join(dir, 'package.json'),
     JSON.stringify({ name: 'packed-types', private: true }, null, 2),
   )
-  // --ignore-scripts: declarations only, no native builds. The
-  // TypeScript and drizzle versions are the repo's own toolchain (read
-  // from the workspace manifests), so this checks what we develop
-  // against, not a hand-pinned floor.
-  const readDep = (path, name) => {
-    const pkg = JSON.parse(readFileSync(join(root, path), 'utf8'))
-    const version = pkg.devDependencies?.[name]
-    if (!version) throw new Error(`${name} not in ${path} devDependencies`)
-    return `${name}@${version}`
+  // --ignore-scripts: declarations only, no native builds. Peer
+  // versions are the EXACT versions installed in this workspace
+  // (resolved through node_modules, i.e. the lockfile's choice), so the
+  // check is reproducible and tracks the repo toolchain — a manifest
+  // range here would let a fresh upstream release fail CI without any
+  // remelondb change.
+  const installedVersion = (name, from) => {
+    // findPackageJSON works regardless of the package's exports map
+    // (typescript, for one, does not expose its package.json)
+    const pj = findPackageJSON(name, pathToFileURL(join(root, from, 'x.js')))
+    if (!pj) throw new Error(`cannot resolve ${name} from ${from}`)
+    return `${name}@${JSON.parse(readFileSync(pj, 'utf8')).version}`
   }
   const peers = [
-    readDep('package.json', 'typescript'),
-    readDep('package.json', 'vitest'),
-    readDep('package.json', '@types/node'),
-    readDep('packages/store-drizzle/package.json', 'drizzle-orm'),
-    'react@19',
-    '@types/react@19',
-    'zod@4',
+    installedVersion('typescript', '.'),
+    installedVersion('vitest', '.'),
+    installedVersion('@types/node', '.'),
+    installedVersion('drizzle-orm', 'packages/store-drizzle'),
+    installedVersion('react', 'packages/core'),
+    installedVersion('@types/react', 'packages/core'),
+    installedVersion('zod', 'packages/core'),
   ]
   execFileSync(
     'npm',
