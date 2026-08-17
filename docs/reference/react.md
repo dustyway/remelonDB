@@ -277,5 +277,8 @@ concept.
 
 `examples/todo-sync` uses these bindings on both platforms: the web
 frontend (`frontend/src/App.tsx`) and the React Native client
-(`mobile/App.tsx`) each render live todos through `useQuery` with no
-local bridge code.
+(`mobile/App.tsx`) render live todos through `useQuery` and write
+through `useMutation` with no local bridge code. The web frontend's
+search box is a live `keepPreviousData` demonstration — the query's
+structure changes with every keystroke while the list stays rendered —
+and the example e2e suite exercises it against the real sync server.

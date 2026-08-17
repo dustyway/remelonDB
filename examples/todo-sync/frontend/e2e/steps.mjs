@@ -66,6 +66,18 @@ export async function runSteps(url, hooks = {}) {
   await b.page.waitForSelector(`li:has-text("${OFFLINE}")`, { timeout: 20000 })
   console.log('step 5: recovery pushes the offline write to B')
 
+  // Step 5b: search narrows the live query (keepPreviousData path).
+  await b.page.fill('input[aria-label="Search todos"]', 'walk the dog')
+  await b.page.waitForSelector(`li:has-text("${FIRST}")`, { timeout: 5000 })
+  await b.page.waitForFunction(
+    (text) => ![...document.querySelectorAll('li')].some((li) => li.textContent.includes(text)),
+    OFFLINE,
+    { timeout: 5000 },
+  )
+  await b.page.fill('input[aria-label="Search todos"]', '')
+  await b.page.waitForSelector(`li:has-text("${OFFLINE}")`, { timeout: 5000 })
+  console.log('step 5b: search filters and clears')
+
   // Step 6: concurrent edits to the same row. A push that only races on
   // the cursor gets interleaved; a push whose row changed under it gets
   // `conflict`, re-pulls, retries. A's push is held at the network layer

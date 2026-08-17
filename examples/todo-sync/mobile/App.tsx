@@ -10,7 +10,7 @@ import {
 } from 'react-native'
 import { Q, type Database } from '@remelondb/core'
 import { TodoModel } from 'example-todo-sync/schema'
-import { useDatabaseState, useQuery } from '@remelondb/core/react'
+import { useDatabaseState, useMutation, useQuery } from '@remelondb/core/react'
 import { TodoItem } from './components/TodoItem'
 import { manager } from './src/db'
 import {
@@ -62,31 +62,33 @@ function Todos({ db }: { db: Database }) {
     return () => clearInterval(timer)
   }, [db])
 
-  const add = async () => {
-    const trimmed = text.trim()
-    if (!trimmed) return
-    setText('')
-    await db.write(() =>
-      db.get(TodoModel).create({ text: trimmed, done: false }),
-    )
+  // Writes go through useMutation: press handlers call .mutate() and
+  // stay floating-safe; a failure lands in .error instead of an
+  // unhandled rejection.
+  const addTodo = useMutation(async (value: string) => {
+    await db.write(() => db.get(TodoModel).create({ text: value, done: false }))
     void runSync(db)
-  }
-
-  const toggle = async (todo: TodoModel) => {
+  })
+  const toggleTodo = useMutation(async (todo: TodoModel) => {
     await db.write(() =>
       db.get(TodoModel).update(todo.id, { done: !todo.done }),
     )
     void runSync(db)
-  }
-
-  const remove = async (todo: TodoModel) => {
+  })
+  const removeTodo = useMutation(async (todo: TodoModel) => {
     await db.write(() => db.get(TodoModel).markAsDeleted(todo.id))
     void runSync(db)
-  }
-
-  const edit = async (todo: TodoModel, newText: string) => {
+  })
+  const editTodo = useMutation(async (todo: TodoModel, newText: string) => {
     await db.write(() => db.get(TodoModel).update(todo.id, { text: newText }))
     void runSync(db)
+  })
+
+  const add = () => {
+    const trimmed = text.trim()
+    if (!trimmed) return
+    setText('')
+    addTodo.mutate(trimmed)
   }
 
   return (
@@ -103,9 +105,13 @@ function Todos({ db }: { db: Database }) {
           value={text}
           onChangeText={setText}
           placeholder="What needs doing?"
-          onSubmitEditing={() => void add()}
+          onSubmitEditing={add}
         />
-        <Pressable style={styles.button} onPress={() => void add()}>
+        <Pressable
+          style={styles.button}
+          onPress={add}
+          disabled={addTodo.isPending}
+        >
           <Text style={styles.buttonText}>Add</Text>
         </Pressable>
       </View>
@@ -116,9 +122,9 @@ function Todos({ db }: { db: Database }) {
         renderItem={({ item }) => (
           <TodoItem
             todo={item}
-            onToggle={() => void toggle(item)}
-            onDelete={() => void remove(item)}
-            onEdit={(newText) => void edit(item, newText)}
+            onToggle={() => toggleTodo.mutate(item)}
+            onDelete={() => removeTodo.mutate(item)}
+            onEdit={(newText) => editTodo.mutate(item, newText)}
           />
         )}
       />

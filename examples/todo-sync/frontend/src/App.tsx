@@ -1,14 +1,27 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { Q, type Database } from '@remelondb/core'
-import { useQuery } from '@remelondb/core/react'
+import { useMutation, useQuery } from '@remelondb/core/react'
 import { TodoModel } from 'example-todo-sync/schema'
 import { getSyncNote, getSyncStatus, runSync, subscribeSyncStatus } from './sync'
 
 export function App({ db }: { db: Database }) {
+  const [search, setSearch] = useState('')
+  const term = search.trim()
   // No memo needed: useQuery keys on the query's structure, so
   // rebuilding it every render reuses the same live subscription.
-  const { data: todos } = useQuery(
-    db.get(TodoModel).query(Q.sortBy('created_at', Q.desc)),
+  // Typing in the search box genuinely changes that structure —
+  // keepPreviousData keeps the last results rendered (dimmed via
+  // isPreviousData) instead of blanking the list on each keystroke.
+  const { data: todos, isPreviousData } = useQuery(
+    db
+      .get(TodoModel)
+      .query(
+        ...(term
+          ? [Q.where('text', Q.like(`%${Q.escapeLike(term)}%`))]
+          : []),
+        Q.sortBy('created_at', Q.desc),
+      ),
+    { keepPreviousData: true },
   )
   const [text, setText] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
@@ -21,35 +34,39 @@ export function App({ db }: { db: Database }) {
     return () => clearInterval(timer)
   }, [db])
 
-  const add = async (event: React.FormEvent) => {
+  // Writes go through useMutation: handlers call .mutate() and stay
+  // floating-safe by construction; a failure lands in .error instead
+  // of an unhandled rejection.
+  const addTodo = useMutation(async (value: string) => {
+    await db.write(() => db.get(TodoModel).create({ text: value, done: false }))
+    void runSync(db)
+  })
+  const toggleTodo = useMutation(async (todo: TodoModel) => {
+    await db.write(() => db.get(TodoModel).update(todo.id, { done: !todo.done }))
+    void runSync(db)
+  })
+  const removeTodo = useMutation(async (todo: TodoModel) => {
+    await db.write(() => db.get(TodoModel).markAsDeleted(todo.id))
+    void runSync(db)
+  })
+  const editTodo = useMutation(async (id: string, value: string) => {
+    await db.write(() => db.get(TodoModel).update(id, { text: value }))
+    void runSync(db)
+  })
+
+  const add = (event: React.FormEvent) => {
     event.preventDefault()
     const trimmed = text.trim()
     if (!trimmed) return
     setText('')
-    await db.write(() =>
-      db.get(TodoModel).create({ text: trimmed, done: false }),
-    )
-    void runSync(db)
+    addTodo.mutate(trimmed)
   }
 
-  const toggle = async (todo: TodoModel) => {
-    await db.write(() =>
-      db.get(TodoModel).update(todo.id, { done: !todo.done }),
-    )
-    void runSync(db)
-  }
-
-  const remove = async (todo: TodoModel) => {
-    await db.write(() => db.get(TodoModel).markAsDeleted(todo.id))
-    void runSync(db)
-  }
-
-  const commitEdit = async (id: string, draft: string) => {
+  const commitEdit = (id: string, draft: string) => {
     setEditing(null)
     const trimmed = draft.trim()
     if (!trimmed) return
-    await db.write(() => db.get(TodoModel).update(id, { text: trimmed }))
-    void runSync(db)
+    editTodo.mutate(id, trimmed)
   }
 
   return (
@@ -67,14 +84,27 @@ export function App({ db }: { db: Database }) {
           placeholder="What needs doing?"
           aria-label="New todo"
         />
-        <button type="submit">Add</button>
+        <button type="submit" disabled={addTodo.isPending}>
+          Add
+        </button>
       </form>
-      <ul>
+      {addTodo.error != null && (
+        <p id="add-error" role="alert">
+          could not add: {String(addTodo.error)}
+        </p>
+      )}
+      <input
+        value={search}
+        onChange={(event) => setSearch(event.target.value)}
+        placeholder="Search todos"
+        aria-label="Search todos"
+      />
+      <ul className={isPreviousData ? 'stale' : ''}>
         {todos.map((todo) => (
           <li
             key={todo.id}
             className={todo.done ? 'done' : ''}
-            onClick={() => void toggle(todo)}
+            onClick={() => toggleTodo.mutate(todo)}
           >
             {editing === todo.id ? (
               <input
@@ -82,7 +112,7 @@ export function App({ db }: { db: Database }) {
                 defaultValue={todo.text}
                 autoFocus
                 onClick={(event) => event.stopPropagation()}
-                onBlur={(event) => void commitEdit(todo.id, event.currentTarget.value)}
+                onBlur={(event) => commitEdit(todo.id, event.currentTarget.value)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') event.currentTarget.blur()
                   if (event.key === 'Escape') setEditing(null)
@@ -109,7 +139,7 @@ export function App({ db }: { db: Database }) {
                     `Are you sure you want to delete ${todo.text}? It will be gone for good`,
                   )
                 ) {
-                  void remove(todo)
+                  removeTodo.mutate(todo)
                 }
               }}
             >
