@@ -135,6 +135,7 @@ jobs:
       # Structural doc checks: guide facts and the checklist/suite join
       - run: pnpm check:guide
       - run: pnpm check:wire
+      - run: pnpm check:reference
       - run: pnpm check:backend-tutorial
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres

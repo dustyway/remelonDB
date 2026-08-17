@@ -11,7 +11,8 @@
     "check:sync-tour": "node scripts/check-sync-tour.mjs",
     "check:backend-tutorial": "node scripts/check-backend-tutorial.mjs",
     "check:guide": "node scripts/check-codebase-guide.mjs",
-    "check:wire": "node scripts/check-sync-wire.mjs"
+    "check:wire": "node scripts/check-sync-wire.mjs",
+    "check:reference": "node scripts/check-reference.mjs"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.2",
