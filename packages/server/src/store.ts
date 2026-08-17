@@ -49,7 +49,7 @@ export interface SyncStoreTx<Scope> {
    *
    * May return ids the storage itself refused (a unique or foreign-key
    * constraint, for example). A refused row must leave no trace, the rest
-   * of the batch must still apply, and the transaction must stay usable —
+   * of the batch must still apply, and the transaction must stay usable:
    * the engine folds the ids into `rejected`, the same lane as validation
    * refusals, so a storage refusal is never a thrown 500.
    */

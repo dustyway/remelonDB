@@ -353,7 +353,7 @@ export function createDrizzleStore<Scope>(options: DrizzleStoreOptions<Scope>): 
       }
       // Slow path, only after a violation: row by row, each in its own
       // savepoint, collecting the ids the database refuses. The wire
-      // contract turns these into per-record rejections — a refused row
+      // contract turns these into per-record rejections: a refused row
       // leaves no trace and the rest of the batch still applies.
       const refused: string[] = []
       for (const value of values) {

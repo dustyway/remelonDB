@@ -151,11 +151,12 @@ powers skip visibly instead of being faked:
 | `invalidRow` in a fixture | per-record validation rejection (7) |
 | `appendOnly` | the append-only refusal case (13) |
 | `uniqueColumn` | storage constraint refusals as rejections (14) |
+| `crossValidation` | the hook-wiring cases: refused row, refused deletion (15, 16) |
 
-The suite runs against five registrations in this repository — the
+The suite runs against five registrations in this repository: the
 memory store, the reference server, the drizzle store over pglite, the
 NestJS transport, and downstream apps register their production stores
-the same way — so a new obligation added to the checklist binds every
+the same way, so a new obligation added to the checklist binds every
 implementation on its next test run. The exported `pulled` and
 `accepted` helpers narrow protocol results in your own tests.
 

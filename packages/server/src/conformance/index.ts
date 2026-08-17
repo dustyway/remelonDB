@@ -89,7 +89,7 @@ export interface ServerConformanceOptions {
   /**
    * Cross-validation coverage (cases 15 and 16): the registrant mounts
    * its own `crossValidate`/`crossValidateChanges` hook and declares
-   * rows that hook refuses, so the cases prove the *wiring* — a
+   * rows that hook refuses, so the cases prove the *wiring*: a
    * transport or adapter that drops hook rejections, or applies a
    * rejected deletion, fails here. `rejectedRow` must be refused as an
    * upsert; `undeletableRow` must apply cleanly but have its deletion
@@ -523,8 +523,8 @@ export function registerServerConformance(
       )
 
       // the second principal pushes one colliding row and one clean row:
-      // the refusal must reach the wire as a rejected id — never a thrown
-      // error — while the clean row applies in the same push
+      // the refusal must reach the wire as a rejected id, never a thrown
+      // error, while the clean row applies in the same push
       const startB = pulled(await pullNull(secondUser))
       const collide = accepted(
         await secondUser.push({
@@ -587,7 +587,7 @@ export function registerServerConformance(
       expect(seeded.rejected?.[cvTable] ?? []).not.toContain(keystone.id)
 
       // the deletion is refused: reported by id, and the tombstone must
-      // NOT be applied — a transport that reports but still deletes
+      // NOT be applied: a transport that reports but still deletes
       // diverges every other device
       const denied = accepted(
         await handlers.push({

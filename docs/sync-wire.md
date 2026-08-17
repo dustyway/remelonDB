@@ -223,8 +223,8 @@ For a server test suite; each item is one scenario or property test.
     must be declared through the backend's *own* registration, which is
     what catches a transport that drops engine config on the way to its
     endpoints.
-14. A refusal originating in *storage itself* — a unique or foreign-key
-    constraint the database enforces — is named in `rejected` like any
+14. A refusal originating in *storage itself*, a unique or foreign-key
+    constraint the database enforces, is named in `rejected` like any
     other refusal, never a thrown error: the refused row leaves no
     trace, the rest of the push applies, and the same id retried with
     an acceptable value succeeds. Opt-in (`uniqueColumn`), since it
@@ -234,7 +234,7 @@ For a server test suite; each item is one scenario or property test.
     mounts its own hook, so the case proves the hook wiring survives
     the registrant's whole stack.
 16. A cross-validation refusal of a *deletion* is reported by id and
-    the row stays alive — a server that reports the refusal but applies
+    the row stays alive: a server that reports the refusal but applies
     the tombstone anyway diverges every other device. Same opt-in.
 
 ## Versioning
