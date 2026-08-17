@@ -1,5 +1,5 @@
 /**
- * The query AST (docs/q-dsl-and-one-engine.md): a query is pure, serializable
+ * The query AST (docs/layers.md): a query is pure, serializable
  * data — building one executes nothing. The builders in ./Q.ts are the only
  * sanctioned constructors; they validate names and values at construction
  * time, so a well-typed QueryDescription never contains unsanitized input.

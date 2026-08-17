@@ -129,7 +129,7 @@ inputs are stable.
 For anything richer than per-row derivation, reach for the query
 language first: joins and conditions belong in Q, where the engine
 evaluates them and one subscription covers the composed result (see
-[q-dsl-and-one-engine](q-dsl-and-one-engine.md)). The bindings
+[the one-engine rule](../layers.md#the-q-dsl-and-the-one-engine-rule)). The bindings
 deliberately ship no stream operators — combining, debouncing, and
 switching between live results is a job for a dedicated reactive
 library on top, not for this module.

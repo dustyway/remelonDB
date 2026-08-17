@@ -13,6 +13,12 @@ Working *on* the library rather than with it? Start with
 lives, and what happens end to end on a write, a read, and a sync. It is
 the trunk the documents below hang off.
 
+Reading the sync documentation in order:
+[sync-basics](sync-basics.md) (behavior) → [sync-tour](sync-tour.md)
+(eight real requests) → [sync-wire-walkthrough](sync-wire-walkthrough.md)
+(the narrated long-form) → [sync-wire](sync-wire.md) (the normative
+contract) → [formal-model](formal-model.md) (what is proven about it).
+
 Two kinds of documents live here. **Design decisions** record *why* the
 project is shaped the way it is — written for people changing the
 library, and dense on purpose; using remelonDB never requires reading
@@ -30,14 +36,12 @@ they track the code and are updated with it.
 
 | Doc | Decision |
 | --- | --- |
-| [q-dsl-and-one-engine.md](q-dsl-and-one-engine.md) | Queries are serializable data; SQLite is the single query engine on every platform, without exception — observers re-query rather than re-match in JS. |
-| [layers.md](layers.md) | The portability seam is a `SqliteDriver` of ~7 required methods (dumb SQL executor) plus three optional multi-tab coordination members, not an ORM-flavored adapter. Async at the seam. Record caching owned by JS only. Tombstones/local storage are core features, not driver methods. Two RN drivers (expo-sqlite by default, a C++ TurboModule as the alternative). |
+| [layers.md](layers.md) | Queries are serializable data and SQLite is the single query engine on every platform (observers re-query rather than re-match in JS).  The portability seam is a `SqliteDriver` of ~7 required methods (dumb SQL executor) plus three optional multi-tab coordination members, not an ORM-flavored adapter. Async at the seam. Record caching owned by JS only. Tombstones/local storage are core features, not driver methods. Two RN drivers (expo-sqlite by default, a C++ TurboModule as the alternative). |
 | [sync-design.md](sync-design.md) | Generic reimplementation of WatermelonDB's sync protocol with two contract-level fixes: an opaque commit-ordered cursor (kills the lost-write race) and push-responds-like-a-pull (kills the push echo). |
 | [sync-basics.md](sync-basics.md) | Plain-language guide to the protocol's behavior: pull-then-push, per-column merge, why wall-clock time never decides a winner, and `conflictResolver` recipes for when last-pusher-wins is the wrong policy (stale offline edits). |
 | [sync-wire.md](sync-wire.md) | The normative wire contract: exact JSON shapes, backend obligations as testable MUSTs, client guarantees, canonical HTTP binding, and a conformance checklist for server implementations. |
 | [sync_model.qnt](sync_model.qnt) | Formal Quint model of the protocol, simulated in CI (25k random traces, invariants checked every step). Found the GC-floor degrade obligation; flipping PUSH_MODE to "naive" reproduces the lost-write race in seconds. Explained in [formal-model.md](formal-model.md). |
 | [formal-model.md](formal-model.md) | How the model and its verification work, for readers without a formal-methods background: the world it models, the invariants, what the checking found, and what simulation does and does not guarantee. |
-| [server-design.md](server-design.md) | Implemented (packages/server): the wire protocol once, above a SyncStore seam (the server-side sibling of SqliteDriver). Obligations split engine/store; adapters prove themselves via the `@remelondb/server/conformance` suite. |
 | [multi-tab.md](multi-tab.md) | Implemented behind the opt-in `{ shared: true }` driver option: every tab live on one database via a SharedWorker broker with tab-hosted compute, cross-tab write arbitration, and change broadcast into each tab's record cache. The ordering invariant is model-checked in [multi-tab.qnt](multi-tab.qnt). Single-owner takeover remains the default and the fallback. |
 | [releasing.md](releasing.md) | The release runbook: tag-triggered trusted publishing from CI (OIDC, no tokens), per-package publisher configuration, and the first-publish-is-manual rule. |
 | [upstream-study.md](upstream-study.md) | Condensed factual findings from reading upstream WatermelonDB: what to keep, what's broken, with file/line receipts. Basis for the other docs. |
@@ -54,9 +58,10 @@ they track the code and are updated with it.
 | [reference/queries.md](reference/queries.md) | The Q DSL: every operator with its SQL and semantics, joins, LIKE escaping, unsafe escape hatches, compilation. |
 | [reference/react.md](reference/react.md) | The React bindings: provider and manager hooks, `useQuery`/`useQueryCount` with structural subscription keys, shared observations, `select`. |
 | [sync-tour.md](sync-tour.md) | The wire protocol in eight real requests and responses — the hands-on companion to the spec, with a clickable .http version in the example. |
+| [sync-wire-walkthrough.md](sync-wire-walkthrough.md) | The narrated long-form of the protocol, written for a consuming team: every wire concept explained in prose with a rendered PDF alongside. Sits between the tour's eight requests and the spec's normative MUSTs. |
 | [reference/sync.md](reference/sync.md) | Using `synchronize`: wire shapes, conflict semantics, resync, migration pulls, testing a backend. |
 | [sync-triggering.md](sync-triggering.md) | When to call `synchronize`: the trigger set, server-signalled sync and why signals carry no data, battery, and why background sync works on mobile but not on web. |
-| [reference/backend.md](reference/backend.md) | Building a sync backend: the transport/engine/store layers, the Postgres table contract, store and endpoint configuration, retention, conformance. |
+| [reference/backend.md](reference/backend.md) | Building a sync backend: the engine/store obligation split, the Postgres table contract, store and endpoint configuration, retention, and certifying a store against the conformance suite. |
 | [reference/schema.md](reference/schema.md) | Defining tables (Zod-first via `zodTable`, hand-written builders as the alternative), inferred record types, standard columns, reserved names, DDL output, migrations and the no-silent-reset contract. |
 | [reference/records.md](reference/records.md) | `RawRecord`, the `sanitizedRaw` trust boundary and its coercion rules, sync fields (`_status`/`_changed`), ids. |
 | [reference/driver.md](reference/driver.md) | The `SqliteDriver` contract: method obligations, value conventions, batch atomicity, why the seam is async, how to implement and conformance-test a new driver. |

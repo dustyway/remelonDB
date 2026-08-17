@@ -4,7 +4,7 @@ The sync backend engine for
 [remelonDB](https://github.com/dustyway/remelonDB): the
 [wire protocol](../../docs/sync-wire.md) implemented once, above a small
 storage seam — the server-side repetition of the client's core move
-(see [server-design.md](../../docs/server-design.md)).
+(see [reference/backend.md](../../docs/reference/backend.md)).
 
 ```ts
 import { createMemoryStore, createSyncEngine } from '@remelondb/server'

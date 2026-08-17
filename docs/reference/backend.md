@@ -14,6 +14,35 @@ hands-on path is the [backend tutorial](../backend-tutorial.md) — every
 code block there is executed by CI, so this page repeats none of it and
 holds what a tutorial can't: the contract and the corners.
 
+## The engine/store split
+
+Every protocol semantic — cursor encoding, conflict detection,
+per-record rejection, the interleave fast path and its degrade rule —
+lives once in the engine, above a small storage seam (`SyncStore`, the
+server-side sibling of `SqliteDriver`). A store knows rows, revisions,
+and scopes; it knows nothing about cursors, conflicts, or the wire.
+The wire spec ([sync-wire.md](../sync-wire.md)) binds the whole server;
+the seam splits its obligations:
+
+| Obligation | Owner |
+| --- | --- |
+| Consistent snapshot per operation | store (`transaction`) |
+| Commit-ordered revisions | store: revisions assigned so that pushes for one scope commit in revision order (`transaction(scope, 'push', …)` MUST serialize per scope — the advisory-lock obligation) |
+| Cursor encoding, opacity, floor checks | engine (revision-based reference mechanism) |
+| Conflict detection and ordering vs rejection | engine (ownership rejections first — foreign revisions are incomparable to a scope's cursor — then whole-push conflict) |
+| Per-record validation | engine, via per-table `validate`/`appendOnly` + optional `crossValidateChanges` (referential checks over the full change set, deletions included) |
+| Tombstoned-write rejection | engine, via the store's `tombstonedIds` |
+| Storage refusals surfaced as rejections | store: `upsert` may return ids the database itself refused (unique/FK constraints); the engine folds them into `rejected` |
+| Upsert discipline (never touch creation stamps, never resurrect tombstones), tombstoning, retention | store |
+| Interleave computation, the both-or-neither package rule, mandatory degrade below the floor | engine |
+
+The seam is not an ORM adapter: `changedSince` returns wire-ready rows
+(the store owns column mapping), and the engine never constructs
+queries. It is not a transport either: the engine produces
+`SyncHandlers` (`pull`/`push` as plain async functions) that a route
+handler, an RPC layer, or a test calls directly. Scope is a type
+parameter — a user id, a tenant key, whatever partitions the data.
+
 ## The table contract
 
 Each synced table carries four machinery columns next to its columns
@@ -80,12 +109,54 @@ the engine's handlers bind to any HTTP server in a few lines (the
 [example server](../../examples/todo-sync/backend/server.ts) is the
 whole thing).
 
-## Proving it
+## Certifying a backend
 
-Every layer is conformance-tested, and custom pieces should be too:
-`registerServerConformance` from `@remelondb/server/conformance` runs
-the wire spec's checklist against any pull/push handlers — in-process,
-or through real HTTP behind a fetch wrapper. The exported `pulled` and
+The wire spec's checklist ([sync-wire.md §7](../sync-wire.md)) is
+executable: `registerServerConformance` from
+`@remelondb/server/conformance` runs every case against any pull/push
+handlers — in-process, or through real HTTP behind a fetch wrapper.
+Passing it is what "implements the protocol" means.
+
+```ts
+import { registerServerConformance } from '@remelondb/server/conformance'
+
+registerServerConformance({
+  name: 'engine over MyStore',
+  // fresh context per test: clean state, authenticated handlers
+  makeContext: async () => {
+    const engine = createSyncEngine({ store: myStore(), tables })
+    return { handlers: engine.as('user-a'), secondUser: engine.as('user-b') }
+  },
+  fixtures: {
+    tasks: {
+      validRow: () => ({ id: nextId(), name: 'a task', done: false }),
+      mutate: (row) => ({ ...row, name: 'edited' }),
+      invalidRow: () => ({ id: nextId(), name: '', done: false }),
+    },
+  },
+})
+```
+
+Three properties make the suite portable. `makeContext` returns
+handlers, not internals, so it tests exactly what a client experiences
+and can wrap anything from an in-memory store to a full HTTP app.
+Fixtures abstract the schema, so the suite does not care what your
+tables are called. And optional capabilities let cases that need extra
+powers skip visibly instead of being faked:
+
+| Capability | Enables |
+| --- | --- |
+| `secondUser` | scoping cases (10, 14) |
+| `concurrently` | the write-during-a-pull commit-order case (4) |
+| `invalidRow` in a fixture | per-record validation rejection (7) |
+| `appendOnly` | the append-only refusal case (13) |
+| `uniqueColumn` | storage constraint refusals as rejections (14) |
+
+The suite runs against five registrations in this repository — the
+memory store, the reference server, the drizzle store over pglite, the
+NestJS transport, and downstream apps register their production stores
+the same way — so a new obligation added to the checklist binds every
+implementation on its next test run. The exported `pulled` and
 `accepted` helpers narrow protocol results in your own tests.
 
 ## Client side
