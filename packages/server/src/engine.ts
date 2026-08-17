@@ -284,7 +284,12 @@ export function createSyncEngine<Scope>(
 
         for (const entry of parsed) {
           if (entry.rows.length > 0) {
-            await tx.upsert(entry.table, scope, entry.rows)
+            const refused = await tx.upsert(entry.table, scope, entry.rows)
+            if (refused && refused.length > 0) {
+              // storage said no (constraint violation): same lane as
+              // validation refusals — never silent, never a 500
+              ;(rejected[entry.table] ??= []).push(...refused)
+            }
           }
         }
         for (const entry of parsed) {

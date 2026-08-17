@@ -46,8 +46,18 @@ export interface SyncStoreTx<Scope> {
   /**
    * Idempotent upserts, stamped with fresh revisions. MUST NOT touch
    * creation stamps of existing rows and MUST NOT resurrect tombstones.
+   *
+   * May return ids the storage itself refused (a unique or foreign-key
+   * constraint, for example). A refused row must leave no trace, the rest
+   * of the batch must still apply, and the transaction must stay usable —
+   * the engine folds the ids into `rejected`, the same lane as validation
+   * refusals, so a storage refusal is never a thrown 500.
    */
-  upsert(table: string, scope: Scope, rows: readonly WireRow[]): Promise<void>
+  upsert(
+    table: string,
+    scope: Scope,
+    rows: readonly WireRow[],
+  ): Promise<void | readonly string[]>
   /** Tombstone the ids (fresh revisions); unknown ids are a no-op. */
   tombstone(table: string, scope: Scope, ids: readonly string[]): Promise<void>
   /** Oldest revision still fully served (tombstone retention floor). */

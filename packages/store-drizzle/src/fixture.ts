@@ -14,6 +14,16 @@ export const tasks = pgTable('tasks', {
   done: boolean('done').notNull(),
 })
 
+// A third table with a database-enforced unique column: constraint
+// violations must surface as per-record rejections, never thrown.
+export const profiles = pgTable('profiles', {
+  id: text('id').primaryKey(),
+  rev: bigint('rev', { mode: 'number' }).notNull(),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  owner: text('owner').notNull(),
+  handle: text('handle').unique(),
+})
+
 // A second table used only by conformance case 13 (appendOnly).
 export const events = pgTable('events', {
   id: text('id').primaryKey(),
@@ -42,6 +52,13 @@ export const freshDb = async (): Promise<{ client: PGlite; db: DrizzleDb }> => {
       deleted_at timestamptz,
       owner text not null,
       note text not null
+    );
+    create table profiles (
+      id text primary key,
+      rev bigint not null,
+      deleted_at timestamptz,
+      owner text not null,
+      handle text unique
     );
   `)
   return { client, db: drizzle(client) as unknown as DrizzleDb }
