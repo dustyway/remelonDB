@@ -8,8 +8,10 @@ set -euo pipefail
 cd /tmp/WmHarness
 npm start -- --reset-cache > /tmp/remelon-metro.log 2>&1 &
 METRO_PID=$!
+LOGCAT_PID=""
 cleanup() {
   kill "$METRO_PID" 2>/dev/null || true
+  [ -n "$LOGCAT_PID" ] && kill "$LOGCAT_PID" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -30,18 +32,35 @@ adb logcat -c
 adb shell am force-stop com.wmharness
 adb shell am start -n com.wmharness/.MainActivity
 
-set +e
-timeout 10m bash -o pipefail -c \
-  'adb logcat -v brief ReactNativeJS:V "*:S" | tee /tmp/remelon-logcat.log | grep -m1 -E "WMSMOKE: (ALL PASS|FAILED)"'
-WAIT_STATUS=$?
-set -e
-if [ "$WAIT_STATUS" -ne 0 ]; then
-  echo "::error title=Android runtime smoke timed out::No terminal WMSMOKE marker appeared"
-  tail -n 200 /tmp/remelon-logcat.log || true
-  exit 1
-fi
-if ! grep -q 'WMSMOKE: ALL PASS' /tmp/remelon-logcat.log; then
+# The verdict is read from the log FILE, never from a live pipe: after
+# the marker, the *:S filter means logcat may never write again, so a
+# grep on the stream leaves the pipeline hanging with no SIGPIPE until
+# the timeout even though the marker arrived (seen on this lane's
+# second run). stdbuf keeps the file line-buffered.
+: > /tmp/remelon-logcat.log
+stdbuf -oL adb logcat -v brief ReactNativeJS:V "*:S" > /tmp/remelon-logcat.log 2>&1 &
+LOGCAT_PID=$!
+
+verdict=""
+for _ in $(seq 1 600); do
+  if grep -q 'WMSMOKE: ALL PASS' /tmp/remelon-logcat.log; then
+    verdict=pass
+    break
+  fi
+  if grep -q 'WMSMOKE: FAILED' /tmp/remelon-logcat.log; then
+    verdict=fail
+    break
+  fi
+  sleep 1
+done
+
+if [ "$verdict" = "fail" ]; then
   echo "::error title=Android runtime smoke failed::The harness reported WMSMOKE: FAILED"
   tail -n 200 /tmp/remelon-logcat.log
+  exit 1
+fi
+if [ "$verdict" != "pass" ]; then
+  echo "::error title=Android runtime smoke timed out::No terminal WMSMOKE marker appeared"
+  tail -n 200 /tmp/remelon-logcat.log || true
   exit 1
 fi
