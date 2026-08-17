@@ -190,7 +190,7 @@ remelonDB's boundary is an interface called `SqliteDriver`, and it speaks only S
 
 ```ts
 interface SqliteDriver {
-  open(name: string, opts?: DriverOptions): Promise<{ userVersion: number }>
+  open(name: string): Promise<{ userVersion: number }>
   close(): Promise<void>
   query(sql: string, args: SqlArgs): Promise<Row[]>
   execute(sql: string, args: SqlArgs): Promise<void>
@@ -935,7 +935,7 @@ The required core is seven methods:
 
 ```ts
 interface SqliteDriver {
-  open(name: string, opts?: DriverOptions): Promise<{ userVersion: number }>
+  open(name: string): Promise<{ userVersion: number }>
   close(): Promise<void>
   query(sql: string, args: SqlArgs): Promise<Row[]>
   execute(sql: string, args: SqlArgs): Promise<void>
@@ -1008,7 +1008,7 @@ requestSyncTurn?(): Promise<boolean>
 
 with two supporting types, `ExternalChange` (`{ record, type: 'created' | 'updated' | 'destroyed' }`) and `ExternalChangeSet` (a per-table map of them). Chapter 9 is what they coordinate. What belongs *here* is the observation that these members cost nothing to the platforms that ignore them. Core reaches for each only through optional-chaining — `driver.publishChanges?.(...)`, `driver.acquireWorkSlot ? ... : ...`, `requestSyncTurn?.() === false` — so a driver that owns its storage exclusively implements none of them. Only `driver-web`, and only in its shared mode, implements the four; the three synchronous drivers ignore them entirely and are validated by the same conformance suite. An optional member is how the contract admits a capability just one platform needs without taxing the other three.
 
-> **A note on `DriverOptions`.** There is no shared `DriverOptions` type in core; options are per-driver. The only substantial one is `WebSqliteDriverOptions` — `storage`, `takeover`, `onTakenOver`, `shared`, `syncLeaseMs`, `openTimeoutMs`, `createEndpoint` — and every one of those exists because the web is the platform where storage is contended. The other drivers need almost no options because they own their storage outright.
+> **A note on driver options.** `open()` takes only a name; anything a driver needs to configure arrives through its constructor instead, and there is no shared `DriverOptions` type in core. The only substantial one is `WebSqliteDriverOptions` — `storage`, `takeover`, `onTakenOver`, `shared`, `syncLeaseMs`, `openTimeoutMs`, `createEndpoint` — and every one of those exists because the web is the platform where storage is contended. The other drivers need almost no options because they own their storage outright.
 
 ## Checkpoint
 
