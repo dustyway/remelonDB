@@ -190,5 +190,5 @@ client and retry later.
   obligations as testable MUSTs, the conformance checklist.
 - [reference/sync.md](reference/sync.md): wiring `synchronize()` into
   an app.
-- [server-design.md](server-design.md): implementing a backend on the
+- [reference/backend.md](reference/backend.md): implementing a backend on the
   `SyncStore` seam, proven with `@remelondb/server/conformance`.

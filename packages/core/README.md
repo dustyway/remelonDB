@@ -95,7 +95,7 @@ local writes — see
   [the driver contract](https://github.com/dustyway/remelonDB/blob/main/docs/reference/driver.md)
 - Design:
   [layers](https://github.com/dustyway/remelonDB/blob/main/docs/layers.md) ·
-  [queries as data, one engine](https://github.com/dustyway/remelonDB/blob/main/docs/q-dsl-and-one-engine.md) ·
+  [queries as data, one engine](https://github.com/dustyway/remelonDB/blob/main/docs/layers.md) ·
   [sync protocol](https://github.com/dustyway/remelonDB/blob/main/docs/sync-design.md)
 
 ## License and credits

@@ -30,7 +30,7 @@ re-queries rather than matching rows in memory. Query semantics are
 inherited from the engine rather than reimplemented per platform, so they
 cannot drift between platforms.
 
-Both are argued in [q-dsl-and-one-engine.md](q-dsl-and-one-engine.md), with
+Both are argued in [layers.md](layers.md#the-q-dsl-and-the-one-engine-rule), with
 the upstream context in [upstream-study.md](upstream-study.md).
 
 ## The shape
@@ -186,7 +186,7 @@ New to the codebase, in this order:
 
 1. This document.
 2. [tutorial.md](tutorial.md) — the API surface from the outside.
-3. [q-dsl-and-one-engine.md](q-dsl-and-one-engine.md) and
+3. [layers.md](layers.md) and
    [layers.md](layers.md) — the two decisions
    everything else follows from.
 4. The reference guide for whichever layer you are changing.

@@ -24,7 +24,7 @@ rebuilds everything on two principles:
 
 1. **A query is data, not code.** `Q.where('likes', Q.gt(10))` builds a
    serializable description; one pure function compiles it to parameterized
-   SQL. See [docs/q-dsl-and-one-engine.md](docs/q-dsl-and-one-engine.md).
+   SQL. See [docs/layers.md](docs/layers.md#the-q-dsl-and-the-one-engine-rule).
 2. **One engine: SQLite everywhere.** Native (expo-sqlite, or a C++
    TurboModule with bundled sqlite3), web (SQLite-WASM + OPFS in a
    Worker), Node (better-sqlite3).
@@ -153,7 +153,7 @@ packages/
                  protocol semantics over a storage seam; in-memory
                  store included, bring a store adapter for persistence;
                  the wire spec's checklist ships as a runnable suite at
-                 '@remelondb/server/conformance' (docs/server-design.md)
+                 '@remelondb/server/conformance' (docs/reference/backend.md)
   store-drizzle/ @remelondb/store-drizzle — Postgres store adapter via
                  drizzle-orm: config per table, conformance-proven,
                  tombstone gc + scrub (see its README)
@@ -201,7 +201,7 @@ side of the wire. Everything else ships as a core or server subpath
 - **[API reference](https://dustyway.github.io/remelonDB/)** — generated
   from the source on every push (all packages, grouped by task, with
   examples)
-- Design decisions: [engine choice](docs/q-dsl-and-one-engine.md) ·
+- Design decisions: [engine choice](docs/layers.md#the-q-dsl-and-the-one-engine-rule) ·
   [layers](docs/layers.md) ·
   [sync protocol](docs/sync-design.md) ·
   [upstream study](docs/upstream-study.md)
