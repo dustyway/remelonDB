@@ -205,7 +205,7 @@ A driver knows how to run SQL and how to report a version number. It does not kn
 This is why `core` is about five thousand lines and each exclusive-storage driver is about a hundred. The work was *moved*, not eliminated. Every concept that used to be reimplemented per platform is now written once, above the seam. The whole stack, drawn:
 
 ```{=typst}
-#block(width: 100%, breakable: false, inset: 9pt, radius: 3pt, fill: luma(246))[
+#block(width: 100%, breakable: false, inset: 9pt, radius: 3pt, fill: luma(250), stroke: 0.5pt + luma(228))[
   #set text(size: 0.86em)
   #table(
     columns: (9em, 1fr),

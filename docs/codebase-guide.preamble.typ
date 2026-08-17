@@ -9,7 +9,8 @@
 
 // Code: slightly smaller, with a soft background and padding.
 #show raw.where(block: true): it => block(
-  fill: luma(245),
+  fill: luma(250),
+  stroke: 0.5pt + luma(228),
   inset: 8pt,
   radius: 3pt,
   width: 100%,
@@ -17,11 +18,11 @@
   text(size: 0.82em, it),
 )
 #show raw.where(block: false): it => box(
-  fill: luma(243), inset: (x: 2pt), outset: (y: 2pt), radius: 2pt, text(size: 0.9em, it),
+  fill: luma(249), inset: (x: 2pt), outset: (y: 2pt), radius: 2pt, text(size: 0.9em, it),
 )
 
-// Block quotes (the Background asides) get a left rule and a tint.
+// Block quotes (the Background asides) get a left rule and a faint tint.
 #show quote.where(block: true): it => block(
-  fill: luma(248), inset: 10pt, radius: 2pt, width: 100%,
-  stroke: (left: 2pt + luma(180)), it,
+  fill: luma(250), inset: 10pt, radius: 2pt, width: 100%,
+  stroke: (left: 2pt + luma(170)), it,
 )

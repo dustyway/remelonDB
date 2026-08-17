@@ -9,7 +9,8 @@
     "check:tutorial": "node scripts/check-tutorial.mjs",
     "check:readme": "node scripts/check-readme.mjs",
     "check:sync-tour": "node scripts/check-sync-tour.mjs",
-    "check:backend-tutorial": "node scripts/check-backend-tutorial.mjs"
+    "check:backend-tutorial": "node scripts/check-backend-tutorial.mjs",
+    "check:guide": "node scripts/check-codebase-guide.mjs"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.2",
