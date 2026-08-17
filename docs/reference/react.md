@@ -78,7 +78,8 @@ observation and returns a plain number. `useQueryCountResult` exposes the
 same count as `{ data, isLoading, error }`; the two hooks share one
 underlying observation. All accept `null`/`undefined`
 for the not-ready phase: `useQuery(null)` is `{ data: [], isLoading:
-false, error: null }`, `useQueryCount(null)` is `0`.
+false, error: null, isPreviousData: false }`, `useQueryCount(null)`
+is `0`.
 
 ### No dependency arrays: structural identity
 

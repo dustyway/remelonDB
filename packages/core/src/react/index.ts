@@ -70,8 +70,14 @@ function useManager(manager?: DatabaseManager): DatabaseManager {
  */
 export function useDatabaseState(manager?: DatabaseManager): DatabaseManagerState {
   const m = useManager(manager)
+  // stable per manager: a fresh subscribe function every render would
+  // make useSyncExternalStore resubscribe on every render
+  const subscribe = useCallback(
+    (onStoreChange: () => void) => m.subscribe(onStoreChange),
+    [m],
+  )
   return useSyncExternalStore(
-    (onStoreChange) => m.subscribe(onStoreChange),
+    subscribe,
     () => m.state,
     () => m.state,
   )
@@ -85,8 +91,12 @@ export function useDatabaseState(manager?: DatabaseManager): DatabaseManagerStat
  */
 export function useDatabase(manager?: DatabaseManager): Database | null {
   const m = useManager(manager)
+  const subscribe = useCallback(
+    (onStoreChange: () => void) => m.subscribe(onStoreChange),
+    [m],
+  )
   return useSyncExternalStore(
-    (onStoreChange) => m.subscribe(onStoreChange),
+    subscribe,
     () => (m.state.status === 'ready' ? m.database : null),
     () => null,
   )
@@ -253,14 +263,21 @@ export interface UseQueryOptions<M, T> {
   keepPreviousData?: boolean
 }
 
+// The select overload comes FIRST and is spelled out concretely: a
+// literal carrying both options must meet the select signature before
+// the select-less overload, or the select callback loses its
+// contextual type and `(rows) => rows.length` stops inferring M[].
+export function useQuery<M, T>(
+  query: Query<M> | null | undefined,
+  options: {
+    select: (rows: M[]) => T
+    keepPreviousData?: boolean
+  },
+): SelectedResult<T>
 export function useQuery<M>(
   query: Query<M> | null | undefined,
   options?: { keepPreviousData?: boolean },
 ): QueryResult<M>
-export function useQuery<M, T>(
-  query: Query<M> | null | undefined,
-  options: UseQueryOptions<M, T> & { select: (rows: M[]) => T },
-): SelectedResult<T>
 export function useQuery<M, T>(
   query: Query<M> | null | undefined,
   options?: UseQueryOptions<M, T>,
@@ -295,25 +312,36 @@ export function useQuery<M, T>(
   // keepPreviousData retention is deliberately consumer-local: a ref in
   // this hook instance, never the shared store, so one consumer's
   // placeholder rows cannot leak into another consumer of the same key.
-  // Written during render (idempotent, so StrictMode-safe): the ref only
-  // ever caches a committed store snapshot under its own db and key.
+  // The ref is only written in the commit-phase effect below — a render
+  // React abandons must not decide what this consumer retains — so the
+  // render path just reads the last committed entry and re-checks every
+  // guard against the current props.
   const keep = options?.keepPreviousData === true
   const heldRef = useRef<{ db: object; key: string; data: M[] } | null>(null)
-  // Retention is dropped when the option is off or the database is no
-  // longer the one the rows came from. A null query has a null
-  // database, so "query became null" is the same clear: previous rows
-  // never render under another database, or under none.
-  if (!keep || (heldRef.current !== null && heldRef.current.db !== database)) {
-    heldRef.current = null
-  }
+  useEffect(() => {
+    // Retention is dropped when the option is off or the database is
+    // no longer the one the rows came from. A null query has a null
+    // database, so "query became null" is the same clear — and it must
+    // happen here, not just be filtered at render time, or the rows
+    // could resurface when their database comes back later.
+    if (!keep || (heldRef.current !== null && heldRef.current.db !== database)) {
+      heldRef.current = null
+    }
+    if (keep && database && key && !raw.isLoading && raw.error === null) {
+      heldRef.current = { db: database, key, data: raw.data }
+    }
+  })
   const held = heldRef.current
-  if (keep && database && key && !raw.isLoading && raw.error === null) {
-    heldRef.current = { db: database, key, data: raw.data }
-  }
   // Previous rows show while the current key has not succeeded yet —
   // loading, or failed before its first delivery. Success always wins.
+  // The db guard repeats here because the effect clear lands one commit
+  // later than the render that switched databases.
   const previous =
-    held !== null && held.key !== key && (raw.isLoading || raw.error !== null)
+    keep &&
+    held !== null &&
+    held.db === database &&
+    held.key !== key &&
+    (raw.isLoading || raw.error !== null)
       ? held
       : null
 

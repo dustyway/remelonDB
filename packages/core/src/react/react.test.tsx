@@ -425,6 +425,24 @@ describe('useQuery keepPreviousData', () => {
     })
   })
 
+  it('a database switch clears retention even when its db returns later', () => {
+    const db1 = fakeDb()
+    const db2 = fakeDb()
+    const qa = fakeQuery<string>(db1, 'decks', { where: 'a' })
+    const qx = fakeQuery<string>(db2, 'decks', { where: 'x' })
+    const qb = fakeQuery<string>(db1, 'decks', { where: 'b' })
+    const { result, rerender } = keepHook(qa)
+    act(() => qa.emit(['a1']))
+
+    rerender({ q: qx }) // the switch itself must clear, not just hide
+    rerender({ q: qb }) // back on db1: the old rows must not resurface
+    expect(result.current).toMatchObject({
+      data: [],
+      isLoading: true,
+      isPreviousData: false,
+    })
+  })
+
   it('shows no previous rows for the same query key on another database', () => {
     const db1 = fakeDb()
     const db2 = fakeDb()
@@ -511,7 +529,8 @@ describe('useQuery keepPreviousData', () => {
       ({ q }) =>
         useQuery(q.query, {
           keepPreviousData: true,
-          select: (rows: string[]) => rows.length,
+          // deliberately unannotated: contextual typing must infer M[]
+          select: (rows) => rows.length,
         }),
       { initialProps: { q: qa } },
     )
