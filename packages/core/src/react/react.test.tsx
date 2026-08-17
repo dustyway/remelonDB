@@ -632,13 +632,14 @@ describe('useMutation hardening', () => {
   })
 
   it('stable callbacks invoke the newest mutation function after a rerender', async () => {
-    let version = 'v1'
-    const { result, rerender } = renderHook(() =>
-      useMutation(async () => version),
+    // each render's callback captures its own immutable prop, so a stale
+    // closure really would return 'v1' — the test fails without fnRef
+    const { result, rerender } = renderHook(
+      ({ value }: { value: string }) => useMutation(async () => value),
+      { initialProps: { value: 'v1' } },
     )
     const firstMutateAsync = result.current.mutateAsync
-    version = 'v2'
-    rerender()
+    rerender({ value: 'v2' })
     expect(result.current.mutateAsync).toBe(firstMutateAsync)
     await act(async () => {
       await expect(firstMutateAsync()).resolves.toBe('v2')
