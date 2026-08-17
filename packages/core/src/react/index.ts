@@ -360,9 +360,12 @@ export function useMutation<Args extends unknown[], Result>(
   const fnRef = useRef(mutationFn)
   fnRef.current = mutationFn
   // generation guards ownership: bumped by each invocation and by reset,
-  // so stale completions cannot write data/error. mountedRef guards
-  // against state updates after unmount.
+  // so stale completions cannot write data/error. era guards pending:
+  // reset zeroes the counter and starts a new era, so completions from
+  // before the reset must not drain what they no longer belong to.
+  // mountedRef guards against state updates after unmount.
   const generationRef = useRef(0)
+  const eraRef = useRef(0)
   const mountedRef = useRef(true)
   useEffect(() => {
     mountedRef.current = true
@@ -373,6 +376,7 @@ export function useMutation<Args extends unknown[], Result>(
 
   const mutateAsync = useCallback(async (...args: Args): Promise<Result> => {
     const generation = ++generationRef.current
+    const era = eraRef.current
     if (mountedRef.current) {
       setState((s) => ({ ...s, error: null, pendingCount: s.pendingCount + 1 }))
     }
@@ -384,6 +388,7 @@ export function useMutation<Args extends unknown[], Result>(
       }) => { data: Result | undefined; error: unknown },
     ) => {
       if (!mountedRef.current) return
+      if (eraRef.current !== era) return
       setState((s) => ({
         ...(generationRef.current === generation ? apply(s) : s),
         pendingCount: s.pendingCount - 1,
@@ -410,7 +415,8 @@ export function useMutation<Args extends unknown[], Result>(
 
   const reset = useCallback(() => {
     generationRef.current++
-    setState((s) => ({ ...IDLE_MUTATION, pendingCount: s.pendingCount }))
+    eraRef.current++
+    setState(IDLE_MUTATION)
   }, [])
 
   return {

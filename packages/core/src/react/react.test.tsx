@@ -505,7 +505,7 @@ describe('useMutation', () => {
     errors.mockRestore()
   })
 
-  it('works under StrictMode double-invocation', async () => {
+  it('works when rendered under StrictMode', async () => {
     const { result } = renderHook(() => useMutation(async (n: number) => n + 1), {
       wrapper: ({ children }) => createElement(StrictMode, null, children),
     })
@@ -514,5 +514,134 @@ describe('useMutation', () => {
     })
     expect(result.current.data).toBe(2)
     expect(result.current.isPending).toBe(false)
+  })
+})
+
+describe('useMutation hardening', () => {
+  it('reset during flight goes idle immediately and the stale settle is fully inert', async () => {
+    const gate = deferred<string>()
+    const gates = [gate]
+    let call = 0
+    const { result } = renderHook(() => useMutation(() => gates[call++]!.promise))
+    act(() => {
+      result.current.mutate()
+    })
+    expect(result.current.isPending).toBe(true)
+    act(() => {
+      result.current.reset()
+    })
+    // idle NOW, not when the abandoned call settles
+    expect(result.current.isPending).toBe(false)
+    await act(async () => {
+      gate.resolve('abandoned')
+      await gate.promise
+    })
+    expect(result.current.data).toBeUndefined()
+    expect(result.current.error).toBeNull()
+    expect(result.current.isPending).toBe(false)
+
+    // the counter survived the era change: the SAME hook's next call
+    // still pends (a stale decrement would have driven the count to -1
+    // and this increment to 0, reading as not pending)
+    gates.push(deferred<string>())
+    act(() => {
+      result.current.mutate()
+    })
+    expect(result.current.isPending).toBe(true)
+  })
+
+  it('an older failure cannot overwrite a newer success', async () => {
+    const first = deferred<string>()
+    const second = deferred<string>()
+    const gates = [first, second]
+    let call = 0
+    const { result } = renderHook(() =>
+      useMutation(() => gates[call++]!.promise),
+    )
+    act(() => {
+      result.current.mutate()
+    })
+    act(() => {
+      result.current.mutate()
+    })
+    await act(async () => {
+      second.resolve('winner')
+      await second.promise
+    })
+    await act(async () => {
+      first.reject(new Error('stale failure'))
+      await first.promise.catch(() => {})
+    })
+    expect(result.current.data).toBe('winner')
+    expect(result.current.error).toBeNull()
+    expect(result.current.isPending).toBe(false)
+  })
+
+  it('an older success cannot clear a newer failure', async () => {
+    const first = deferred<string>()
+    const second = deferred<string>()
+    const gates = [first, second]
+    let call = 0
+    const boom = new Error('newer failed')
+    const { result } = renderHook(() =>
+      useMutation(() => gates[call++]!.promise),
+    )
+    act(() => {
+      result.current.mutate()
+    })
+    act(() => {
+      result.current.mutate()
+    })
+    await act(async () => {
+      second.reject(boom)
+      await second.promise.catch(() => {})
+    })
+    expect(result.current.error).toBe(boom)
+    await act(async () => {
+      first.resolve('stale success')
+      await first.promise
+    })
+    expect(result.current.error).toBe(boom)
+    expect(result.current.data).toBeUndefined()
+    expect(result.current.isPending).toBe(false)
+  })
+
+  it('each mutateAsync caller receives its own resolution regardless of state ownership', async () => {
+    const first = deferred<string>()
+    const second = deferred<string>()
+    const gates = [first, second]
+    let call = 0
+    const { result } = renderHook(() =>
+      useMutation(() => gates[call++]!.promise),
+    )
+    let p1!: Promise<string>
+    let p2!: Promise<string>
+    act(() => {
+      p1 = result.current.mutateAsync()
+      p2 = result.current.mutateAsync()
+    })
+    await act(async () => {
+      second.resolve('two')
+      first.resolve('one')
+      await Promise.all([p1, p2])
+    })
+    // hook state belongs to the latest call, but each caller got its own value
+    await expect(p1).resolves.toBe('one')
+    await expect(p2).resolves.toBe('two')
+    expect(result.current.data).toBe('two')
+  })
+
+  it('stable callbacks invoke the newest mutation function after a rerender', async () => {
+    let version = 'v1'
+    const { result, rerender } = renderHook(() =>
+      useMutation(async () => version),
+    )
+    const firstMutateAsync = result.current.mutateAsync
+    version = 'v2'
+    rerender()
+    expect(result.current.mutateAsync).toBe(firstMutateAsync)
+    await act(async () => {
+      await expect(firstMutateAsync()).resolves.toBe('v2')
+    })
   })
 })
