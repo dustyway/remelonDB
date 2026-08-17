@@ -30,8 +30,8 @@ second-class platform permanently.
 
 Consequences for implementers and for core:
 
-- Drivers **may** resolve synchronously under the hood (the Node driver
-  does; the future RN JSI driver will). Core must never depend on same-tick
+- Drivers **may** resolve synchronously under the hood (the Node and RN
+  C++ drivers do). Core must never depend on same-tick
   resolution for correctness.
 - If profiling ever shows microtask latency hurting native hot paths, a
   synchronous fast path can be added as an optional driver *capability* —
@@ -143,3 +143,25 @@ drivers run it verbatim.
 | React Native | `@remelondb/driver-rn` | Thin adapter over `expo-sqlite`; the default, and runs in Expo Go with no native build of its own. |
 | React Native (no expo) | `@remelondb/driver-rn-cpp` | Pure C++ TurboModule, bundled sqlite3 amalgamation, prefab JSI linkage. Requires a development build; see its README for when to choose it. |
 | Web | `@remelondb/driver-web` | SQLite-WASM + OPFS SAH pool in a dedicated Worker. Full contract verified against real sqlite-wasm in-process, and OPFS suites run in CI on real Chromium, Firefox, and WebKit. |
+
+## Runtime coverage
+
+The contract is exercised at the platform boundary, not only against
+in-process substitutes:
+
+- Node runs the complete conformance suite directly over
+  `better-sqlite3`.
+- Web runs its OPFS Worker suites in real Chromium, Firefox, and WebKit;
+  real Safari runs the same browser suite on macOS.
+- The RN C++ package is packed into a generated React Native 0.86 app,
+  compiled with the Android NDK, installed on a CI emulator, and invoked
+  through the generated TurboModule. Its runtime harness covers module
+  resolution, open, typed write/read, atomic batch rollback, close/reopen
+  persistence, destroy, a core `Database` round trip, and the shared
+  driver conformance suite.
+
+The Android job separately inspects generated autolinking glue so a
+runtime failure can be distinguished from a package that compiled but
+was never registered. iOS compilation and simulator verification are
+documented in the C++ driver's `e2e/ios-verification.md`; they are not
+currently an automated CI lane.

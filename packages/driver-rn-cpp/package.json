@@ -17,6 +17,7 @@
   "scripts": {
     "fetch-sqlite": "node scripts/fetch-sqlite.mjs",
     "build": "tsdown",
+    "typecheck:e2e": "tsc --noEmit --strict --jsx react-jsx --moduleResolution bundler --module esnext --target es2022 --skipLibCheck e2e/App.tsx e2e/AppReload.tsx e2e/vitest-shim.ts",
     "prepack": "tsdown"
   },
   "peerDependencies": {

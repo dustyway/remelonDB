@@ -7,11 +7,10 @@ reporting to the screen and to logcat.
 
 ## Build the harness
 
-Same recipe as CI's `android-driver` job: pack `core` and `driver-rn`
-as tarballs (rewriting `workspace:*` deps to the tarball paths — the
-conformance suite ships inside core), `npx @react-native-community/cli init WmHarness
---version 0.86.0`, install the tarballs, then copy these four files over
-the app's own:
+CI's `android-driver` job runs this recipe on an Android emulator. It
+packs `core` and `driver-rn-cpp` as tarballs (the conformance suite
+ships inside core), creates a React Native 0.86 `WmHarness`, installs
+the tarballs, and copies these four files over the app's own:
 
 - `App.tsx` — the test runner UI; logs `WMSMOKE:` / `WMCONF:` lines
 - `vitest-shim.ts` — minimal describe/it/expect so the conformance
@@ -30,8 +29,10 @@ adb shell am start -n com.wmharness/.MainActivity
 adb logcat -s ReactNativeJS:* | grep -E "WMSMOKE|WMCONF"
 ```
 
-Expected: every `WMSMOKE: ok` line, `WMCONF: 50 passed, 0 failed`,
-then `WMSMOKE: ALL PASS`.
+Expected: every `WMSMOKE: ok` line, a zero-failure `WMCONF:` summary,
+then `WMSMOKE: ALL PASS`. CI treats `WMSMOKE: FAILED` or ten minutes
+without a terminal marker as a failure and uploads the Metro/logcat
+output for diagnosis.
 
 (iOS twin: [ios-verification.md](ios-verification.md). Note RN ≥ 0.79
 doesn't forward `console.log` to metro/logcat-equivalent on iOS — read

@@ -1745,7 +1745,7 @@ The layers above are only worth as much as their enforcement, so it is worth kno
 - **`example-e2e`**: the todo app end to end in Chromium — two isolated browser contexts, separate OPFS each, against the real sync server, testing propagation both directions, offline writes staying local, and backlog recovery.
 - **`web-browser`**: the driver conformance suite for real in Chromium and Firefox (real Worker, real OPFS, durability across worker termination), plus a Vite smoke test consuming the packed tarball in single-tab and shared two-tab modes.
 - **`web-browser-webkit-safari`** (macOS): WebKit and *real Safari* via `safaridriver`, because Linux WebKit lacks the OPFS APIs entirely.
-- **`android-driver`**: compiles the C++ TurboModule with a real NDK inside a real React Native app and greps the generated autolinking to assert the module is *registered*, not merely compiled.
+- **`android-driver`**: packs the C++ TurboModule into a generated React Native app, compiles it with a real NDK, greps the generated autolinking, then installs it on an Android emulator and runs the smoke plus shared conformance suites through the JavaScript TurboModule runtime. This distinguishes “compiled and linked” from “resolves and executes SQLite on a device.”
 
 And a family of doc-check scripts execute the code blocks in the tutorial, README, sync tour, and backend tutorial against the *real built packages*, so the documentation cannot silently drift from behavior. That last practice is why this guide could trust the docs it cross-referenced — they are executed, not just written.
 

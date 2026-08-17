@@ -1,5 +1,5 @@
 /**
- * Reload-teardown test for @remelondb/driver-rn: the last device-side
+ * Reload-teardown test for @remelondb/driver-rn-cpp: the last device-side
  * open item. Run 1 opens a database, writes, and — with the connection
  * deliberately left open — triggers a dev reload. The reload tears down
  * the React instance and with it the TurboModule; the C++ side must
@@ -14,7 +14,7 @@
  */
 import React, { useEffect, useState } from 'react'
 import { DevSettings, SafeAreaView, StatusBar, StyleSheet, Text } from 'react-native'
-import { RnSqliteDriver } from '@remelondb/driver-rn'
+import { RnSqliteDriver } from '@remelondb/driver-rn-cpp'
 
 type Result = { name: string; ok: boolean; detail?: string }
 

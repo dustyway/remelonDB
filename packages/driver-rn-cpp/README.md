@@ -113,6 +113,12 @@ clang++ -fsyntax-only -std=c++20 -I. -Ivendor -I$RN/ReactCommon/jsi SqliteConnec
 
 ## Open items
 
+Android runtime behavior is automated in CI: the package and core are
+packed into a generated React Native 0.86 app, installed on an emulator,
+and run through the smoke plus shared conformance suites. The harness in
+[`e2e/`](e2e/README.md) covers TurboModule resolution, write/read,
+rollback, close/reopen persistence, destroy, and the core `Database` API.
+
 - [x] iOS: `modulesProvider` registration + pod compiles the amalgamation
       (same C++ core as Android) — verified on an iOS 26.5 simulator per
       [e2e/ios-verification.md](e2e/ios-verification.md): pod install +
