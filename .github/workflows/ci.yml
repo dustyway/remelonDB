@@ -141,9 +141,23 @@ jobs:
       - run: pnpm check:backend-tutorial
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-linux-chromium-${{ hashFiles('pnpm-lock.yaml') }}
       - name: Install Chromium for the Vite smoke test
         # playwright is a driver-web devDependency; resolve it there
-        run: pnpm --filter @remelondb/driver-web exec playwright install chromium --with-deps
+        timeout-minutes: 12
+        run: |
+          install_chromium() {
+            timeout 5m pnpm --filter @remelondb/driver-web exec playwright install chromium --with-deps
+          }
+          install_chromium || {
+            echo "Playwright install failed or timed out; retrying once"
+            sleep 5
+            install_chromium
+          }
       # A real vite build + preview from packed tarballs, driven in a
       # browser: catches dist-only breakage (worker URL rewriting,
       # wasm assets) that vitest's dev pipeline can never see.
@@ -220,7 +234,22 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter example-todo-sync typecheck
       - run: pnpm --filter example-todo-sync-web typecheck
-      - run: pnpm --filter example-todo-sync-web exec playwright install --with-deps chromium
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-linux-chromium-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Install Chromium
+        timeout-minutes: 12
+        run: |
+          install_chromium() {
+            timeout 5m pnpm --filter example-todo-sync-web exec playwright install --with-deps chromium
+          }
+          install_chromium || {
+            echo "Playwright install failed or timed out; retrying once"
+            sleep 5
+            install_chromium
+          }
       - run: pnpm --filter example-todo-sync-web e2e
 
   # The web driver's full conformance suite in real Chromium and Firefox:
@@ -241,7 +270,22 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @remelondb/driver-web exec playwright install --with-deps chromium firefox
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-linux-chromium-firefox-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Install Chromium and Firefox
+        timeout-minutes: 12
+        run: |
+          install_browsers() {
+            timeout 5m pnpm --filter @remelondb/driver-web exec playwright install --with-deps chromium firefox
+          }
+          install_browsers || {
+            echo "Playwright install failed or timed out; retrying once"
+            sleep 5
+            install_browsers
+          }
       - run: pnpm --filter @remelondb/driver-web test:browser
       - run: BROWSER=firefox pnpm --filter @remelondb/driver-web test:browser
       # the packed tarball consumed by a real vite app, single-tab and
@@ -361,26 +405,3 @@ jobs:
           # module is silently absent at runtime
           grep -q "RemelonDriver" \
             /tmp/WmHarness/android/app/build/generated/autolinking/src/main/jni/autolinking.cpp
-
-  browser-tests:
-    name: browser suite (${{ matrix.browser }})
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        # webkit deliberately absent: linux webkit lacks the OPFS
-        # sync-access APIs; the macOS web-browser-webkit-safari job
-        # covers webkit and real safari
-        browser: [chromium, firefox]
-    steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 11
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @remelondb/driver-web exec playwright install ${{ matrix.browser }} --with-deps
-      - run: BROWSER=${{ matrix.browser }} pnpm --filter @remelondb/driver-web test:browser
