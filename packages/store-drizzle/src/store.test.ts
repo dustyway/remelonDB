@@ -49,6 +49,19 @@ registerServerConformance({
         events: { validate: () => true, appendOnly: true },
         profiles: { validate: () => true },
       },
+      // conformance cases 15/16 prove this wiring survives the stack:
+      // reject 'cross-reject' rows as upserts, keystone ids as deletions
+      crossValidateChanges: async (_tx, _scope, changes) => {
+        const tasks = changes['tasks']
+        if (!tasks) return {}
+        const refused = [
+          ...tasks.rows
+            .filter((row) => row['name'] === 'cross-reject')
+            .map((row) => row.id),
+          ...tasks.deleted.filter((id) => id.startsWith('keystone-')),
+        ]
+        return refused.length > 0 ? { tasks: refused } : {}
+      },
     })
     return { handlers: engine.as('scope-a'), secondUser: engine.as('scope-b') }
   },
@@ -69,5 +82,10 @@ registerServerConformance({
   uniqueColumn: {
     table: 'profiles',
     row: (id, value) => ({ id, handle: value }),
+  },
+  crossValidation: {
+    table: 'tasks',
+    rejectedRow: () => ({ id: newId(), name: 'cross-reject', done: false }),
+    undeletableRow: () => ({ id: `keystone-${++counter}`, name: 'a task', done: false }),
   },
 })

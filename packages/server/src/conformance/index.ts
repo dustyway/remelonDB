@@ -86,6 +86,20 @@ export interface ServerConformanceOptions {
     readonly table: string
     readonly row: (id: string, value: string) => WireRow
   }
+  /**
+   * Cross-validation coverage (cases 15 and 16): the registrant mounts
+   * its own `crossValidate`/`crossValidateChanges` hook and declares
+   * rows that hook refuses, so the cases prove the *wiring* — a
+   * transport or adapter that drops hook rejections, or applies a
+   * rejected deletion, fails here. `rejectedRow` must be refused as an
+   * upsert; `undeletableRow` must apply cleanly but have its deletion
+   * refused.
+   */
+  readonly crossValidation?: {
+    readonly table: string
+    readonly rejectedRow: () => WireRow
+    readonly undeletableRow: () => WireRow
+  }
 }
 
 const only = (changes: SyncChanges, table: string) =>
@@ -532,6 +546,61 @@ export function registerServerConformance(
         }),
       )
       expect(recovered.rejected?.[uqTable] ?? []).toEqual([])
+    })
+
+    const crossValidation = options.crossValidation
+    const caseCross = crossValidation ? it : it.skip
+    caseCross('15. a cross-validation refusal is reported in rejected and the row is not applied (needs `crossValidation`)', async () => {
+      const { table: cvTable, rejectedRow } = crossValidation!
+      const { handlers } = await options.makeContext()
+      const bad = rejectedRow()
+
+      const start = pulled(await pullNull(handlers))
+      const result = accepted(
+        await handlers.push({
+          changes: {
+            [cvTable]: { created: [bad], updated: [], deleted: [] },
+          },
+          cursor: start.cursor,
+        }),
+      )
+      expect(result.rejected?.[cvTable] ?? []).toContain(bad.id)
+
+      const state = pulled(await pullNull(handlers))
+      expect(liveIds(state.changes, cvTable)).not.toContain(bad.id)
+    })
+
+    caseCross('16. a cross-validation refusal of a deletion keeps the row alive (needs `crossValidation`)', async () => {
+      const { table: cvTable, undeletableRow } = crossValidation!
+      const { handlers } = await options.makeContext()
+      const keystone = undeletableRow()
+
+      const start = pulled(await pullNull(handlers))
+      const seeded = accepted(
+        await handlers.push({
+          changes: {
+            [cvTable]: { created: [keystone], updated: [], deleted: [] },
+          },
+          cursor: start.cursor,
+        }),
+      )
+      expect(seeded.rejected?.[cvTable] ?? []).not.toContain(keystone.id)
+
+      // the deletion is refused: reported by id, and the tombstone must
+      // NOT be applied — a transport that reports but still deletes
+      // diverges every other device
+      const denied = accepted(
+        await handlers.push({
+          changes: {
+            [cvTable]: { created: [], updated: [], deleted: [keystone.id] },
+          },
+          cursor: seeded.cursor!,
+        }),
+      )
+      expect(denied.rejected?.[cvTable] ?? []).toContain(keystone.id)
+
+      const state = pulled(await pullNull(handlers))
+      expect(liveIds(state.changes, cvTable)).toContain(keystone.id)
     })
   })
 }

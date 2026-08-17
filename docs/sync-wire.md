@@ -229,6 +229,13 @@ For a server test suite; each item is one scenario or property test.
     trace, the rest of the push applies, and the same id retried with
     an acceptable value succeeds. Opt-in (`uniqueColumn`), since it
     needs a backend whose storage can refuse a row on its own.
+15. A cross-validation refusal of a row is reported in `rejected` and
+    the row is not applied. Opt-in (`crossValidation`): the backend
+    mounts its own hook, so the case proves the hook wiring survives
+    the registrant's whole stack.
+16. A cross-validation refusal of a *deletion* is reported by id and
+    the row stays alive — a server that reports the refusal but applies
+    the tombstone anyway diverges every other device. Same opt-in.
 
 ## Versioning
 
