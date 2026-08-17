@@ -602,5 +602,82 @@ export function registerServerConformance(
       const state = pulled(await pullNull(handlers))
       expect(liveIds(state.changes, cvTable)).toContain(keystone.id)
     })
+
+    it('17. an id in deleted supersedes its created/updated content in the same push', async () => {
+      const { handlers } = await options.makeContext()
+      const row = fixture.validRow()
+      const start = pulled(await pullNull(handlers))
+      const seeded = accepted(
+        await handlers.push({ changes: changesWith([row]), cursor: start.cursor }),
+      )
+
+      // updated + deleted for a live id: the deletion wins, the content
+      // statement is never applied, and nothing is rejected
+      const both = accepted(
+        await handlers.push({
+          changes: changesWith([fixture.mutate(row)], [row.id], true),
+          cursor: seeded.cursor ?? start.cursor,
+        }),
+      )
+      expect(both.rejected?.[table] ?? []).toEqual([])
+      const afterBoth = pulled(await pullNull(handlers))
+      expect(liveIds(afterBoth.changes, table)).not.toContain(row.id)
+
+      // created + deleted for an unknown id nets to nothing
+      const ghost = fixture.validRow()
+      const netted = accepted(
+        await handlers.push({
+          changes: changesWith([ghost], [ghost.id]),
+          cursor: afterBoth.cursor,
+        }),
+      )
+      expect(netted.rejected?.[table] ?? []).toEqual([])
+      const state = pulled(await pullNull(handlers))
+      expect(liveIds(state.changes, table)).not.toContain(ghost.id)
+    })
+
+    const case18 = crossValidation ? it : it.skip
+    case18('18. a refused deletion of a duplicated id rejects the id and keeps the pre-push content (needs `crossValidation`)', async () => {
+      const { table: cvTable, undeletableRow } = crossValidation!
+      const { handlers } = await options.makeContext()
+      const keystone = undeletableRow()
+      const cvChanges = (
+        rows: WireRow[],
+        deleted: string[] = [],
+      ): SyncChanges => ({
+        [cvTable]: { created: [], updated: rows, deleted },
+      })
+
+      const start = pulled(await pullNull(handlers))
+      const seeded = accepted(
+        await handlers.push({ changes: cvChanges([keystone]), cursor: start.cursor }),
+      )
+      expect(seeded.rejected?.[cvTable] ?? []).not.toContain(keystone.id)
+
+      // an update AND a deletion for the keystone: the deletion is the
+      // surviving statement, the hook refuses it, so the id is rejected
+      // and NEITHER effect lands — the row keeps its pre-push content
+      const mutated = { ...keystone, ...{} } as WireRow
+      for (const key of Object.keys(mutated)) {
+        if (key !== 'id' && typeof mutated[key] === 'string') {
+          mutated[key] = `${String(mutated[key])} (rewritten)`
+          break
+        }
+      }
+      const denied = accepted(
+        await handlers.push({
+          changes: cvChanges([mutated], [keystone.id]),
+          cursor: seeded.cursor!,
+        }),
+      )
+      expect(denied.rejected?.[cvTable] ?? []).toContain(keystone.id)
+
+      const state = pulled(await pullNull(handlers))
+      const stored = [
+        ...only(state.changes, cvTable).created,
+        ...only(state.changes, cvTable).updated,
+      ].find((r) => String(r['id']) === keystone.id)
+      expect(stored).toEqual(keystone)
+    })
   })
 }
