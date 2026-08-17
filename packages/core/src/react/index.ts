@@ -330,7 +330,7 @@ export function useQuery<M, T>(
     if (keep && database && key && !raw.isLoading && raw.error === null) {
       heldRef.current = { db: database, key, data: raw.data }
     }
-  })
+  }, [keep, database, key, raw])
   const held = heldRef.current
   // Previous rows show while the current key has not succeeded yet —
   // loading, or failed before its first delivery. Success always wins.
