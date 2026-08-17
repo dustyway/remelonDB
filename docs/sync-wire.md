@@ -223,6 +223,12 @@ For a server test suite; each item is one scenario or property test.
     must be declared through the backend's *own* registration, which is
     what catches a transport that drops engine config on the way to its
     endpoints.
+14. A refusal originating in *storage itself* — a unique or foreign-key
+    constraint the database enforces — is named in `rejected` like any
+    other refusal, never a thrown error: the refused row leaves no
+    trace, the rest of the push applies, and the same id retried with
+    an acceptable value succeeds. Opt-in (`uniqueColumn`), since it
+    needs a backend whose storage can refuse a row on its own.
 
 ## Versioning
 
