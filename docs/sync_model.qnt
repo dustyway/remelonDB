@@ -24,6 +24,9 @@
 //                    finds a violating trace in seconds — the reason
 //                    sync-wire.md makes cursor+changes a package
 //   - lost push responses (server applied, client never heard)
+//   - storage refusals: the apply stage itself may refuse content rows
+//     (unique/FK constraints surfaced by upsert); they join the
+//     response's rejected list and the rest of the batch commits
 //   - tombstone GC with a floor; replacement sync (resyncRequired)
 //
 // Simplifications: one synced user, fixed row ids, a push batch shares
@@ -47,6 +50,17 @@ module sync_model {
   // silent" a load-bearing rule rather than a stylistic one, the same
   // way PUSH_MODE = "naive" makes the interleave rule load-bearing.
   pure val SILENT_DROP = false
+  // When true, a refused id's same-push deletion still applies — the
+  // engine bug the deleted-supersedes rule fixed: content and a
+  // deletion for one id travelled as separate statements, so a refusal
+  // of the content half (validation, append-only, a storage
+  // constraint) left the deletion live while the response named the id
+  // rejected. The model's client keeps one statement per id, so the
+  // leak attaches directly to refused deletions; the observable fault
+  // is identical — an id named in `rejected` has an effect applied
+  // anyway. Flipping this on must break rejectedNoEffect: the
+  // deleted-supersedes rule (sync-wire.md §1) is load-bearing.
+  pure val DELETE_LEAK = false
   pure val NO_VAL = 0
 
   pure val DIRTY_STATUSES = Set("created", "updated", "deleted")
@@ -59,6 +73,14 @@ module sync_model {
   var gcFloor: int
   var cRows: str -> (str -> CRow)
   var cursor: str -> int
+  // ghost state for rejectedNoEffect: the last push's rejected list
+  // and the server rows as they stood before that push. Every other
+  // action clears the list, so the invariant bites exactly on the
+  // post-push state. Needed because rejected ids stay dirty client-
+  // side and dirty rows are exempt from the agreement invariants — a
+  // half-applied rejection is invisible without it.
+  var lastRejected: Set[str]
+  var lastBefore: str -> SRow
 
   def dirty(c: str): Set[str] =
     IDS.filter(id => DIRTY_STATUSES.contains(cRows.get(c).get(id).status))
@@ -69,6 +91,8 @@ module sync_model {
     gcFloor' = 0,
     cRows' = CLIENTS.mapBy(c => IDS.mapBy(id => { value: NO_VAL, status: "none" })),
     cursor' = CLIENTS.mapBy(c => 0),
+    lastRejected' = Set(),
+    lastBefore' = IDS.mapBy(id => { present: false, del: false, value: NO_VAL, rev: 0 }),
   }
 
   // ----- local offline writes: _status bookkeeping, the db is the queue
@@ -82,6 +106,7 @@ module sync_model {
       cRows' = cRows.setBy(c, m => m.set(id, { value: v, status: "created" })),
       cursor' = cursor,
       sRows' = sRows, sRev' = sRev, gcFloor' = gcFloor,
+      lastRejected' = Set(), lastBefore' = lastBefore,
     }
   }
 
@@ -97,6 +122,7 @@ module sync_model {
       })),
       cursor' = cursor,
       sRows' = sRows, sRev' = sRev, gcFloor' = gcFloor,
+      lastRejected' = Set(), lastBefore' = lastBefore,
     }
   }
 
@@ -108,6 +134,7 @@ module sync_model {
       cRows' = cRows.setBy(c, m => m.setBy(id, r => { value: r.value, status: "deleted" })),
       cursor' = cursor,
       sRows' = sRows, sRev' = sRev, gcFloor' = gcFloor,
+      lastRejected' = Set(), lastBefore' = lastBefore,
     }
   }
 
@@ -129,6 +156,7 @@ module sync_model {
       cRows' = cRows.set(c, IDS.mapBy(id => pullRow(c, id))),
       cursor' = cursor.set(c, sRev),
       sRows' = sRows, sRev' = sRev, gcFloor' = gcFloor,
+      lastRejected' = Set(), lastBefore' = lastBefore,
     }
   }
 
@@ -143,9 +171,12 @@ module sync_model {
       not(sRows.get(id).present and sRows.get(id).rev > cursor.get(c))),
   }
 
-  def serverAfterPush(c: str, accepted: Set[str]): str -> SRow =
+  // `leaked` is only ever non-empty under DELETE_LEAK: refused ids
+  // whose deletion applies anyway (they all hold status "deleted", so
+  // they take the tombstone branch).
+  def serverAfterPush(c: str, accepted: Set[str], leaked: Set[str]): str -> SRow =
     IDS.mapBy(id =>
-      if (accepted.contains(id))
+      if (accepted.contains(id) or leaked.contains(id))
         if (cRows.get(c).get(id).status == "deleted")
           { present: true, del: true, value: sRows.get(id).value, rev: sRev + 1 }
         else
@@ -183,34 +214,54 @@ module sync_model {
       else l
     })
 
-  // response received; server may have rejected any subset, up to the
-  // whole push. A fully-rejected push commits nothing, so it MUST NOT
+  // response received; rejections come from two stages. The engine
+  // rejects before apply (validation, ownership, tombstoned ids,
+  // cross-validation) and may name any statement; storage refuses
+  // DURING apply (a unique/FK constraint surfaced by the upsert) and
+  // only ever sees content rows — deletions are tombstone writes, not
+  // upserts. Both stages land in the response's `rejected` list,
+  // indistinguishable to the client, and the rest of the batch
+  // commits. A fully-rejected push commits nothing, so it MUST NOT
   // mint a revision — its fast-path response identifies the current
   // snapshot instead.
   //
-  // `reported` is what the response names as rejected, `dropped` is what
+  // `named` is what the response reports as rejected, `dropped` is what
   // the server additionally failed to apply without saying so. They are
   // equal unless SILENT_DROP is on: applying and reporting are one
   // decision, and that identity is the property under test.
   action pushAccepted = {
     nondet c = oneOf(CLIENTS)
     nondet reported = oneOf(dirty(c).powerset())
-    nondet dropped = oneOf(dirty(c).exclude(reported).powerset())
-    val unapplied = if (SILENT_DROP) reported.union(dropped) else reported
+    nondet storageRefused = oneOf(
+      dirty(c)
+        .filter(id => cRows.get(c).get(id).status != "deleted")
+        .exclude(reported)
+        .powerset())
+    nondet dropped = oneOf(
+      dirty(c).exclude(reported).exclude(storageRefused).powerset())
+    val named = reported.union(storageRefused)
+    val unapplied = if (SILENT_DROP) named.union(dropped) else named
+    val leaked =
+      if (DELETE_LEAK)
+        named.filter(id => cRows.get(c).get(id).status == "deleted")
+      else Set()
+    val committed = dirty(c).exclude(unapplied).union(leaked)
     all {
       pushGuard(c),
-      sRows' = serverAfterPush(c, dirty(c).exclude(unapplied)),
-      sRev' = if (unapplied == dirty(c)) sRev else sRev + 1,
-      // the client trusts the response: everything not *reported*
+      sRows' = serverAfterPush(c, dirty(c).exclude(unapplied), leaked),
+      sRev' = if (committed == Set()) sRev else sRev + 1,
+      // the client trusts the response: everything not *named*
       // rejected flips to synced, silently dropped rows included
-      cRows' = cRows.set(c, clientAfterPush(c, dirty(c).exclude(reported))),
+      cRows' = cRows.set(c, clientAfterPush(c, dirty(c).exclude(named))),
       cursor' = {
-        val snapshot = if (unapplied == dirty(c)) sRev else sRev + 1
+        val snapshot = if (committed == Set()) sRev else sRev + 1
         if (PUSH_MODE == "naive") cursor.set(c, snapshot)
         else if (fullPathOk(c)) cursor.set(c, snapshot)
         else cursor // degraded response: cursor null, keep the old one
       },
       gcFloor' = gcFloor,
+      lastRejected' = named,
+      lastBefore' = sRows,
     }
   }
 
@@ -223,11 +274,15 @@ module sync_model {
     all {
       pushGuard(c),
       rejected != dirty(c),
-      sRows' = serverAfterPush(c, dirty(c).exclude(rejected)),
+      sRows' = serverAfterPush(c, dirty(c).exclude(rejected), Set()),
       sRev' = sRev + 1,
       cRows' = cRows,
       cursor' = cursor,
       gcFloor' = gcFloor,
+      // no response reached the client, but internally refused ids
+      // must equally leave no trace — same property, response or not
+      lastRejected' = rejected,
+      lastBefore' = sRows,
     }
   }
 
@@ -246,6 +301,7 @@ module sync_model {
       }),
       gcFloor' = g,
       sRev' = sRev, cRows' = cRows, cursor' = cursor,
+      lastRejected' = Set(), lastBefore' = lastBefore,
     }
   }
 
@@ -263,6 +319,7 @@ module sync_model {
       })),
       cursor' = cursor.set(c, sRev),
       sRows' = sRows, sRev' = sRev, gcFloor' = gcFloor,
+      lastRejected' = Set(), lastBefore' = lastBefore,
     }
   }
 
@@ -300,5 +357,16 @@ module sync_model {
           (sRows.get(id).present and not(sRows.get(id).del))
             iff (cRows.get(c).get(id).status == "synced")))
 
-  val allInvariants = and { cursorBound, perRowAgreement, fullAgreement }
+  // The rejected list is a guarantee, not a mood: an id a push named
+  // in `rejected` holds exactly the server state it held before that
+  // push — no half of its effect applies (sync-wire.md §1 terminal-
+  // statement rule, §3 rejected records). SILENT_DROP's mirror image:
+  // that fault applies less than the response claims; this catches
+  // applying more. DELETE_LEAK = true violates it within seconds.
+  val rejectedNoEffect =
+    lastRejected.forall(id => sRows.get(id) == lastBefore.get(id))
+
+  val allInvariants = and {
+    cursorBound, perRowAgreement, fullAgreement, rejectedNoEffect,
+  }
 }

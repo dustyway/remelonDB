@@ -73,6 +73,12 @@ What it does include is the hostile stuff:
   any subset of a push, including all of it. A fully-rejected push
   commits nothing and must not mint a revision; rejected rows stay
   dirty client-side.
+- **Storage refusals during apply**: beyond the engine's pre-apply
+  rejections, the apply stage itself may refuse rows (a unique or
+  foreign-key constraint surfaced by the upsert — wire checklist
+  item 14). The split is structural: storage only ever sees content
+  rows, never deletions, and both stages merge into one `rejected`
+  list the client cannot tell apart.
 - **Id reuse**: a client may create a record under an id the server
   already knows — live, tombstoned, or garbage-collected — covering
   the delete-then-recreate corner next to where the GC-floor bug was
@@ -83,10 +89,14 @@ What it does include is the hostile stuff:
   where the interesting results live.
 - **Whether refusals are visible** (`SILENT_DROP`), a fault switch: a
   server that applies less than it reports as accepted.
+- **Whether a rejected id can leak an effect** (`DELETE_LEAK`), the
+  opposite fault switch: a server that applies *more* than it reports —
+  a refused id's same-push deletion lands anyway. This is the engine
+  bug the deleted-supersedes rule fixed (wire spec §1).
 
 ## What "correct" means: the invariants
 
-Three properties, checked after every step of every explored trace:
+Four properties, checked after every step of every explored trace:
 
 - `cursorBound` — a client's cursor never runs ahead of the server's
   revision. A sanity floor.
@@ -98,6 +108,11 @@ Three properties, checked after every step of every explored trace:
 - `fullAgreement` — a client that is fully caught up (cursor at the
   server's revision) with nothing left to push mirrors the server
   exactly, row for row.
+- `rejectedNoEffect` — the rejected list is a guarantee: an id a push
+  named in `rejected` holds exactly the server state it held before
+  that push, never half of its effect. Checked through two ghost
+  variables remembering the last push's rejected list and the pre-push
+  server rows.
 
 ## What the checking found
 
@@ -122,6 +137,23 @@ the cursor advances past the revision, and no later pull mentions the
 row again, so the divergence is permanent. This is the class three
 shipped bugs belonged to (releases 0.1.3 and 0.1.5); the model now
 holds the reason they were bugs, not just the fixes.
+
+**Storage refusals and the rejection guarantee — checked, not argued.**
+Wire checklist item 14 lets storage itself refuse rows mid-apply
+(unique/FK constraints), with the rest of the batch committing. Whether
+that interacts with the invariants had been argued but never checked;
+the model now draws storage refusals as a separate nondeterministic
+stage (content rows only, merged into the same `rejected` list) and all
+invariants hold across 25,000 traces. The checking also exposed a blind
+spot: the three original invariants exempt dirty rows, and rejected
+rows stay dirty, so *no existing property could see a half-applied
+rejection*. With `DELETE_LEAK = true` — the engine bug the
+deleted-supersedes rule fixed (§1), where a refused id's same-push
+deletion applied anyway — the original three invariants stay green
+while the new `rejectedNoEffect` falls in milliseconds. The invariant
+is the model-level statement of "a rejected id leaves no effect", and
+the flag keeps the bug reproducible the way `PUSH_MODE = "naive"`
+keeps the lost-write race.
 
 **The GC-floor obligation — discovered by the model.** The fast path
 (server answers a push with cursor + interleave) is only lawful when
@@ -198,6 +230,7 @@ Then open the file, change `PUSH_MODE` to `"naive"`, run the same
 command, and read the counterexample trace it prints: a
 step-by-step reenactment of the lost-write race, ending in the state
 the invariant forbids. `SILENT_DROP = true` does the same for the
-phantom-record fault. Changing the protocol? Model the change here
+phantom-record fault, and `DELETE_LEAK = true` for the half-applied
+rejection (a deletion landing for an id the response named rejected). Changing the protocol? Model the change here
 first — an invariant violation at this stage costs minutes instead of
 a corrupted database in the field.
