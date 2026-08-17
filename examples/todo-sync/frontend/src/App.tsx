@@ -4,6 +4,12 @@ import { useMutation, useQuery } from '@remelondb/core/react'
 import { TodoModel } from 'example-todo-sync/schema'
 import { getSyncNote, getSyncStatus, runSync, subscribeSyncStatus } from './sync'
 
+type WriteAction =
+  | { type: 'add'; text: string }
+  | { type: 'toggle'; todo: TodoModel }
+  | { type: 'remove'; todo: TodoModel }
+  | { type: 'edit'; id: string; text: string }
+
 export function App({ db }: { db: Database }) {
   const [search, setSearch] = useState('')
   const term = search.trim()
@@ -34,23 +40,25 @@ export function App({ db }: { db: Database }) {
     return () => clearInterval(timer)
   }, [db])
 
-  // Writes go through useMutation: handlers call .mutate() and stay
-  // floating-safe by construction; a failure lands in .error instead
-  // of an unhandled rejection.
-  const addTodo = useMutation(async (value: string) => {
-    await db.write(() => db.get(TodoModel).create({ text: value, done: false }))
-    void runSync(db)
-  })
-  const toggleTodo = useMutation(async (todo: TodoModel) => {
-    await db.write(() => db.get(TodoModel).update(todo.id, { done: !todo.done }))
-    void runSync(db)
-  })
-  const removeTodo = useMutation(async (todo: TodoModel) => {
-    await db.write(() => db.get(TodoModel).markAsDeleted(todo.id))
-    void runSync(db)
-  })
-  const editTodo = useMutation(async (id: string, value: string) => {
-    await db.write(() => db.get(TodoModel).update(id, { text: value }))
+  // One mutation owns every write, so the hook's ownership rule — the
+  // latest invocation owns `error` — is exactly the banner's rule: a
+  // newer success clears an older failure. Separate per-action hooks
+  // would each hold a stale error until their own next call.
+  const write = useMutation(async (action: WriteAction) => {
+    await db.write(() => {
+      switch (action.type) {
+        case 'add':
+          return db.get(TodoModel).create({ text: action.text, done: false })
+        case 'toggle':
+          return db
+            .get(TodoModel)
+            .update(action.todo.id, { done: !action.todo.done })
+        case 'remove':
+          return db.get(TodoModel).markAsDeleted(action.todo.id)
+        case 'edit':
+          return db.get(TodoModel).update(action.id, { text: action.text })
+      }
+    })
     void runSync(db)
   })
 
@@ -61,23 +69,18 @@ export function App({ db }: { db: Database }) {
     const trimmed = text.trim()
     if (!trimmed) return
     try {
-      await addTodo.mutateAsync(trimmed)
+      await write.mutateAsync({ type: 'add', text: trimmed })
       setText('')
     } catch {
-      // the failure is already in addTodo.error
+      // the failure is already in write.error
     }
   }
-
-  // one banner for every write path; production code would surface
-  // each error where its action happened
-  const writeError =
-    addTodo.error ?? toggleTodo.error ?? removeTodo.error ?? editTodo.error
 
   const commitEdit = (id: string, draft: string) => {
     setEditing(null)
     const trimmed = draft.trim()
     if (!trimmed) return
-    editTodo.mutate(id, trimmed)
+    write.mutate({ type: 'edit', id, text: trimmed })
   }
 
   return (
@@ -95,13 +98,13 @@ export function App({ db }: { db: Database }) {
           placeholder="What needs doing?"
           aria-label="New todo"
         />
-        <button type="submit" disabled={addTodo.isPending}>
+        <button type="submit" disabled={write.isPending}>
           Add
         </button>
       </form>
-      {writeError != null && (
+      {write.error != null && (
         <p id="write-error" role="alert">
-          write failed: {String(writeError)}
+          write failed: {String(write.error)}
         </p>
       )}
       <input
@@ -115,7 +118,7 @@ export function App({ db }: { db: Database }) {
           <li
             key={todo.id}
             className={todo.done ? 'done' : ''}
-            onClick={() => toggleTodo.mutate(todo)}
+            onClick={() => write.mutate({ type: 'toggle', todo })}
           >
             {editing === todo.id ? (
               <input
@@ -150,7 +153,7 @@ export function App({ db }: { db: Database }) {
                     `Are you sure you want to delete ${todo.text}? It will be gone for good`,
                   )
                 ) {
-                  removeTodo.mutate(todo)
+                  write.mutate({ type: 'remove', todo })
                 }
               }}
             >

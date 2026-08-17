@@ -21,6 +21,12 @@ import {
 } from './src/sync'
 import { theme } from './theme'
 
+type WriteAction =
+  | { type: 'add'; text: string }
+  | { type: 'toggle'; todo: TodoModel }
+  | { type: 'remove'; todo: TodoModel }
+  | { type: 'edit'; id: string; text: string }
+
 export default function App() {
   const { status, error } = useDatabaseState(manager)
   useEffect(() => {
@@ -62,25 +68,25 @@ function Todos({ db }: { db: Database }) {
     return () => clearInterval(timer)
   }, [db])
 
-  // Writes go through useMutation: press handlers call .mutate() and
-  // stay floating-safe; a failure lands in .error instead of an
-  // unhandled rejection.
-  const addTodo = useMutation(async (value: string) => {
-    await db.write(() => db.get(TodoModel).create({ text: value, done: false }))
-    void runSync(db)
-  })
-  const toggleTodo = useMutation(async (todo: TodoModel) => {
-    await db.write(() =>
-      db.get(TodoModel).update(todo.id, { done: !todo.done }),
-    )
-    void runSync(db)
-  })
-  const removeTodo = useMutation(async (todo: TodoModel) => {
-    await db.write(() => db.get(TodoModel).markAsDeleted(todo.id))
-    void runSync(db)
-  })
-  const editTodo = useMutation(async (todo: TodoModel, newText: string) => {
-    await db.write(() => db.get(TodoModel).update(todo.id, { text: newText }))
+  // One mutation owns every write, so the hook's ownership rule — the
+  // latest invocation owns `error` — is exactly the banner's rule: a
+  // newer success clears an older failure. Separate per-action hooks
+  // would each hold a stale error until their own next call.
+  const write = useMutation(async (action: WriteAction) => {
+    await db.write(() => {
+      switch (action.type) {
+        case 'add':
+          return db.get(TodoModel).create({ text: action.text, done: false })
+        case 'toggle':
+          return db
+            .get(TodoModel)
+            .update(action.todo.id, { done: !action.todo.done })
+        case 'remove':
+          return db.get(TodoModel).markAsDeleted(action.todo.id)
+        case 'edit':
+          return db.get(TodoModel).update(action.id, { text: action.text })
+      }
+    })
     void runSync(db)
   })
 
@@ -90,17 +96,12 @@ function Todos({ db }: { db: Database }) {
     const trimmed = text.trim()
     if (!trimmed) return
     try {
-      await addTodo.mutateAsync(trimmed)
+      await write.mutateAsync({ type: 'add', text: trimmed })
       setText('')
     } catch {
-      // the failure is already in addTodo.error
+      // the failure is already in write.error
     }
   }
-
-  // one banner for every write path; production code would surface
-  // each error where its action happened
-  const writeError =
-    addTodo.error ?? toggleTodo.error ?? removeTodo.error ?? editTodo.error
 
   return (
     <>
@@ -110,8 +111,8 @@ function Todos({ db }: { db: Database }) {
         {todos.length} todo{todos.length === 1 ? '' : 's'} · {syncStatus}
       </Text>
       {syncNote && <Text style={styles.note}>{syncNote}</Text>}
-      {writeError != null && (
-        <Text style={styles.error}>write failed: {String(writeError)}</Text>
+      {write.error != null && (
+        <Text style={styles.error}>write failed: {String(write.error)}</Text>
       )}
       <View style={styles.row}>
         <TextInput
@@ -124,7 +125,7 @@ function Todos({ db }: { db: Database }) {
         <Pressable
           style={styles.button}
           onPress={() => void add()}
-          disabled={addTodo.isPending}
+          disabled={write.isPending}
         >
           <Text style={styles.buttonText}>Add</Text>
         </Pressable>
@@ -136,9 +137,11 @@ function Todos({ db }: { db: Database }) {
         renderItem={({ item }) => (
           <TodoItem
             todo={item}
-            onToggle={() => toggleTodo.mutate(item)}
-            onDelete={() => removeTodo.mutate(item)}
-            onEdit={(newText) => editTodo.mutate(item, newText)}
+            onToggle={() => write.mutate({ type: 'toggle', todo: item })}
+            onDelete={() => write.mutate({ type: 'remove', todo: item })}
+            onEdit={(newText) =>
+              write.mutate({ type: 'edit', id: item.id, text: newText })
+            }
           />
         )}
       />
