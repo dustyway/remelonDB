@@ -99,6 +99,12 @@ export interface QueryResult<M> {
   readonly data: M[]
   readonly isLoading: boolean
   readonly error: Error | null
+  /**
+   * True while `keepPreviousData` is showing the previous query's rows
+   * because the current query has not delivered yet. Always false
+   * without the option.
+   */
+  readonly isPreviousData: boolean
 }
 
 export interface QueryCountResult {
@@ -139,8 +145,18 @@ function createStore<T>(
   }
 }
 
-const LOADING: QueryResult<never> = { data: [], isLoading: true, error: null }
-const NO_QUERY: QueryResult<never> = { data: [], isLoading: false, error: null }
+const LOADING: QueryResult<never> = {
+  data: [],
+  isLoading: true,
+  error: null,
+  isPreviousData: false,
+}
+const NO_QUERY: QueryResult<never> = {
+  data: [],
+  isLoading: false,
+  error: null,
+  isPreviousData: false,
+}
 const noStore = {
   subscribe: (_: () => void): Unsubscribe => () => {},
   snapshot: () => NO_QUERY,
@@ -202,27 +218,52 @@ export interface SelectedResult<T> {
   readonly data: T
   readonly isLoading: boolean
   readonly error: Error | null
+  /** See {@link QueryResult.isPreviousData}. */
+  readonly isPreviousData: boolean
+}
+
+export interface UseQueryOptions<M, T> {
+  /**
+   * Derive the rendered value from the rows. Runs when the rows
+   * change (per consumer, so different components can select
+   * differently from one shared subscription); must be pure.
+   * Changing the function recomputes the selected value without
+   * restarting the shared query observation.
+   */
+  select?: (rows: M[]) => T
+  /**
+   * When the query's structure changes (a new search term, another
+   * page), keep rendering the previous query's rows until the new one
+   * delivers, instead of dropping to an empty `isLoading` state. The
+   * transition is visible as `isPreviousData: true`; `isLoading` stays
+   * reserved for having nothing renderable. An error from the new
+   * query surfaces immediately, with the previous rows still rendered.
+   *
+   * Retention is strictly per consumer: the previous rows never enter
+   * the shared query store, so another component reaching the same
+   * query never sees them. Retained rows are dropped the moment the
+   * database object changes or the query becomes null.
+   *
+   * For a periodically re-parameterized query over a bounded row set
+   * (a due-by-now clause), prefer a stable query plus `select`: it
+   * recomputes locally instead of restarting the observation on every
+   * tick. This option is for queries that must change — search,
+   * pagination — where the row set can't be pulled whole.
+   */
+  keepPreviousData?: boolean
 }
 
 export function useQuery<M>(
   query: Query<M> | null | undefined,
+  options?: { keepPreviousData?: boolean },
 ): QueryResult<M>
 export function useQuery<M, T>(
   query: Query<M> | null | undefined,
-  options: {
-    /**
-     * Derive the rendered value from the rows. Runs when the rows
-     * change (per consumer, so different components can select
-     * differently from one shared subscription); must be pure. The
-     * Changing the function recomputes the selected value without
-     * restarting the shared query observation.
-     */
-    select: (rows: M[]) => T
-  },
+  options: UseQueryOptions<M, T> & { select: (rows: M[]) => T },
 ): SelectedResult<T>
 export function useQuery<M, T>(
   query: Query<M> | null | undefined,
-  options?: { select?: (rows: M[]) => T },
+  options?: UseQueryOptions<M, T>,
 ): QueryResult<M> | SelectedResult<T> {
   const database = query ? query.collection.database : null
   const key = query ? queryKey(query) : null
@@ -237,9 +278,10 @@ export function useQuery<M, T>(
         query.observe(
           (data) => {
             latest = data
-            set({ data, isLoading: false, error: null })
+            set({ data, isLoading: false, error: null, isPreviousData: false })
           },
-          (error) => set({ data: latest, isLoading: false, error }),
+          (error) =>
+            set({ data: latest, isLoading: false, error, isPreviousData: false }),
         ),
       )
     })
@@ -249,11 +291,50 @@ export function useQuery<M, T>(
     store.snapshot,
     store.snapshot,
   ) as QueryResult<M>
+
+  // keepPreviousData retention is deliberately consumer-local: a ref in
+  // this hook instance, never the shared store, so one consumer's
+  // placeholder rows cannot leak into another consumer of the same key.
+  // Written during render (idempotent, so StrictMode-safe): the ref only
+  // ever caches a committed store snapshot under its own db and key.
+  const keep = options?.keepPreviousData === true
+  const heldRef = useRef<{ db: object; key: string; data: M[] } | null>(null)
+  // Retention is dropped when the option is off or the database is no
+  // longer the one the rows came from. A null query has a null
+  // database, so "query became null" is the same clear: previous rows
+  // never render under another database, or under none.
+  if (!keep || (heldRef.current !== null && heldRef.current.db !== database)) {
+    heldRef.current = null
+  }
+  const held = heldRef.current
+  if (keep && database && key && !raw.isLoading && raw.error === null) {
+    heldRef.current = { db: database, key, data: raw.data }
+  }
+  // Previous rows show while the current key has not succeeded yet —
+  // loading, or failed before its first delivery. Success always wins.
+  const previous =
+    held !== null && held.key !== key && (raw.isLoading || raw.error !== null)
+      ? held
+      : null
+
   const select = options?.select
   return useMemo<QueryResult<M> | SelectedResult<T>>(() => {
-    if (!select) return raw
-    return { isLoading: raw.isLoading, error: raw.error, data: select(raw.data) }
-  }, [raw, select])
+    const presented: QueryResult<M> = previous
+      ? {
+          data: previous.data,
+          isLoading: false,
+          error: raw.error,
+          isPreviousData: true,
+        }
+      : raw
+    if (!select) return presented
+    return {
+      isLoading: presented.isLoading,
+      error: presented.error,
+      isPreviousData: presented.isPreviousData,
+      data: select(presented.data),
+    }
+  }, [raw, select, previous])
 }
 
 /**

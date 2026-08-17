@@ -134,6 +134,46 @@ deliberately ship no stream operators — combining, debouncing, and
 switching between live results is a job for a dedicated reactive
 library on top, not for this module.
 
+### Query changes: `keepPreviousData`
+
+```tsx
+const { data, isPreviousData } = useQuery(searchQuery(term), {
+  keepPreviousData: true,
+})
+```
+
+When the query's structure changes (a new search term, another page),
+the subscription is keyed on the new structure and starts empty — by
+default the hook drops to `isLoading: true` and the list blanks out.
+With `keepPreviousData: true` the hook keeps rendering the previous
+query's rows until the new one delivers. The transition is visible as
+`isPreviousData: true` (dim the list, keep it interactive);
+`isLoading` stays reserved for having nothing renderable at all.
+
+The semantics, precisely:
+
+- The first delivery of the new query replaces the rows and clears
+  `isPreviousData` — success always wins.
+- If the new query *fails* before its first delivery, the error
+  surfaces immediately in `error` while the previous rows stay
+  rendered and `isPreviousData` stays true; the first later success
+  clears both.
+- Retention is per consumer and never enters the shared query store:
+  two components arriving at the same query from different previous
+  queries each keep their own rows, and a third component subscribing
+  fresh sees a plain loading state.
+- Retained rows are dropped the moment the database object changes
+  (switching accounts never flashes one user's rows under another) or
+  the query becomes null.
+- `select` applies to whatever is rendered, previous rows included.
+
+One steering note: for a periodically re-parameterized query over a
+bounded row set (a due-by-now clause re-keying every few seconds),
+prefer a stable query plus `select` — it recomputes locally instead of
+restarting the observation on every tick. `keepPreviousData` is for
+queries that genuinely must change — search, pagination — where the
+row set can't be pulled whole and derived from.
+
 ## Mutations: `useMutation`
 
 The write-side counterpart of the query hooks. Wrap an async write and
@@ -221,7 +261,9 @@ isLoading: true }` until the first emission for this subscription
 isLoading: false, error: null }` on every emission. If a refetch fails,
 the error lands in `error` with `isLoading: false` while `data` retains
 the last successful rows. `useQueryCountResult` follows the same rule,
-retaining its last successful count.
+retaining its last successful count. `useQuery` results additionally
+carry `isPreviousData`, false except during a `keepPreviousData`
+transition (see above).
 
 ## Server-side rendering
 

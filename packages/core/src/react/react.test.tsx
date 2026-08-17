@@ -160,7 +160,12 @@ describe('useQuery', () => {
 
     act(() => q.fail(error))
 
-    expect(result.current).toEqual({ data: [], isLoading: false, error })
+    expect(result.current).toEqual({
+      data: [],
+      isLoading: false,
+      error,
+      isPreviousData: false,
+    })
   })
 
   it('clears the error on the next successful emission', () => {
@@ -176,6 +181,7 @@ describe('useQuery', () => {
       data: ['recovered'],
       isLoading: false,
       error: null,
+      isPreviousData: false,
     })
   })
 
@@ -207,6 +213,7 @@ describe('useQuery', () => {
       data: ['cached'],
       isLoading: false,
       error,
+      isPreviousData: false,
     })
   })
 
@@ -315,6 +322,231 @@ describe('useQuery select', () => {
     rerender({ limit: 2 })
     expect(result.current.data).toEqual(['a', 'b'])
     expect(q.observe).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('useQuery keepPreviousData', () => {
+  type Q = ReturnType<typeof fakeQuery<string>>
+  const keepHook = (initial: Q) =>
+    renderHook(
+      ({ q }: { q: Q | null }) =>
+        useQuery(q ? q.query : null, { keepPreviousData: true }),
+      { initialProps: { q: initial as Q | null } },
+    )
+
+  it('default behavior is unchanged: a query change drops to loading', () => {
+    const db = fakeDb()
+    const qa = fakeQuery<string>(db, 'decks', { where: 'a' })
+    const qb = fakeQuery<string>(db, 'decks', { where: 'b' })
+    const { result, rerender } = renderHook(({ q }) => useQuery(q), {
+      initialProps: { q: qa.query },
+    })
+    act(() => qa.emit(['a1']))
+    rerender({ q: qb.query })
+    expect(result.current).toMatchObject({
+      data: [],
+      isLoading: true,
+      isPreviousData: false,
+    })
+  })
+
+  it('retains the previous rows across a query change until the new query emits', () => {
+    const db = fakeDb()
+    const qa = fakeQuery<string>(db, 'decks', { where: 'a' })
+    const qb = fakeQuery<string>(db, 'decks', { where: 'b' })
+    const { result, rerender } = keepHook(qa)
+    act(() => qa.emit(['a1', 'a2']))
+
+    rerender({ q: qb })
+    // previous rows render; isLoading stays reserved for "nothing renderable"
+    expect(result.current).toMatchObject({
+      data: ['a1', 'a2'],
+      isLoading: false,
+      error: null,
+      isPreviousData: true,
+    })
+
+    act(() => qb.emit(['b1']))
+    expect(result.current).toMatchObject({
+      data: ['b1'],
+      isLoading: false,
+      isPreviousData: false,
+    })
+  })
+
+  it('keeps retention per consumer and never seeds the shared store', () => {
+    const db = fakeDb()
+    const qa = fakeQuery<string>(db, 'decks', { where: 'a' })
+    const qb = fakeQuery<string>(db, 'decks', { where: 'b' })
+    const qc1 = fakeQuery<string>(db, 'decks', { where: 'c' })
+    const qc2 = fakeQuery<string>(db, 'decks', { where: 'c' })
+    const qc3 = fakeQuery<string>(db, 'decks', { where: 'c' })
+
+    const fromA = keepHook(qa)
+    const fromB = keepHook(qb)
+    act(() => {
+      qa.emit(['a1'])
+      qb.emit(['b1'])
+    })
+
+    // both consumers arrive at the same structural key 'c'
+    fromA.rerender({ q: qc1 })
+    fromB.rerender({ q: qc2 })
+    expect(fromA.result.current.data).toEqual(['a1'])
+    expect(fromB.result.current.data).toEqual(['b1'])
+
+    // a third consumer of 'c' without history sees plain loading: the
+    // shared store was not seeded by either placeholder
+    const fresh = renderHook(() => useQuery(qc3.query))
+    expect(fresh.result.current).toMatchObject({ data: [], isLoading: true })
+
+    act(() => qc1.emit(['c1']))
+    expect(fromA.result.current.data).toEqual(['c1'])
+    expect(fromB.result.current.data).toEqual(['c1'])
+    expect(fresh.result.current.data).toEqual(['c1'])
+  })
+
+  it('drops retained rows the moment the database object changes', () => {
+    const db1 = fakeDb()
+    const db2 = fakeDb()
+    // the key changes together with the database — the case only the
+    // db guard catches (with an unchanged key, key identity would
+    // already suppress the previous rows)
+    const qa = fakeQuery<string>(db1, 'decks', { where: 'a' })
+    const qb = fakeQuery<string>(db2, 'decks', { where: 'b' })
+    const { result, rerender } = keepHook(qa)
+    act(() => qa.emit(['a1']))
+
+    rerender({ q: qb })
+    expect(result.current).toMatchObject({
+      data: [],
+      isLoading: true,
+      isPreviousData: false,
+    })
+  })
+
+  it('shows no previous rows for the same query key on another database', () => {
+    const db1 = fakeDb()
+    const db2 = fakeDb()
+    const qa = fakeQuery<string>(db1, 'decks', { where: 'a' })
+    const qb = fakeQuery<string>(db2, 'decks', { where: 'a' })
+    const { result, rerender } = keepHook(qa)
+    act(() => qa.emit(['a1']))
+
+    rerender({ q: qb })
+    expect(result.current).toMatchObject({
+      data: [],
+      isLoading: true,
+      isPreviousData: false,
+    })
+    // even an error before db2's first delivery must not resurrect them
+    act(() => qb.fail(new Error('boom')))
+    expect(result.current).toMatchObject({
+      data: [],
+      isPreviousData: false,
+    })
+  })
+
+  it('clears retention when the query becomes null', () => {
+    const db = fakeDb()
+    const qa = fakeQuery<string>(db, 'decks', { where: 'a' })
+    const qb = fakeQuery<string>(db, 'decks', { where: 'b' })
+    const { result, rerender } = keepHook(qa)
+    act(() => qa.emit(['a1']))
+
+    rerender({ q: null })
+    expect(result.current).toMatchObject({ data: [], isLoading: false })
+
+    rerender({ q: qb })
+    expect(result.current).toMatchObject({
+      data: [],
+      isLoading: true,
+      isPreviousData: false,
+    })
+  })
+
+  it('surfaces an error from the new query alongside the retained rows', () => {
+    const db = fakeDb()
+    const qa = fakeQuery<string>(db, 'decks', { where: 'a' })
+    const qb = fakeQuery<string>(db, 'decks', { where: 'b' })
+    const { result, rerender } = keepHook(qa)
+    act(() => qa.emit(['a1']))
+
+    rerender({ q: qb })
+    const boom = new Error('boom')
+    act(() => qb.fail(boom))
+    expect(result.current).toMatchObject({
+      data: ['a1'],
+      error: boom,
+      isLoading: false,
+      isPreviousData: true,
+    })
+
+    act(() => qb.emit(['b1']))
+    expect(result.current).toMatchObject({
+      data: ['b1'],
+      error: null,
+      isPreviousData: false,
+    })
+  })
+
+  it('an error on the current key is not a previous-data transition', () => {
+    const db = fakeDb()
+    const qa = fakeQuery<string>(db, 'decks', { where: 'a' })
+    const { result } = keepHook(qa)
+    act(() => qa.emit(['a1']))
+    act(() => qa.fail(new Error('boom')))
+    expect(result.current).toMatchObject({
+      data: ['a1'],
+      isPreviousData: false,
+    })
+    expect(result.current.error).toBeInstanceOf(Error)
+  })
+
+  it('select applies to the retained rows', () => {
+    const db = fakeDb()
+    const qa = fakeQuery<string>(db, 'decks', { where: 'a' })
+    const qb = fakeQuery<string>(db, 'decks', { where: 'b' })
+    const { result, rerender } = renderHook(
+      ({ q }) =>
+        useQuery(q.query, {
+          keepPreviousData: true,
+          select: (rows: string[]) => rows.length,
+        }),
+      { initialProps: { q: qa } },
+    )
+    act(() => qa.emit(['a1', 'a2']))
+    expect(result.current.data).toBe(2)
+
+    rerender({ q: qb })
+    expect(result.current).toMatchObject({ data: 2, isPreviousData: true })
+
+    act(() => qb.emit(['b1']))
+    expect(result.current).toMatchObject({ data: 1, isPreviousData: false })
+  })
+
+  it('works when rendered under StrictMode', () => {
+    const db = fakeDb()
+    const qa = fakeQuery<string>(db, 'decks', { where: 'a' })
+    const qb = fakeQuery<string>(db, 'decks', { where: 'b' })
+    const { result, rerender } = renderHook(
+      ({ q }: { q: Q }) => useQuery(q.query, { keepPreviousData: true }),
+      {
+        initialProps: { q: qa },
+        wrapper: ({ children }) => createElement(StrictMode, null, children),
+      },
+    )
+    act(() => qa.emit(['a1']))
+    rerender({ q: qb })
+    expect(result.current).toMatchObject({
+      data: ['a1'],
+      isPreviousData: true,
+    })
+    act(() => qb.emit(['b1']))
+    expect(result.current).toMatchObject({
+      data: ['b1'],
+      isPreviousData: false,
+    })
   })
 })
 
