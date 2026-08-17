@@ -15,14 +15,18 @@ if (!tarballDir) {
   process.exit(1)
 }
 const find = (prefix) => {
-  const hit = readdirSync(tarballDir).find(
+  const matches = readdirSync(tarballDir).filter(
     (f) => f.startsWith(prefix) && f.endsWith('.tgz'),
   )
-  if (!hit) {
-    console.error(`no ${prefix}*.tgz in ${tarballDir}`)
+  if (matches.length !== 1) {
+    // two matches = a stale tarball from an earlier local run; picking
+    // one silently would test an arbitrary version
+    console.error(
+      `expected exactly one ${prefix}*.tgz in ${tarballDir}, found ${matches.length}`,
+    )
     process.exit(1)
   }
-  return join(resolve(tarballDir), hit)
+  return join(resolve(tarballDir), matches[0])
 }
 const core = find('remelondb-core-')
 const nodeDriver = find('remelondb-driver-node-')

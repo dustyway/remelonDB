@@ -13,6 +13,7 @@ import {
   cpSync,
   mkdtempSync,
   readdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from 'node:fs'
@@ -27,18 +28,30 @@ if (!tarballDir) {
 }
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
-// Only the packages the fixtures import: installing every tarball would
-// drag in native/RN peer trees the fixtures never touch.
-const WANTED = ['remelondb-core-', 'remelondb-driver-node-', 'remelondb-server-']
-const tarballs = readdirSync(tarballDir)
-  .filter((f) => f.endsWith('.tgz') && WANTED.some((p) => f.startsWith(p)))
-  .map((f) => join(resolve(tarballDir), f))
-if (tarballs.length !== WANTED.length) {
-  console.error(
-    `expected ${WANTED.length} tarballs (${WANTED.join(' ')}), found: ${tarballs.join(', ') || 'none'}`,
-  )
-  process.exit(1)
-}
+// Every packed package the fixtures can typecheck without a framework
+// stack. Not covered here, and deliberately so: the RN drivers (their
+// declarations need react-native's types — the RN harness lane consumes
+// them packed) and the nestjs module (needs the Nest type stack).
+const WANTED = [
+  'remelondb-core-',
+  'remelondb-driver-node-',
+  'remelondb-driver-web-',
+  'remelondb-server-',
+  'remelondb-store-drizzle-',
+]
+const files = readdirSync(tarballDir)
+const tarballs = WANTED.map((prefix) => {
+  const matches = files.filter((f) => f.startsWith(prefix) && f.endsWith('.tgz'))
+  if (matches.length !== 1) {
+    // zero = pack failed; two = a stale tarball from an earlier local
+    // run is still in the directory and versions would be ambiguous
+    console.error(
+      `expected exactly one ${prefix}*.tgz in ${tarballDir}, found ${matches.length}: ${matches.join(', ')}`,
+    )
+    process.exit(1)
+  }
+  return join(resolve(tarballDir), matches[0])
+})
 
 const dir = mkdtempSync(join(tmpdir(), 'packed-types-'))
 try {
@@ -46,16 +59,47 @@ try {
     join(dir, 'package.json'),
     JSON.stringify({ name: 'packed-types', private: true }, null, 2),
   )
-  // --ignore-scripts: declarations only, no native builds
-  const peers = ['typescript@5.8.3', 'react@19', '@types/react@19', 'zod@4']
+  // --ignore-scripts: declarations only, no native builds. The
+  // TypeScript and drizzle versions are the repo's own toolchain (read
+  // from the workspace manifests), so this checks what we develop
+  // against, not a hand-pinned floor.
+  const readDep = (path, name) => {
+    const pkg = JSON.parse(readFileSync(join(root, path), 'utf8'))
+    const version = pkg.devDependencies?.[name]
+    if (!version) throw new Error(`${name} not in ${path} devDependencies`)
+    return `${name}@${version}`
+  }
+  const peers = [
+    readDep('package.json', 'typescript'),
+    readDep('package.json', 'vitest'),
+    readDep('package.json', '@types/node'),
+    readDep('packages/store-drizzle/package.json', 'drizzle-orm'),
+    'react@19',
+    '@types/react@19',
+    'zod@4',
+  ]
   execFileSync(
     'npm',
     ['install', '--ignore-scripts', '--no-audit', '--no-fund', ...tarballs, ...peers],
     { cwd: dir, stdio: 'inherit' },
   )
   cpSync(join(root, 'scripts/fixtures/packed-types'), dir, { recursive: true })
-  execFileSync('npx', ['tsc', '--noEmit', '-p', dir], { cwd: dir, stdio: 'inherit' })
-  console.log('PACKED TYPES CHECK: PASS { core, react, zod, server, driver-node }')
+  // Two projects: the base checks every remelondb d.ts with a full lib
+  // check (skipLibCheck off); the drizzle fixture runs separately with
+  // skipLibCheck because drizzle-orm's own published d.ts cannot pass
+  // one (see tsconfig.drizzle.json).
+  execFileSync('npx', ['tsc', '--noEmit', '-p', join(dir, 'tsconfig.json')], {
+    cwd: dir,
+    stdio: 'inherit',
+  })
+  execFileSync(
+    'npx',
+    ['tsc', '--noEmit', '-p', join(dir, 'tsconfig.drizzle.json')],
+    { cwd: dir, stdio: 'inherit' },
+  )
+  console.log(
+    'PACKED TYPES CHECK: PASS { core (+react/zod/conformance), server (+conformance), driver-node, driver-web, store-drizzle }',
+  )
 } finally {
   rmSync(dir, { recursive: true, force: true })
 }

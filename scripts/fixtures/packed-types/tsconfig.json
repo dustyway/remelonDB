@@ -5,8 +5,15 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
-    "skipLibCheck": true,
+    "lib": ["es2022", "dom"],
+    "skipLibCheck": false,
     "noEmit": true
   },
-  "include": ["core.ts", "react.tsx", "server.ts"]
+  "include": [
+    "core.ts",
+    "react.tsx",
+    "server.ts",
+    "conformance.ts",
+    "driver-web.ts"
+  ]
 }

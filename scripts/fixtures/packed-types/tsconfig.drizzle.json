@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // drizzle-orm's published d.ts cannot pass a full lib check: its
+    // gel/mysql cores reference optional peers (gel, mysql2, Buffer)
+    // that a pg consumer never installs, and carry internal
+    // inconsistencies of their own. Only this fixture relaxes
+    // skipLibCheck; every package we own is checked with it off in the
+    // base project.
+    "skipLibCheck": true
+  },
+  "include": ["store-drizzle.ts"]
+}

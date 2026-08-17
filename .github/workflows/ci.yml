@@ -165,6 +165,7 @@ jobs:
         run: pnpm --filter @remelondb/driver-web smoke:vite
       - name: Pack workspace packages
         run: |
+          rm -rf /tmp/tarballs
           mkdir -p /tmp/tarballs
           pnpm -r --filter './packages/*' pack --pack-destination /tmp/tarballs
       # The committed fixtures typecheck against the tarballs' public
