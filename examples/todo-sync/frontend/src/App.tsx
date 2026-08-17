@@ -54,13 +54,24 @@ export function App({ db }: { db: Database }) {
     void runSync(db)
   })
 
-  const add = (event: React.FormEvent) => {
+  // mutateAsync where the caller needs the outcome: the draft is only
+  // cleared after the write commits, so a failure keeps the text.
+  const add = async (event: React.FormEvent) => {
     event.preventDefault()
     const trimmed = text.trim()
     if (!trimmed) return
-    setText('')
-    addTodo.mutate(trimmed)
+    try {
+      await addTodo.mutateAsync(trimmed)
+      setText('')
+    } catch {
+      // the failure is already in addTodo.error
+    }
   }
+
+  // one banner for every write path; production code would surface
+  // each error where its action happened
+  const writeError =
+    addTodo.error ?? toggleTodo.error ?? removeTodo.error ?? editTodo.error
 
   const commitEdit = (id: string, draft: string) => {
     setEditing(null)
@@ -77,7 +88,7 @@ export function App({ db }: { db: Database }) {
         {todos.length === 1 ? '' : 's'} · {syncStatus}
       </p>
       {syncNote && <p id="note">{syncNote}</p>}
-      <form onSubmit={add}>
+      <form onSubmit={(event) => void add(event)}>
         <input
           value={text}
           onChange={(event) => setText(event.target.value)}
@@ -88,9 +99,9 @@ export function App({ db }: { db: Database }) {
           Add
         </button>
       </form>
-      {addTodo.error != null && (
-        <p id="add-error" role="alert">
-          could not add: {String(addTodo.error)}
+      {writeError != null && (
+        <p id="write-error" role="alert">
+          write failed: {String(writeError)}
         </p>
       )}
       <input

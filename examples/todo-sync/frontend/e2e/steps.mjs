@@ -66,7 +66,9 @@ export async function runSteps(url, hooks = {}) {
   await b.page.waitForSelector(`li:has-text("${OFFLINE}")`, { timeout: 20000 })
   console.log('step 5: recovery pushes the offline write to B')
 
-  // Step 5b: search narrows the live query (keepPreviousData path).
+  // Step 5b: search narrows the live query. (This drives the
+  // keepPreviousData UI, but only filtering is asserted — the
+  // transition semantics are covered by the hook's unit suite.)
   await b.page.fill('input[aria-label="Search todos"]', 'walk the dog')
   await b.page.waitForSelector(`li:has-text("${FIRST}")`, { timeout: 5000 })
   await b.page.waitForFunction(

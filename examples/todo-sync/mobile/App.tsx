@@ -84,12 +84,23 @@ function Todos({ db }: { db: Database }) {
     void runSync(db)
   })
 
-  const add = () => {
+  // mutateAsync where the caller needs the outcome: the draft is only
+  // cleared after the write commits, so a failure keeps the text.
+  const add = async () => {
     const trimmed = text.trim()
     if (!trimmed) return
-    setText('')
-    addTodo.mutate(trimmed)
+    try {
+      await addTodo.mutateAsync(trimmed)
+      setText('')
+    } catch {
+      // the failure is already in addTodo.error
+    }
   }
+
+  // one banner for every write path; production code would surface
+  // each error where its action happened
+  const writeError =
+    addTodo.error ?? toggleTodo.error ?? removeTodo.error ?? editTodo.error
 
   return (
     <>
@@ -99,17 +110,20 @@ function Todos({ db }: { db: Database }) {
         {todos.length} todo{todos.length === 1 ? '' : 's'} · {syncStatus}
       </Text>
       {syncNote && <Text style={styles.note}>{syncNote}</Text>}
+      {writeError != null && (
+        <Text style={styles.error}>write failed: {String(writeError)}</Text>
+      )}
       <View style={styles.row}>
         <TextInput
           style={styles.input}
           value={text}
           onChangeText={setText}
           placeholder="What needs doing?"
-          onSubmitEditing={add}
+          onSubmitEditing={() => void add()}
         />
         <Pressable
           style={styles.button}
-          onPress={add}
+          onPress={() => void add()}
           disabled={addTodo.isPending}
         >
           <Text style={styles.buttonText}>Add</Text>
@@ -142,6 +156,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: '600' },
   status: { color: theme.colorGrey, marginVertical: 8 },
   note: { color: theme.colorCerulean, marginBottom: 8, fontSize: 13 },
+  error: { color: '#c62828', marginBottom: 8, fontSize: 13 },
   row: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   input: {
     flex: 1,
