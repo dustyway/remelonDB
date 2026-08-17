@@ -128,7 +128,7 @@ not neutral:
 The contract takes no side on upstream's sanitize-vs-refuse policy
 question; it only insists that *if* the server refuses, the refusal is
 visible and whole. Upstream's whole-push conflict rule (its push rule
-5) is kept unchanged — `rejected` is for record-specific refusals,
+5) is kept unchanged: `rejected` is for record-specific refusals,
 `conflict` for staleness.
 
 ## Protocol at a glance
