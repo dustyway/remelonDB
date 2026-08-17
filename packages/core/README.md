@@ -17,7 +17,8 @@ platform:
 | --- | --- |
 | Node | [`@remelondb/driver-node`](https://www.npmjs.com/package/@remelondb/driver-node) (better-sqlite3) |
 | Browser | [`@remelondb/driver-web`](https://www.npmjs.com/package/@remelondb/driver-web) (SQLite-WASM + OPFS in a Worker) |
-| React Native | [`@remelondb/driver-rn`](https://www.npmjs.com/package/@remelondb/driver-rn) (C++ TurboModule, bundled SQLite) |
+| React Native | [`@remelondb/driver-rn`](https://www.npmjs.com/package/@remelondb/driver-rn) (expo-sqlite; runs in Expo Go) |
+| React Native, no expo | [`@remelondb/driver-rn-cpp`](https://www.npmjs.com/package/@remelondb/driver-rn-cpp) (C++ TurboModule, bundled SQLite; dev build required) |
 
 Because every driver is real SQLite and passes the same
 conformance suite (`@remelondb/core/conformance`),

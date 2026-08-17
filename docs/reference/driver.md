@@ -140,5 +140,6 @@ drivers run it verbatim.
 | Driver | Package | Notes |
 | --- | --- | --- |
 | Node | `@remelondb/driver-node` | better-sqlite3; synchronous underneath; WAL for file DBs; `:memory:` supported. Powers all tests. |
-| React Native | `@remelondb/driver-rn` | Pure C++ TurboModule, bundled sqlite3 amalgamation, prefab JSI linkage. Codegen + syntax verified locally; device build pending (see its README). |
+| React Native | `@remelondb/driver-rn` | Thin adapter over `expo-sqlite`; the default, and runs in Expo Go with no native build of its own. |
+| React Native (no expo) | `@remelondb/driver-rn-cpp` | Pure C++ TurboModule, bundled sqlite3 amalgamation, prefab JSI linkage. Requires a development build; see its README for when to choose it. |
 | Web | `@remelondb/driver-web` | SQLite-WASM + OPFS SAH pool in a dedicated Worker. Full contract verified against real sqlite-wasm in-process; OPFS persistence needs a browser run (see its README). |
