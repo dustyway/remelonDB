@@ -206,6 +206,24 @@ await db.write(async () => {
 Ids are client-generated (16 characters, sync-safe), so records never
 wait for a server to exist.
 
+Writes can fail: the database was closed under you (logout, a tab
+takeover), the disk refused, a query inside the block threw. `write()`
+rejects with that error, and for a batch the in-memory state is left
+untouched, so the failure is clean rather than half-applied. Handle it
+where the user is waiting:
+
+```js fragment
+try {
+  await db.write(() => db.get(Deck).create({ title }))
+  closeDialog()          // only once the write is durable
+} catch (error) {
+  showError(error)       // the deck was not created; say so
+}
+```
+
+Dismissing the dialog before the write resolves is the tempting
+shortcut, and it reports a success the database never agreed to.
+
 ## 6. The study queue
 
 Queries are built from `Q` conditions on a collection. The study queue
