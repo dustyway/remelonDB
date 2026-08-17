@@ -64,10 +64,27 @@ const normalize = (line) => line.trim().replace(/\s+/g, ' ')
 {
   const doc = await read('docs/reference/backend.md')
   const suite = await read('packages/server/src/conformance/index.ts')
-  const inSuite = new Set([
-    ...[...suite.matchAll(/readonly (\w+)\?:/g)].map((m) => m[1]),
-    ...[...suite.matchAll(/(\w+)\?\(\)/g)].map((m) => m[1]),
-  ])
+  // The optional members of the three registration interfaces ARE the
+  // capability set; derive it so a seventh capability is required to be
+  // documented the moment it exists, not when someone updates a list.
+  const interfaceBlock = (name) => {
+    const match = suite.match(
+      new RegExp(`export interface ${name}[^{]*\\{([\\s\\S]*?)\\n\\}`),
+    )
+    check(match !== null, `conformance: interface ${name} not found`)
+    return match ? match[1] : ''
+  }
+  const capabilities = new Set()
+  for (const name of [
+    'ServerConformanceOptions',
+    'ServerConformanceContext',
+    'TableFixture',
+  ]) {
+    const block = interfaceBlock(name)
+    for (const m of block.matchAll(/readonly (\w+)\?:/g)) capabilities.add(m[1])
+    for (const m of block.matchAll(/^\s*(\w+)\?\(/gm)) capabilities.add(m[1])
+  }
+  check(capabilities.size > 0, 'conformance: no optional capabilities derived')
   const tableMatch = doc.match(/\| Capability \| Enables \|\n\|[^\n]*\|\n([\s\S]*?)\n\n/)
   check(tableMatch !== null, 'backend.md: capability table not found')
   if (tableMatch) {
@@ -77,20 +94,11 @@ const normalize = (line) => line.trim().replace(/\s+/g, ' ')
     check(documented.length > 0, 'backend.md: no capability rows parsed')
     for (const name of documented) {
       check(
-        inSuite.has(name),
+        capabilities.has(name),
         `backend.md capability table lists unknown capability ${name}`,
       )
     }
-    // options-level capabilities must all be in the table (context-level
-    // secondUser/concurrently and fixture-level invalidRow included)
-    for (const name of [
-      'secondUser',
-      'concurrently',
-      'invalidRow',
-      'appendOnly',
-      'uniqueColumn',
-      'crossValidation',
-    ]) {
+    for (const name of capabilities) {
       check(
         documented.includes(name),
         `backend.md capability table is missing ${name}`,

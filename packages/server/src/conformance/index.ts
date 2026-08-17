@@ -99,6 +99,8 @@ export interface ServerConformanceOptions {
     readonly table: string
     readonly rejectedRow: () => WireRow
     readonly undeletableRow: () => WireRow
+    /** A changed-but-valid version of an undeletable row (case 18). */
+    readonly mutateUndeletableRow: (row: WireRow) => WireRow
   }
 }
 
@@ -638,7 +640,7 @@ export function registerServerConformance(
 
     const case18 = crossValidation ? it : it.skip
     case18('18. a refused deletion of a duplicated id rejects the id and keeps the pre-push content (needs `crossValidation`)', async () => {
-      const { table: cvTable, undeletableRow } = crossValidation!
+      const { table: cvTable, undeletableRow, mutateUndeletableRow } = crossValidation!
       const { handlers } = await options.makeContext()
       const keystone = undeletableRow()
       const cvChanges = (
@@ -657,13 +659,8 @@ export function registerServerConformance(
       // an update AND a deletion for the keystone: the deletion is the
       // surviving statement, the hook refuses it, so the id is rejected
       // and NEITHER effect lands — the row keeps its pre-push content
-      const mutated = { ...keystone, ...{} } as WireRow
-      for (const key of Object.keys(mutated)) {
-        if (key !== 'id' && typeof mutated[key] === 'string') {
-          mutated[key] = `${String(mutated[key])} (rewritten)`
-          break
-        }
-      }
+      const mutated = mutateUndeletableRow(keystone)
+      expect(mutated).not.toEqual(keystone)
       const denied = accepted(
         await handlers.push({
           changes: cvChanges([mutated], [keystone.id]),
