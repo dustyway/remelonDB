@@ -3,9 +3,10 @@
 How remelonDB keeps devices in sync, and why the protocol looks the
 way it does. This is a generic reimplementation of
 [WatermelonDB](https://github.com/Nozbe/WatermelonDB)'s sync protocol:
-its shape is kept where it's sound, and its two contract-level flaws
-are fixed at the protocol level. No specific backend is a design
-input. The normative wire contract lives in
+its shape is kept where it's sound, its two contract-level flaws are
+fixed at the protocol level, and per-record rejection is promoted
+from an experiment to a normative contract. No specific backend is a
+design input. The normative wire contract lives in
 [sync-wire.md](sync-wire.md); this doc is the rationale.
 
 ## How it works, in short

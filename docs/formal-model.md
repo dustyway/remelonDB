@@ -231,6 +231,7 @@ command, and read the counterexample trace it prints: a
 step-by-step reenactment of the lost-write race, ending in the state
 the invariant forbids. `SILENT_DROP = true` does the same for the
 phantom-record fault, and `DELETE_LEAK = true` for the half-applied
-rejection (a deletion landing for an id the response named rejected). Changing the protocol? Model the change here
+rejection (a deletion landing for an id the response named rejected).
+Changing the protocol? Model the change here
 first — an invariant violation at this stage costs minutes instead of
 a corrupted database in the field.
