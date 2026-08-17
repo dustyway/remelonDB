@@ -87,5 +87,6 @@ registerServerConformance({
     table: 'tasks',
     rejectedRow: () => ({ id: newId(), name: 'cross-reject', done: false }),
     undeletableRow: () => ({ id: `keystone-${++counter}`, name: 'a task', done: false }),
+    mutateUndeletableRow: (row) => ({ ...row, name: `${String(row['name'])} (rewritten)` }),
   },
 })
