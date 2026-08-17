@@ -134,6 +134,52 @@ deliberately ship no stream operators — combining, debouncing, and
 switching between live results is a job for a dedicated reactive
 library on top, not for this module.
 
+## Mutations: `useMutation`
+
+The write-side counterpart of the query hooks. Wrap an async write and
+get state instead of a bare promise to babysit:
+
+```ts
+import { useMutation } from '@remelondb/core/react'
+
+const { mutate, mutateAsync, data, error, isPending, reset } = useMutation(
+  (title: string) => db.write(() => db.get(Deck).create({ title })),
+)
+```
+
+`mutate(...args)` is fire-and-observe: it returns `void`, so a floating
+call is safe by construction, and a failure lands in `error` rather
+than becoming an unhandled rejection. `mutateAsync(...args)` keeps
+normal promise semantics (resolves with the result, rejects with the
+original error) for flows that must continue only after success:
+
+```ts
+const onSubmit = async (fields: FormFields) => {
+  await mutateAsync(fields.title)
+  closeDialog()               // only reached when the write committed
+}
+```
+
+The two entry points are deliberate. A `mutate` that both swallowed
+rejection and returned a promise would let `await mutate()` continue
+down the success path after a failure, which is the exact bug the hook
+exists to prevent: a dialog dismissed on a failed write reports a
+success the database never agreed to.
+
+State semantics:
+
+- `isPending` is true while any tracked invocation is in flight; use it
+  to disable the submit control.
+- `data` and `error` are owned by the latest invocation. A stale
+  completion arriving out of order only drains `isPending` and cannot
+  overwrite newer state.
+- Starting a new invocation clears the previous `error`; `data` keeps
+  its last value until the owning invocation replaces it.
+- `reset()` returns to idle; in-flight completions are ignored.
+- Completions after unmount are inert.
+- The mutation function is read at call time, so a re-render capturing
+  a new closure is picked up without any dependency array.
+
 ## Migrating from a hand-rolled bridge
 
 If you already wrote a `useState`/`useEffect` bridge over `observe()`,
