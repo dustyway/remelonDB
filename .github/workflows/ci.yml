@@ -132,6 +132,9 @@ jobs:
       # against the built packages — docs cannot drift from the API.
       - run: pnpm check:tutorial
       - run: pnpm check:readme
+      # Structural doc checks: guide facts and the checklist/suite join
+      - run: pnpm check:guide
+      - run: pnpm check:wire
       - run: pnpm check:backend-tutorial
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres

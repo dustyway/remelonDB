@@ -25,11 +25,18 @@ const sectionMatch = wire.match(
 )
 if (!sectionMatch) fail('conformance checklist section not found in sync-wire.md')
 const docItems = new Map()
+const docDuplicates = []
 for (const line of sectionMatch[1].split('\n')) {
   const item = line.match(/^(\d+)\.\s+(.*)/)
-  if (item) docItems.set(Number(item[1]), item[2].trim())
+  if (!item) continue
+  const n = Number(item[1])
+  if (docItems.has(n)) docDuplicates.push(n)
+  docItems.set(n, item[2].trim())
 }
 if (docItems.size === 0) fail('no numbered items parsed from the checklist')
+if (docDuplicates.length > 0) {
+  fail(`checklist number(s) used more than once: ${docDuplicates.join(', ')}`)
+}
 
 // --- suite cases: '<n>. …' string literals passed to it()/case vars ---
 const suite = await readFile(
@@ -37,10 +44,16 @@ const suite = await readFile(
   'utf8',
 )
 const suiteCases = new Map()
+const suiteDuplicates = []
 for (const match of suite.matchAll(/(['"])(\d+)\.\s((?:(?!\1)[^\n])+)\1/g)) {
-  suiteCases.set(Number(match[2]), match[3].trim())
+  const n = Number(match[2])
+  if (suiteCases.has(n)) suiteDuplicates.push(n)
+  suiteCases.set(n, match[3].trim())
 }
 if (suiteCases.size === 0) fail('no numbered case titles parsed from the suite')
+if (suiteDuplicates.length > 0) {
+  fail(`suite case number(s) used more than once: ${suiteDuplicates.join(', ')}`)
+}
 
 // --- compare ---
 const missingCases = [...docItems.keys()].filter((n) => !suiteCases.has(n))
