@@ -45,18 +45,22 @@ export function App({ db }: { db: Database }) {
   // newer success clears an older failure. Separate per-action hooks
   // would each hold a stale error until their own next call.
   const write = useMutation(async (action: WriteAction) => {
-    await db.write(() => {
+    await db.write(async () => {
       switch (action.type) {
         case 'add':
-          return db.get(TodoModel).create({ text: action.text, done: false })
+          await db.get(TodoModel).create({ text: action.text, done: false })
+          break
         case 'toggle':
-          return db
+          await db
             .get(TodoModel)
             .update(action.todo.id, { done: !action.todo.done })
+          break
         case 'remove':
-          return db.get(TodoModel).markAsDeleted(action.todo.id)
+          await db.get(TodoModel).markAsDeleted(action.todo.id)
+          break
         case 'edit':
-          return db.get(TodoModel).update(action.id, { text: action.text })
+          await db.get(TodoModel).update(action.id, { text: action.text })
+          break
       }
     })
     void runSync(db)
