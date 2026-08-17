@@ -117,6 +117,16 @@ migration range silently falls back to destroy-and-recreate** (index.js:191).
   but wasteful. Proper fix: push responds with a new cursor.
 - Push sends full raws including `_status`/`_changed` instead of changed
   columns only (fetchLocal.js:35–37 TODOs).
+- Per-record refusal exists only as an experiment: `pushChanges` may
+  return `experimentalRejectedIds` (src/sync/index.js:60) and the
+  client keeps those records dirty, skipping their deletes
+  (markAsSynced.js:19–46; verified against upstream master, Aug 2026).
+  No server obligation attaches: nothing requires a refused write to
+  be visible at all, and Sync/Backend.md's push rule 10 recommends
+  silently sanitizing bad values over returning errors. → replaced by
+  the normative `rejected` lane (sync-design.md, "The third
+  divergence"): refusals are never silent, a rejected id leaves no
+  effect, storage refusals included.
 - Sync depends on adapter-level tombstones (`getDeletedRecords` /
   `destroyDeletedRecords`) and KV local storage (`getLocal`/`setLocal`) — ORM
   concepts leaked into the adapter interface.

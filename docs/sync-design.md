@@ -92,6 +92,45 @@ Two rules keep this safe:
   cursor while skipping the foreign changes committed under it would
   reintroduce the lost-write race through the back door.
 
+## The third divergence: rejection is a contract, not an experiment
+
+Upstream acknowledges per-record refusal only as an escape hatch: a
+push implementation may return `experimentalRejectedIds`
+(src/sync/index.js:60), and the client keeps those records dirty. No
+obligation attaches to it: nothing says when a server must use it,
+nothing forbids refusing silently instead, and the backend guide
+recommends the opposite for bad values: silently "fix" them
+server-side rather than return an error (Sync/Backend.md, push
+endpoint rule 10).
+
+This protocol promotes the lane to a normative contract
+([sync-wire.md](sync-wire.md) §3), because the silent alternatives are
+not neutral:
+
+- **Refusals are never silent.** Any write the server declines for a
+  record-specific reason MUST be visible in the response, named in
+  `rejected` or covered by `conflict`. A refusal the client never
+  hears about makes it mark the record synced and diverge permanently;
+  the model proves this (`SILENT_DROP` in
+  [formal-model.md](formal-model.md)), and it is the class three
+  shipped bugs belonged to.
+- **A rejected id leaves no effect at all.** Not half of one: an id
+  named in `deleted` supersedes its same-push content (the
+  terminal-statement rule, wire spec §1), so whatever refuses the
+  surviving statement refuses the id entirely. Model invariant
+  `rejectedNoEffect` holds this; wire checklist items 17–18 make it
+  runnable.
+- **Storage itself may refuse.** A unique or foreign-key constraint
+  firing during apply is a rejection like any other (named, no trace
+  left, rest of the push applies; checklist item 14), never a thrown
+  500 that wedges the sync loop.
+
+The contract takes no side on upstream's sanitize-vs-refuse policy
+question; it only insists that *if* the server refuses, the refusal is
+visible and whole. Upstream's whole-push conflict rule (its push rule
+5) is kept unchanged — `rejected` is for record-specific refusals,
+`conflict` for staleness.
+
 ## Protocol at a glance
 
 ```
