@@ -12,6 +12,7 @@ import {
   DatabaseProvider,
   useDatabase,
   useDatabaseState,
+  useMutation,
   useQuery,
   useQueryCount,
   useQueryCountResult,
@@ -350,5 +351,168 @@ describe('useQueryCount', () => {
       result: { data: 7, isLoading: false, error },
     })
     expect(q.observeCount).toHaveBeenCalledTimes(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// useMutation
+
+const deferred = <T,>() => {
+  let resolve!: (value: T) => void
+  let reject!: (reason: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
+describe('useMutation', () => {
+  it('floating mutate never rejects; failure lands in error state', async () => {
+    const boom = new Error('write failed')
+    const { result } = renderHook(() =>
+      useMutation(async (_title: string) => {
+        throw boom
+      }),
+    )
+    act(() => {
+      result.current.mutate('a')
+    })
+    await act(async () => {})
+    expect(result.current.error).toBe(boom)
+    expect(result.current.isPending).toBe(false)
+    expect(result.current.data).toBeUndefined()
+  })
+
+  it('tracks pending across the call and stores the result', async () => {
+    const gate = deferred<number>()
+    const { result } = renderHook(() => useMutation(() => gate.promise))
+    expect(result.current.isPending).toBe(false)
+    act(() => {
+      result.current.mutate()
+    })
+    expect(result.current.isPending).toBe(true)
+    await act(async () => {
+      gate.resolve(42)
+      await gate.promise
+    })
+    expect(result.current.isPending).toBe(false)
+    expect(result.current.data).toBe(42)
+    expect(result.current.error).toBeNull()
+  })
+
+  it('mutateAsync resolves with the result and rejects with the original error', async () => {
+    const ok = renderHook(() => useMutation(async (n: number) => n * 2))
+    await act(async () => {
+      await expect(ok.result.current.mutateAsync(21)).resolves.toBe(42)
+    })
+    expect(ok.result.current.data).toBe(42)
+
+    const boom = new Error('nope')
+    const bad = renderHook(() =>
+      useMutation(async () => {
+        throw boom
+      }),
+    )
+    await act(async () => {
+      await expect(bad.result.current.mutateAsync()).rejects.toBe(boom)
+    })
+    expect(bad.result.current.error).toBe(boom)
+  })
+
+  it('latest invocation owns data and error under out-of-order completion', async () => {
+    const first = deferred<string>()
+    const second = deferred<string>()
+    const gates = [first, second]
+    let call = 0
+    const { result } = renderHook(() =>
+      useMutation(() => gates[call++]!.promise),
+    )
+    act(() => {
+      result.current.mutate()
+    })
+    act(() => {
+      result.current.mutate()
+    })
+    expect(result.current.isPending).toBe(true)
+    // the SECOND (latest) call completes first and takes ownership
+    await act(async () => {
+      second.resolve('second')
+      await second.promise
+    })
+    expect(result.current.data).toBe('second')
+    // the stale first call completes later: pending drains, data untouched
+    expect(result.current.isPending).toBe(true)
+    await act(async () => {
+      first.resolve('first')
+      await first.promise
+    })
+    expect(result.current.isPending).toBe(false)
+    expect(result.current.data).toBe('second')
+  })
+
+  it('a new invocation clears the previous error', async () => {
+    const boom = new Error('first failed')
+    let shouldFail = true
+    const { result } = renderHook(() =>
+      useMutation(async () => {
+        if (shouldFail) throw boom
+        return 'ok'
+      }),
+    )
+    act(() => {
+      result.current.mutate()
+    })
+    await act(async () => {})
+    expect(result.current.error).toBe(boom)
+
+    shouldFail = false
+    act(() => {
+      result.current.mutate()
+    })
+    expect(result.current.error).toBeNull()
+    await act(async () => {})
+    expect(result.current.data).toBe('ok')
+  })
+
+  it('reset restores the idle state', async () => {
+    const { result } = renderHook(() => useMutation(async () => 'done'))
+    await act(async () => {
+      await result.current.mutateAsync()
+    })
+    expect(result.current.data).toBe('done')
+    act(() => {
+      result.current.reset()
+    })
+    expect(result.current.data).toBeUndefined()
+    expect(result.current.error).toBeNull()
+    expect(result.current.isPending).toBe(false)
+  })
+
+  it('completion after unmount is inert', async () => {
+    const gate = deferred<string>()
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { result, unmount } = renderHook(() => useMutation(() => gate.promise))
+    act(() => {
+      result.current.mutate()
+    })
+    unmount()
+    await act(async () => {
+      gate.resolve('late')
+      await gate.promise
+    })
+    expect(errors).not.toHaveBeenCalled()
+    errors.mockRestore()
+  })
+
+  it('works under StrictMode double-invocation', async () => {
+    const { result } = renderHook(() => useMutation(async (n: number) => n + 1), {
+      wrapper: ({ children }) => createElement(StrictMode, null, children),
+    })
+    await act(async () => {
+      await expect(result.current.mutateAsync(1)).resolves.toBe(2)
+    })
+    expect(result.current.data).toBe(2)
+    expect(result.current.isPending).toBe(false)
   })
 })

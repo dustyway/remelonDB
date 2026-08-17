@@ -12,8 +12,12 @@
 import {
   createContext,
   createElement,
+  useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
+  useState,
   useSyncExternalStore,
   type ReactNode,
 } from 'react'
@@ -301,4 +305,126 @@ export function useQueryCount(
   query: Query<unknown> | null | undefined,
 ): number {
   return useQueryCountResult(query).data
+}
+
+// ---------------------------------------------------------------------------
+// Mutations
+
+/** State and entry points returned by {@link useMutation}. */
+export interface UseMutationResult<Args extends unknown[], Result> {
+  /**
+   * Fire-and-observe: returns void, so a floating call is safe by
+   * construction. Failure never becomes an unhandled rejection; it
+   * lands in `error`.
+   */
+  mutate: (...args: Args) => void
+  /**
+   * Awaitable form with normal promise semantics: resolves with the
+   * mutation result, rejects with the original error. For workflows
+   * that must continue only after success (close a dialog once the
+   * write commits). Drives the same state as `mutate`.
+   */
+  mutateAsync: (...args: Args) => Promise<Result>
+  /** Result of the most recent completed invocation that still owns state. */
+  data: Result | undefined
+  /** Failure of the owning invocation; cleared when a new one starts. */
+  error: unknown
+  /** True while any tracked invocation is in flight. */
+  isPending: boolean
+  /** Back to idle: clears data and error, in-flight completions are ignored. */
+  reset: () => void
+}
+
+/**
+ * The write-side counterpart of `useQuery`: wrap an async write and get
+ * pending/error state instead of a bare promise to babysit.
+ *
+ *     const { mutate, isPending, error } = useMutation(
+ *       (title: string) => db.write(() => db.get(Deck).create({ title })),
+ *     )
+ *
+ * Ownership under overlap: the latest invocation owns `data` and
+ * `error`; completions of superseded or reset invocations only drain
+ * `isPending`. The mutation function is read at call time, so a
+ * re-render with a new closure is picked up without re-subscribing.
+ */
+export function useMutation<Args extends unknown[], Result>(
+  mutationFn: (...args: Args) => Promise<Result> | Result,
+): UseMutationResult<Args, Result> {
+  const [state, setState] = useState<{
+    data: Result | undefined
+    error: unknown
+    pendingCount: number
+  }>(IDLE_MUTATION)
+
+  const fnRef = useRef(mutationFn)
+  fnRef.current = mutationFn
+  // generation guards ownership: bumped by each invocation and by reset,
+  // so stale completions cannot write data/error. mountedRef guards
+  // against state updates after unmount.
+  const generationRef = useRef(0)
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
+  const mutateAsync = useCallback(async (...args: Args): Promise<Result> => {
+    const generation = ++generationRef.current
+    if (mountedRef.current) {
+      setState((s) => ({ ...s, error: null, pendingCount: s.pendingCount + 1 }))
+    }
+    const settle = (
+      apply: (s: {
+        data: Result | undefined
+        error: unknown
+        pendingCount: number
+      }) => { data: Result | undefined; error: unknown },
+    ) => {
+      if (!mountedRef.current) return
+      setState((s) => ({
+        ...(generationRef.current === generation ? apply(s) : s),
+        pendingCount: s.pendingCount - 1,
+      }))
+    }
+    try {
+      const result = await fnRef.current(...args)
+      settle((s) => ({ ...s, data: result, error: null }))
+      return result
+    } catch (error) {
+      settle((s) => ({ ...s, error }))
+      throw error
+    }
+  }, [])
+
+  const mutate = useCallback(
+    (...args: Args): void => {
+      mutateAsync(...args).catch(() => {
+        // failure is owned by the hook state; a floating mutate is safe
+      })
+    },
+    [mutateAsync],
+  )
+
+  const reset = useCallback(() => {
+    generationRef.current++
+    setState((s) => ({ ...IDLE_MUTATION, pendingCount: s.pendingCount }))
+  }, [])
+
+  return {
+    mutate,
+    mutateAsync,
+    data: state.data,
+    error: state.error,
+    isPending: state.pendingCount > 0,
+    reset,
+  }
+}
+
+const IDLE_MUTATION = {
+  data: undefined,
+  error: null,
+  pendingCount: 0,
 }
