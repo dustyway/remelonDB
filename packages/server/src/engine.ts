@@ -183,6 +183,14 @@ export function createSyncEngine<Scope>(
           }
           byId.set(id, raw as WireRow)
         }
+        // a deletion is the terminal statement for its id: an id named in
+        // `deleted` supersedes any created/updated content in the same
+        // push. Without this, a rejection of the upsert half (validation,
+        // append-only, a storage constraint) would leave the deletion
+        // live, and the push would report the id rejected while applying
+        // one of its effects anyway
+        const deletes = [...new Set(change?.deleted ?? [])]
+        for (const id of deletes) byId.delete(id)
         const rows: WireRow[] = []
         for (const row of byId.values()) {
           if (options.tables[table]?.validate?.(row) === false) {
@@ -191,11 +199,7 @@ export function createSyncEngine<Scope>(
             rows.push(row)
           }
         }
-        return {
-          table,
-          rows,
-          deletes: [...(change?.deleted ?? [])],
-        }
+        return { table, rows, deletes }
       })
 
       return options.store.transaction(scope, 'push', async (tx) => {
@@ -279,6 +283,9 @@ export function createSyncEngine<Scope>(
           if (drop.size > 0) {
             ;(rejected[entry.table] ??= []).push(...drop)
             entry.rows = entry.rows.filter((r) => !drop.has(r.id))
+            // a rejected id leaves no effect: unreachable after the
+            // deleted-supersedes normalization, kept as the invariant
+            entry.deletes = entry.deletes.filter((id) => !drop.has(id))
           }
         }
 
@@ -289,6 +296,10 @@ export function createSyncEngine<Scope>(
               // storage said no (constraint violation): same lane as
               // validation refusals — never silent, never a 500
               ;(rejected[entry.table] ??= []).push(...refused)
+              const drop = new Set(refused)
+              // a rejected id leaves no effect: unreachable after the
+              // deleted-supersedes normalization, kept as the invariant
+              entry.deletes = entry.deletes.filter((id) => !drop.has(id))
             }
           }
         }

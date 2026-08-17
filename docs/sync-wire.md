@@ -41,7 +41,13 @@ applies `updated` for a locally-missing record as a create (and vice
 versa, logging an anomaly). Servers SHOULD classify when cheap and MAY
 report all live rows as `updated`. A ChangeSet naming one id in both
 arrays states the record twice; the receiver MUST apply the last
-statement (`updated` over `created`) rather than fail.
+statement (`updated` over `created`) rather than fail. A deletion is
+the terminal statement: an id named in `deleted` supersedes any
+created/updated content for that id in the same ChangeSet, and the
+superseded content MUST NOT be validated or applied. This keeps
+rejection coherent: whatever refuses the surviving statement (a
+validation hook, a storage constraint) refuses the id's entire effect,
+never half of it.
 
 ## 2. Pull
 
@@ -236,6 +242,14 @@ For a server test suite; each item is one scenario or property test.
 16. A cross-validation refusal of a *deletion* is reported by id and
     the row stays alive: a server that reports the refusal but applies
     the tombstone anyway diverges every other device. Same opt-in.
+17. An id named in `deleted` supersedes its created/updated content in
+    the same push: the deletion applies, the content does not, and
+    nothing lands in `rejected`. A created-and-deleted unknown id nets
+    to nothing.
+18. When the surviving statement for a duplicated id is refused (a
+    deletion the cross-validation hook denies), the id is rejected and
+    the row keeps its *pre-push* content: the superseded update leaves
+    no trace either. Opt-in (`crossValidation`).
 
 ## Versioning
 
