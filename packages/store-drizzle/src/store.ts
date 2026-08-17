@@ -213,6 +213,19 @@ export interface DrizzleStore<Scope> extends SyncStore<Scope> {
 
 const IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)?$/
 
+// Unique (23505) and foreign-key (23503) violations are content refusals the
+// wire contract owes the client as per-record rejections, not thrown 500s.
+// Drivers differ in where they put the SQLSTATE, so walk the cause chain.
+const CONSTRAINT_CODES = new Set(['23505', '23503'])
+const isConstraintViolation = (error: unknown): boolean => {
+  for (let e = error, depth = 0; e && depth < 5; depth++) {
+    const code = (e as { code?: unknown }).code
+    if (typeof code === 'string' && CONSTRAINT_CODES.has(code)) return true
+    e = (e as { cause?: unknown }).cause
+  }
+  return false
+}
+
 /** @category Store seam */
 export function createDrizzleStore<Scope>(options: DrizzleStoreOptions<Scope>): DrizzleStore<Scope> {
   const sequence = options.revSequence ?? 'remelon_rev'
@@ -320,15 +333,38 @@ export function createDrizzleStore<Scope>(options: DrizzleStoreOptions<Scope>): 
       }))
       const set: Record<string, SQL> = { [p.revKey]: excluded(p.cfg.rev.name) }
       for (const column of p.updateColumns) set[column.key] = excluded(column.name)
-      await tx
-        .insert(p.cfg.table)
-        .values(values as never)
-        .onConflictDoUpdate({
-          target: p.cfg.id,
-          set: set as never,
-          // never resurrect a tombstone, never touch its rev
-          setWhere: isNull(p.cfg.deletedAt),
-        })
+      const apply = (subset: typeof values, on: DrizzleTx) =>
+        on
+          .insert(p.cfg.table)
+          .values(subset as never)
+          .onConflictDoUpdate({
+            target: p.cfg.id,
+            set: set as never,
+            // never resurrect a tombstone, never touch its rev
+            setWhere: isNull(p.cfg.deletedAt),
+          })
+      // Fast path: the whole batch in one statement, inside a savepoint so
+      // a constraint violation cannot poison the outer push transaction.
+      try {
+        await tx.transaction((sp) => apply(values, sp))
+        return
+      } catch (error) {
+        if (!isConstraintViolation(error)) throw error
+      }
+      // Slow path, only after a violation: row by row, each in its own
+      // savepoint, collecting the ids the database refuses. The wire
+      // contract turns these into per-record rejections — a refused row
+      // leaves no trace and the rest of the batch still applies.
+      const refused: string[] = []
+      for (const value of values) {
+        try {
+          await tx.transaction((sp) => apply([value], sp))
+        } catch (error) {
+          if (!isConstraintViolation(error)) throw error
+          refused.push(String((value as Record<string, unknown>)[p.idKey]))
+        }
+      }
+      return refused
     },
     tombstone: async (name, txScope, ids) => {
       const p = tableOf(name)

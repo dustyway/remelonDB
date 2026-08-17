@@ -77,6 +77,15 @@ export interface ServerConformanceOptions {
     readonly table: string
     readonly fixture: TableFixture
   }
+  /**
+   * A table with a storage-enforced unique column, for backends whose
+   * storage can refuse a row on its own (case 14). `row` builds a wire
+   * row whose unique column carries `value`. Requires `secondUser`.
+   */
+  readonly uniqueColumn?: {
+    readonly table: string
+    readonly row: (id: string, value: string) => WireRow
+  }
 }
 
 const only = (changes: SyncChanges, table: string) =>
@@ -479,6 +488,50 @@ export function registerServerConformance(
         ...only(state.changes, aoTable).updated,
       ].find((r) => String(r['id']) === row.id)
       expect(stored).toEqual(row)
+    })
+
+    const uniqueColumn = options.uniqueColumn
+    const case14 = uniqueColumn ? it : it.skip
+    case14('14. a storage constraint refusal is a per-record rejection, and the rest of the batch applies (needs `uniqueColumn`)', async (ctx) => {
+      const { table: uqTable, row: uqRow } = uniqueColumn!
+      const { handlers, secondUser } = await options.makeContext()
+      if (!secondUser) return ctx.skip()
+      const changes = (rows: WireRow[]): SyncChanges => ({
+        [uqTable]: { created: [], updated: rows, deleted: [] },
+      })
+
+      const startA = pulled(await pullNull(handlers))
+      accepted(
+        await handlers.push({
+          changes: changes([uqRow('uq-a', 'taken')]),
+          cursor: startA.cursor,
+        }),
+      )
+
+      // the second principal pushes one colliding row and one clean row:
+      // the refusal must reach the wire as a rejected id — never a thrown
+      // error — while the clean row applies in the same push
+      const startB = pulled(await pullNull(secondUser))
+      const collide = accepted(
+        await secondUser.push({
+          changes: changes([uqRow('uq-b1', 'taken'), uqRow('uq-b2', 'free')]),
+          cursor: startB.cursor,
+        }),
+      )
+      expect(collide.rejected?.[uqTable] ?? []).toContain('uq-b1')
+      const afterB = pulled(await pullNull(secondUser))
+      expect(liveIds(afterB.changes, uqTable)).toContain('uq-b2')
+      expect(liveIds(afterB.changes, uqTable)).not.toContain('uq-b1')
+
+      // the refusal wedges nothing: the same id retries with a free value
+      // and goes through
+      const recovered = accepted(
+        await secondUser.push({
+          changes: changes([uqRow('uq-b1', 'fresh')]),
+          cursor: collide.cursor!,
+        }),
+      )
+      expect(recovered.rejected?.[uqTable] ?? []).toEqual([])
     })
   })
 }
