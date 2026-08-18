@@ -84,8 +84,23 @@ Q.like/notLike/includes(pattern: string): Comparison<string>
 
 `WhereDescription<C, V>` carries both phantom parameters;
 `Q.where(left, value)` infers `V` from a bare value or takes it from
-the comparison. `Q.and`/`Q.or` propagate the same union their
-conditions carry, as they do for column names today.
+the comparison. `Q.and`/`Q.or` must NOT aggregate independent column
+and value unions — `And<'position' | 'title', number | string>` can no
+longer distinguish valid leaves from crossed ones. Instead they carry
+the union of their conditions' *complete* leaf descriptions:
+
+```ts
+type WhereLeaf = WhereDescription<string, Value>
+And<L extends WhereLeaf>   // L = WhereDescription<'position', number>
+                           //   | WhereDescription<'title', string> ...
+```
+
+Each union member keeps its own column→value pairing, and nested
+`and`/`or` merge leaf unions without losing it. The query-site check
+then distributes over `L`: every member must individually satisfy the
+collection's `WhereFor<M>`, so a crossed leaf
+(`WhereDescription<'position', string>`) fails on its own even when
+the aggregate unions would look valid.
 
 ### 4. The clause union becomes value-aware
 
@@ -147,8 +162,12 @@ as a breaking type-level change in the next release notes.
 ## Open questions
 
 - **`Q.column` right-hand sides.** `Q.eq(Q.column('other'))` has no
-  value type; v1 types it as an opt-out (`Comparison<any>`), losing
-  value checking for that one clause. Typing it properly needs the
+  value type; v1 types it as an opt-out for that one clause. The
+  opt-out must NOT be `Comparison<any>` — no public `any`. Use a
+  dedicated phantom marker (`Comparison<UncheckedValue>`, where
+  `WhereFor` explicitly accepts the marker for every column), or
+  `Comparison<never>` if the prototype proves its variance safe under
+  the covariant check. Typing column comparisons properly needs the
   column map at comparison-build time, which the standalone-builder
   shape resists.
 - **Error-message quality.** The distributed clause union produces
