@@ -38,6 +38,10 @@ class FakeServer {
   docs = new Map<string, { fields: DirtyRaw; rev: number; deleted: boolean }>()
   pullCalls = 0
   pushCalls = 0
+  /** Ids this server refuses per the wire contract: named in
+   * `rejected`, their effects never applied, the rest of the push
+   * accepted — a genuine refusal, not a rewritten response. */
+  rejectIds = new Set<string>()
 
   seed(id: string, fields: DirtyRaw): void {
     this.docs.set(id, { fields: { ...fields, id }, rev: ++this.rev, deleted: false })
@@ -88,14 +92,27 @@ class FakeServer {
       }
     }
     const interleaved = this.changesSince(cursor, new Set(pushedIds))
+    const rejected: string[] = []
     for (const record of [...table.created, ...table.updated]) {
       const id = record['id'] as string
+      if (this.rejectIds.has(id)) {
+        rejected.push(id)
+        continue
+      }
       this.docs.set(id, { fields: { ...record }, rev: ++this.rev, deleted: false })
     }
     for (const id of table.deleted) {
+      if (this.rejectIds.has(id)) {
+        rejected.push(id)
+        continue
+      }
       this.docs.set(id, { fields: { id }, rev: ++this.rev, deleted: true })
     }
-    return { cursor: String(this.rev), changes: interleaved }
+    return {
+      cursor: String(this.rev),
+      changes: interleaved,
+      ...(rejected.length > 0 ? { rejected: { tasks: rejected } } : {}),
+    }
   }
 }
 
@@ -347,15 +364,8 @@ describe('sync engine', () => {
       await db.get('tasks').create({ id: 'ok', name: 'fine' })
       await db.get('tasks').create({ id: 'bad', name: 'rejected' })
     })
-    await sync({
-      pushChanges: async (args) => {
-        const result = await server.push(args)
-        if ('conflict' in result) {
-          return result
-        }
-        return { ...result, rejected: { tasks: ['bad'] } }
-      },
-    })
+    server.rejectIds.add('bad')
+    await sync()
     expect((await db.get('tasks').find('ok'))._status).toBe('synced')
     expect((await db.get('tasks').find('bad'))._status).toBe('created')
   })
@@ -365,22 +375,23 @@ describe('sync engine', () => {
       await db.get('tasks').create({ id: 'ok', name: 'fine' })
       await db.get('tasks').create({ id: 'bad', name: 'rejected' })
     })
-    const result = await sync({
-      pushChanges: async (args) => {
-        const r = await server.push(args)
-        if ('conflict' in r) return r
-        return { ...r, rejected: { tasks: ['bad'] } }
-      },
-    })
+    server.rejectIds.add('bad')
+    const result = await sync()
     // identity matches the count, table by table
     expect(result.rejected).toBe(1)
     expect(result.rejectedRecords).toEqual({ tasks: ['bad'] })
+    // a genuine refusal: the rejected row never reached server storage,
+    // the accepted one did
+    expect(server.docs.has('bad')).toBe(false)
+    expect(server.docs.has('ok')).toBe(true)
 
-    // the rejected row stayed dirty; the next round (no injected
-    // refusal) pushes it cleanly and the report goes back to empty
+    // the rejected row stayed dirty; once the server stops refusing,
+    // the next round pushes it and the report goes back to empty
+    server.rejectIds.clear()
     const again = await sync()
     expect(again.rejected).toBe(0)
     expect(again.rejectedRecords).toEqual({})
+    expect(server.docs.has('bad')).toBe(true)
   })
 
   it('omits tables whose rejection list is empty', async () => {
@@ -389,7 +400,9 @@ describe('sync engine', () => {
       pushChanges: async (args) => {
         const r = await server.push(args)
         if ('conflict' in r) return r
-        // a server naming a table with zero ids must not surface it
+        // a nonconforming server naming a table with zero ids must not
+        // surface it — this one stays a response rewrite on purpose,
+        // since a conforming server never produces the shape
         return { ...r, rejected: { tasks: [] } }
       },
     })
