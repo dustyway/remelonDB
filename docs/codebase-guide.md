@@ -1,7 +1,7 @@
 ---
 title: "remelonDB: A Guide to the Codebase"
 subtitle: "How the layers fit together, and why each one exists"
-version: "0.1.9 · 2026-08-10"
+version: "0.1.9 · 2026-08-18"
 ---
 
 <!-- Source of the maintainer guide. Render the PDF with:
@@ -11,7 +11,7 @@ version: "0.1.9 · 2026-08-10"
 
 # Preface {.unnumbered}
 
-This guide can be read cover to cover, with no repository open beside you: each time the code leans on an idea — a database transaction, an advisory lock, a SharedWorker, a CRDT-flavoured merge — a short **Background** aside explains it first, set off so your eye can slide past what you already know. It describes the codebase at version **0.1.9** or newer: the guide tracks `main`, so it is never more outdated than the release it ships beside and may briefly run ahead of it; roadmap work tracked only in open issues is out of scope.
+This guide can be read cover to cover, with no repository open beside you: each time the code leans on an idea — a database transaction, an advisory lock, a SharedWorker, a CRDT-flavoured merge — a short **Background** aside explains it first, set off so your eye can slide past what you already know. It describes the codebase at version **0.1.9** or newer: the stamped version is a floor, content is kept current with `main`, and the date beside the version is the last content pass. That claim is held to the source where a machine can hold it (the API summaries, repository paths, and structural assertions are checker-verified on every push) and by review everywhere else; roadmap work tracked only in open issues is out of scope.
 
 ## What you are holding
 
@@ -1431,7 +1431,7 @@ entry.rows = entry.rows.filter((r) => !drop.has(r.id))
 
 The rationale, from the source: "both must be visible in `rejected` or the client marks a refused write as synced and diverges for good." (Conformance case 12.)
 
-**Refusals from storage itself.** A unique or foreign-key constraint the database enforces fires *during* apply — after validation, after the conflict check — as a thrown SQL error. The engine treats it as a rejection like any other, never a 500 that wedges the whole sync loop: `SyncStoreTx.upsert` may return refused ids, and the drizzle store implements this with a savepoint-per-batch fast path that retries row by row on a constraint violation (Postgres 23505/23503), so one refused row costs one savepoint round instead of the batch. The refused id lands in `rejected`, leaves no trace in storage, and the rest of the push applies. (Conformance case 14, opt-in `uniqueColumn`.)
+**Refusals from storage itself.** A unique or foreign-key constraint the database enforces fires *during* apply — after validation, after the conflict check — as a thrown SQL error. The engine treats it as a rejection like any other, never a 500 that wedges the whole sync loop: `SyncStoreTx.upsert` may return refused ids, and the drizzle store implements this in two stages — the whole batch is attempted inside one savepoint (the fast path every clean push takes), and only after a constraint violation (Postgres 23505/23503) is each row retried individually, each in its own savepoint, collecting the refused ids. A violating batch of N rows therefore costs one failed batch attempt plus N per-row attempts; the clean path costs one savepoint total. The refused id lands in `rejected`, leaves no trace in storage, and the rest of the push applies. (Conformance case 14, opt-in `uniqueColumn`.)
 
 **Content and a deletion for one id in the same push.** An id named in `deleted` is the *terminal statement* for that id: it supersedes any created/updated content in the same ChangeSet, and the superseded content is never validated or applied (a created-and-deleted unknown id nets to nothing). The rule earns its keep when the surviving statement is refused — before it, a rejection of the content half (validation, append-only, a storage constraint) stripped only the upsert, leaving the deletion live: the push reported the id rejected while applying half of its effect anyway. The formal model now states the guarantee as an invariant — `rejectedNoEffect`, an id named in `rejected` holds exactly its pre-push state — with a fault flag (`DELETE_LEAK`) that reproduces the old bug on demand, in the same spirit as `SILENT_DROP`. (Conformance cases 17 and 18.)
 
@@ -1661,7 +1661,7 @@ return useMemo<QueryResult<M> | SelectedResult<T>>(() => {
 
 (`previous` is the `keepPreviousData` retention explained below; without the option it is always `null` and `presented` is just `raw`.)
 
-The design point is what `select` is — and is not — a dependency of. It keys the **derivation** (`[raw, select]`) but never the **subscription**, which is keyed on the query's structure alone. So changing the selector recomputes the rendered value without ever restarting the shared observation, and a selector that captures changed inputs — filtering by a `now` timestamp, say — always recomputes rather than serving a stale derivation (a test pins exactly this). An inline lambda's fresh identity each render merely re-runs a pure projection over already-fetched rows, which is cheap by construction. Two components can share one observation of "all todos" while one renders `rows.length` and the other `rows[0]`.
+The design point is what `select` is — and is not — a dependency of. It keys the **derivation** (together with the snapshot and the retained previous rows) but never the **subscription**, which is keyed on the query's structure alone. So changing the selector recomputes the rendered value without ever restarting the shared observation, and a selector that captures changed inputs — filtering by a `now` timestamp, say — always recomputes rather than serving a stale derivation (a test pins exactly this). An inline lambda's fresh identity each render merely re-runs a pure projection over already-fetched rows, which is cheap by construction. Two components can share one observation of "all todos" while one renders `rows.length` and the other `rows[0]`.
 
 Counts get the same treatment: `useQueryCountResult` exposes `{ data, isLoading, error }` with the same structural keying under a distinct key namespace (`c:` versus `q:`, so counts and result sets never collide), backed by the engine's cheaper `observeCount`; `useQueryCount` is its convenience form, returning the bare number.
 
