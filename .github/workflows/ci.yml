@@ -353,16 +353,12 @@ jobs:
           pnpm --filter @remelondb/core pack --pack-destination /tmp/packed
           pnpm --filter @remelondb/driver-rn-cpp pack --pack-destination /tmp/packed
       - name: Create RN 0.86 test app
+        # versions pinned exactly (never @latest): a lane failure must
+        # mean the code changed, not the ecosystem
         run: |
-          cd /tmp
-          npx @react-native-community/cli@latest init WmHarness --version 0.86.0 --pm npm --skip-install --install-pods false
-          cd WmHarness
-          npm install
-          npm install /tmp/packed/*core*.tgz /tmp/packed/*driver-rn-cpp*.tgz
-          cp "$GITHUB_WORKSPACE"/packages/driver-rn-cpp/e2e/App.tsx App.tsx
-          cp "$GITHUB_WORKSPACE"/packages/driver-rn-cpp/e2e/vitest-shim.ts vitest-shim.ts
-          cp "$GITHUB_WORKSPACE"/packages/driver-rn-cpp/e2e/metro.config.js metro.config.js
-          cp "$GITHUB_WORKSPACE"/packages/driver-rn-cpp/e2e/babel.config.js babel.config.js
+          packages/driver-rn-cpp/scripts/create-rn-harness.sh \
+            --react-native 0.86.0 --cli 20.2.0 \
+            --tarballs /tmp/packed --output /tmp/WmHarness
       - name: Build Android (debug)
         run: |
           cd /tmp/WmHarness/android
@@ -399,3 +395,51 @@ jobs:
             /tmp/remelon-metro.log
             /tmp/remelon-logcat.log
           if-no-files-found: ignore
+
+  # Compile-only floor check: the oldest React Native the driver claims
+  # to support (peerDependencies react-native >=0.76) must still pack,
+  # codegen, autolink, and compile. Runtime execution stays on the
+  # current-version lane above — a second emulator run would double the
+  # cost for little extra signal. If this lane fails, the peer floor is
+  # wrong: either add compatibility code or raise >=0.76 to the oldest
+  # version that passes.
+  android-driver-minimum:
+    needs: changes
+    if: needs.changes.outputs.cpp == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: pnpm install --frozen-lockfile
+      - name: Fetch SQLite amalgamation
+        run: node packages/driver-rn-cpp/scripts/fetch-sqlite.mjs
+      - name: Pack workspace packages
+        run: |
+          mkdir -p /tmp/packed
+          pnpm --filter @remelondb/core pack --pack-destination /tmp/packed
+          pnpm --filter @remelondb/driver-rn-cpp pack --pack-destination /tmp/packed
+      - name: Create RN 0.76 test app
+        run: |
+          packages/driver-rn-cpp/scripts/create-rn-harness.sh \
+            --react-native 0.76.9 --cli 15.1.3 \
+            --tarballs /tmp/packed --output /tmp/WmHarness
+      - name: Build Android (debug)
+        run: |
+          cd /tmp/WmHarness/android
+          ./gradlew assembleDebug --no-daemon --stacktrace
+      - name: Assert the TurboModule is registered (not just linked)
+        run: |
+          # generated-glue layout moved across CLI majors, so search the
+          # whole generated tree rather than pinning one path
+          grep -rq "RemelonDriver" /tmp/WmHarness/android/app/build/generated
