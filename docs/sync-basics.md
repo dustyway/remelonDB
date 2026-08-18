@@ -149,8 +149,9 @@ them into "synced or failed" will lie to the user in exactly one case:
 
 | Outcome | What happened | What to show |
 | --- | --- | --- |
-| Throw from `synchronize()` | Transport failure: nothing definitive happened | sync failed / offline |
-| Conflict | Another device won a race; handled internally by the retry loop | nothing, it resolved itself |
+| Thrown error | The run did not complete: a transport failure (the offline case), exhausted conflict retries, an abort signal, a response failing validation or a protocol invariant, or a local database failure | sync failed / offline |
+| Lease denied (`lease: 'unavailable'`) | Another context (tab, process) holds the sync lease; nothing ran here | keep the prior state, another context is syncing |
+| Conflict | Another device won a race; resolved internally by the retry loop, within its bound (`conflictRetries`, default 5), beyond which it becomes a thrown error | nothing, it resolved itself |
 | Result with `rejected > 0` | The push **completed** but the server refused specific records | attention required |
 | Clean result | Everything pushed and pulled | synced |
 
@@ -163,6 +164,11 @@ result carries what honesty needs:
 ```ts
 const result = await synchronize(options)
 
+if (result.lease === 'unavailable') {
+  // nothing ran here — another tab or process holds the sync lease;
+  // labeling this "synced" would launder a run that never happened
+  return { status: 'deferred' }
+}
 if (result.rejected > 0) {
   return {
     status: 'attention-required',
