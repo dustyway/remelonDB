@@ -38,6 +38,24 @@ jobs:
       - run: pnpm test
       - run: pnpm typecheck
       - run: pnpm build
+      - name: Build codebase-guide EPUB
+        uses: docker://pandoc/core:3.10
+        with:
+          args: >-
+            docs/codebase-guide.md
+            -o remelondb-guide.epub
+            --toc --toc-depth=2 -N
+            --resource-path=docs
+            --css docs/codebase-guide.epub.css
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Validate codebase-guide EPUB
+        run: |
+          curl -fsSLO https://github.com/w3c/epubcheck/releases/download/v5.3.0/epubcheck-5.3.0.zip
+          unzip -q epubcheck-5.3.0.zip
+          java -jar epubcheck-5.3.0/epubcheck.jar remelondb-guide.epub
       - name: Pack and publish (skip versions already on the registry)
         run: |
           TAG="${GITHUB_REF_NAME#v}"
@@ -74,9 +92,10 @@ jobs:
             exit 0
           esac
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo "release $GITHUB_REF_NAME already exists — skipping"
+            echo "release $GITHUB_REF_NAME already exists — updating guide asset"
           else
             gh release create "$GITHUB_REF_NAME" \
               --title "$GITHUB_REF_NAME" \
               --notes-file "docs/releases/$GITHUB_REF_NAME.md"
           fi
+          gh release upload "$GITHUB_REF_NAME" remelondb-guide.epub --clobber

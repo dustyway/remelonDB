@@ -12,7 +12,8 @@
     "check:backend-tutorial": "node scripts/check-backend-tutorial.mjs",
     "check:guide": "node scripts/check-codebase-guide.mjs",
     "check:wire": "node scripts/check-sync-wire.mjs",
-    "check:reference": "node scripts/check-reference.mjs"
+    "check:reference": "node scripts/check-reference.mjs",
+    "guide:epub": "pandoc docs/codebase-guide.md -o remelondb-guide.epub --toc --toc-depth=2 -N --resource-path=docs --css docs/codebase-guide.epub.css"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.2",

@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title description" viewBox="0 0 1000 720">
+  <title id="title">remelonDB architecture and SQLite driver seam</title>
+  <desc id="description">The public API and shared TypeScript core sit above the SqliteDriver seam. Four platform-specific drivers for Node, Expo React Native, C++ React Native, and web WASM with OPFS sit below it.</desc>
+  <style>
+    text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; fill: #18212b }
+    .heading { font-size: 27px; font-weight: 700 }
+    .label { font-size: 22px; font-weight: 700 }
+    .body { font-size: 18px }
+    .small { font-size: 16px; fill: #52606d }
+    .box { fill: #f8fafc; stroke: #94a3b8; stroke-width: 2 }
+    .core { fill: #eef6ff; stroke: #4f86c6; stroke-width: 2 }
+    .driver { fill: #f7f7f2; stroke: #89916b; stroke-width: 2 }
+    .seam { stroke: #263746; stroke-width: 4 }
+  </style>
+
+  <rect width="1000" height="720" fill="#ffffff" />
+
+  <rect class="box" x="25" y="25" width="950" height="75" rx="12" />
+  <text class="label" x="50" y="70">Public API</text>
+  <text class="body" x="245" y="70">Model · Collection · Query · observation · sync · React hooks</text>
+
+  <rect class="core" x="25" y="120" width="950" height="245" rx="12" />
+  <text class="label" x="50" y="158">Shared core</text>
+  <text class="small" x="50" y="185">one implementation · pure TypeScript · approximately 60% of project TypeScript</text>
+  <text class="body" x="70" y="225">Q → SQL compiler · schema DDL and migrations · RecordCache</text>
+  <text class="body" x="70" y="260">writer queue and change bus · sync engine and per-column merge</text>
+  <text class="body" x="70" y="295">DatabaseManager and cross-tab changes · tombstones and local storage</text>
+  <text class="small" x="70" y="333">All behavior above the seam is implemented and tested once.</text>
+
+  <line class="seam" x1="25" y1="405" x2="975" y2="405" />
+  <rect x="340" y="382" width="320" height="46" rx="23" fill="#ffffff" stroke="#263746" stroke-width="2" />
+  <text class="heading" x="500" y="414" text-anchor="middle">SqliteDriver seam</text>
+
+  <text class="body" x="35" y="460">Required: open · close · query · execute · executeBatch · setUserVersion · destroy</text>
+  <text class="small" x="35" y="492">Optional web coordination: acquireWorkSlot · publishChanges · onExternalChanges · requestSyncTurn</text>
+
+  <rect class="driver" x="25" y="535" width="220" height="105" rx="10" />
+  <rect class="driver" x="265" y="535" width="220" height="105" rx="10" />
+  <rect class="driver" x="505" y="535" width="220" height="105" rx="10" />
+  <rect class="driver" x="745" y="535" width="230" height="105" rx="10" />
+  <text class="label" x="135" y="578" text-anchor="middle">Node</text>
+  <text class="small" x="135" y="610" text-anchor="middle">exclusive SQLite</text>
+  <text class="label" x="375" y="578" text-anchor="middle">React Native</text>
+  <text class="small" x="375" y="610" text-anchor="middle">Expo SQLite</text>
+  <text class="label" x="615" y="578" text-anchor="middle">RN C++</text>
+  <text class="small" x="615" y="610" text-anchor="middle">TurboModule / JSI</text>
+  <text class="label" x="860" y="578" text-anchor="middle">Web</text>
+  <text class="small" x="860" y="610" text-anchor="middle">WASM · OPFS · broker</text>
+
+  <text class="heading" x="500" y="690" text-anchor="middle">Below the seam: platform work × 4</text>
+</svg>

@@ -1,0 +1,76 @@
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  line-height: 1.55;
+}
+
+h1 {
+  break-before: page;
+  page-break-before: always;
+}
+
+h1:first-child {
+  break-before: avoid;
+  page-break-before: avoid;
+}
+
+h2,
+h3 {
+  break-after: avoid;
+  page-break-after: avoid;
+}
+
+pre {
+  background: #f7f7f7;
+  border: 1px solid #dedede;
+  border-radius: 0.25rem;
+  padding: 0.75rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+code {
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+blockquote {
+  background: #fafafa;
+  border-left: 0.2rem solid #aaa;
+  margin-inline: 0;
+  padding: 0.25rem 0.9rem;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+table {
+  border-collapse: collapse;
+  font-size: 0.9em;
+  margin-block: 1rem;
+  width: 100%;
+}
+
+th,
+td {
+  border: 1px solid #bbb;
+  padding: 0.35rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.architecture-diagram {
+  break-inside: avoid;
+  margin: 1.25rem 0;
+  page-break-inside: avoid;
+  text-align: center;
+}
+
+.architecture-diagram img {
+  height: auto;
+  max-width: 100%;
+}
+
+figcaption {
+  color: #555;
+  font-size: 0.85em;
+  margin-top: 0.4rem;
+}

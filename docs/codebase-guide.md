@@ -1,12 +1,14 @@
 ---
+#Source of the maintainer guide.
+#PDF, from docs/:
+#pandoc codebase-guide.md -o remelondb-guide.pdf --pdf-engine=typst
+#--toc --toc-depth=2 -N --include-in-header=codebase-guide.preamble.typ
+#EPUB, from the repository root: pnpm guide:epub
 title: "remelonDB: A Guide to the Codebase"
 subtitle: "How the layers fit together, and why each one exists"
+lang: "en-US"
 version: "0.1.9 · 2026-08-18"
 ---
-
-<!-- Source of the maintainer guide. Render the PDF with:
-     pandoc codebase-guide.md -o remelondb-guide.pdf --pdf-engine=typst \
-       --toc --toc-depth=2 -N --include-in-header=codebase-guide.preamble.typ -->
 
 
 # Preface {.unnumbered}
@@ -243,6 +245,14 @@ This is why `core` is about five thousand lines and each exclusive-storage drive
     table.cell(colspan: 2)[#align(center)[#text(fill: luma(115))[above the seam: written once  ·  below: × 4 platforms]]],
   )
 ]
+```
+
+```{=html}
+<figure class="architecture-diagram">
+  <img src="codebase-guide-architecture.svg"
+       alt="remelonDB architecture: the public API and shared TypeScript core sit above the eleven-method SqliteDriver seam; below it are four thin platform drivers for Node, Expo React Native, C++ React Native, and web WASM with OPFS." />
+  <figcaption>The shared core above the driver seam is written once; the four platform drivers below it carry the platform-specific cost.</figcaption>
+</figure>
 ```
 
 Read the double rule as the expensive line: everything above it is written once and tested once; everything below it is multiplied by four. The whole architecture is one long effort to keep that lower band thin.

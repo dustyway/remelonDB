@@ -2,9 +2,11 @@
 
 Releases publish to npm from CI via trusted publishing (OIDC): pushing a
 `v*` tag runs `.github/workflows/release.yml`, which tests, builds,
-packs every workspace package, and `npm publish`es each tarball whose
-version matches the tag and is not already on the registry. No tokens,
-no OTP; provenance attestations are automatic.
+validates the codebase-guide EPUB, packs every workspace package, and
+`npm publish`es each tarball whose version matches the tag and is not
+already on the registry. Stable releases also attach the validated EPUB
+to the GitHub Release. No tokens, no OTP; provenance attestations are
+automatic.
 
 ## Cutting a release
 
@@ -13,8 +15,8 @@ no OTP; provenance attestations are automatic.
    commit it together with the notes as `chore(release): vX.Y.Z`.
 3. `git tag -s vX.Y.Z && git push && git push origin vX.Y.Z`.
 4. Watch the Release workflow: after publishing it creates the GitHub
-   Release entry from the notes file (no tarball attachments — npm is
-   the distribution).
+   Release entry from the notes file and attaches `remelondb-guide.epub`.
+   Package tarballs remain on npm rather than being attached to GitHub.
 
 Release tags must be **signed**: a repository ruleset rejects unsigned
 `v*` tags and forbids deleting or moving them once pushed. The

@@ -14,3 +14,4 @@ dist/
 docs-api/
 _apalache-out/
 .env*
+remelondb-guide.epub
