@@ -397,12 +397,14 @@ jobs:
           if-no-files-found: ignore
 
   # Compile-only floor check: the oldest React Native the driver claims
-  # to support (peerDependencies react-native >=0.76) must still pack,
+  # to support (peerDependencies react-native >=0.80) must still pack,
   # codegen, autolink, and compile. Runtime execution stays on the
   # current-version lane above — a second emulator run would double the
   # cost for little extra signal. If this lane fails, the peer floor is
-  # wrong: either add compatibility code or raise >=0.76 to the oldest
-  # version that passes.
+  # wrong: either add compatibility code or raise the floor to the
+  # oldest version that passes. (This is how the original >=0.76 claim
+  # was falsified: the shipped codegen glue needs 0.80's
+  # target_compile_reactnative_options.)
   android-driver-minimum:
     needs: changes
     if: needs.changes.outputs.cpp == 'true' || github.event_name == 'workflow_dispatch'
@@ -429,10 +431,10 @@ jobs:
           mkdir -p /tmp/packed
           pnpm --filter @remelondb/core pack --pack-destination /tmp/packed
           pnpm --filter @remelondb/driver-rn-cpp pack --pack-destination /tmp/packed
-      - name: Create RN 0.76 test app
+      - name: Create RN 0.80 test app
         run: |
           packages/driver-rn-cpp/scripts/create-rn-harness.sh \
-            --react-native 0.76.9 --cli 15.1.3 \
+            --react-native 0.80.2 --cli 19.1.2 \
             --tarballs /tmp/packed --output /tmp/WmHarness
       - name: Build Android (debug)
         run: |

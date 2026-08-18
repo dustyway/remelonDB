@@ -21,7 +21,7 @@
     "prepack": "tsdown"
   },
   "peerDependencies": {
-    "react-native": ">=0.76",
+    "react-native": ">=0.80",
     "@remelondb/core": "workspace:*"
   },
   "devDependencies": {
