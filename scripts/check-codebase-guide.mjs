@@ -23,7 +23,7 @@ const expect = (condition, message) => {
 }
 
 const metadataVersion = guide.match(/^version:\s*"([^" ·]+)[^"\n]*"/m)?.[1]
-const proseVersion = guide.match(/describes the shipped codebase at version \*\*([^*]+)\*\*/)?.[1]
+const proseVersion = guide.match(/describes the codebase at version \*\*([^*]+)\*\* or newer/)?.[1]
 expect(metadataVersion === pkg.version, `metadata version ${metadataVersion ?? '<missing>'} != package version ${pkg.version}`)
 expect(proseVersion === pkg.version, `preface version ${proseVersion ?? '<missing>'} != package version ${pkg.version}`)
 

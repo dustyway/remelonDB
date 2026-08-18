@@ -11,7 +11,7 @@ version: "0.1.9 · 2026-08-10"
 
 # Preface {.unnumbered}
 
-This guide can be read cover to cover, with no repository open beside you: each time the code leans on an idea — a database transaction, an advisory lock, a SharedWorker, a CRDT-flavoured merge — a short **Background** aside explains it first, set off so your eye can slide past what you already know. It describes the shipped codebase at version **0.1.9**; roadmap work tracked only in open issues is out of scope.
+This guide can be read cover to cover, with no repository open beside you: each time the code leans on an idea — a database transaction, an advisory lock, a SharedWorker, a CRDT-flavoured merge — a short **Background** aside explains it first, set off so your eye can slide past what you already know. It describes the codebase at version **0.1.9** or newer: the guide tracks `main`, so it is never more outdated than the release it ships beside and may briefly run ahead of it; roadmap work tracked only in open issues is out of scope.
 
 ## What you are holding
 
@@ -1415,9 +1415,9 @@ Inside the per-scope-serialized transaction, the checks run in a specific order,
 
 The validation granularity is worth stating as a rule, because it is easy to get wrong: **envelope shape** (strict object, usable ids) is validated in the transport and fails the whole request; **per-record values** are validated in the engine and are rejected *by id while the rest applies*. Value-validating in the transport would 400 an entire batch because one record was bad — punishing forty good writes for one typo. Splitting the two granularities is what lets a mostly-good push mostly succeed.
 
-## Two ways a push fails honestly
+## Four ways a push fails honestly
 
-Both share a theme: a write the server will not honor must be *visibly rejected*, because a silently-dropped write is the worst outcome — the client believes it succeeded and diverges permanently.
+All four share a theme: a write the server will not honor must be *visibly rejected*, because a silently-dropped write is the worst outcome — the client believes it succeeded and diverges permanently.
 
 **One id in both `created` and `updated`.** The engine dedupes the two lists by id into a map and lets the **last statement win** — `created` and `updated` are advisory labels over the same upsert, not a strict classification the client must get right. (Concatenating them into one batch would tell a SQL store to touch the same row twice in a single statement, which Postgres rejects with `21000`.) (Conformance case 11.)
 
@@ -1430,6 +1430,10 @@ entry.rows = entry.rows.filter((r) => !drop.has(r.id))
 ```
 
 The rationale, from the source: "both must be visible in `rejected` or the client marks a refused write as synced and diverges for good." (Conformance case 12.)
+
+**Refusals from storage itself.** A unique or foreign-key constraint the database enforces fires *during* apply — after validation, after the conflict check — as a thrown SQL error. The engine treats it as a rejection like any other, never a 500 that wedges the whole sync loop: `SyncStoreTx.upsert` may return refused ids, and the drizzle store implements this with a savepoint-per-batch fast path that retries row by row on a constraint violation (Postgres 23505/23503), so one refused row costs one savepoint round instead of the batch. The refused id lands in `rejected`, leaves no trace in storage, and the rest of the push applies. (Conformance case 14, opt-in `uniqueColumn`.)
+
+**Content and a deletion for one id in the same push.** An id named in `deleted` is the *terminal statement* for that id: it supersedes any created/updated content in the same ChangeSet, and the superseded content is never validated or applied (a created-and-deleted unknown id nets to nothing). The rule earns its keep when the surviving statement is refused — before it, a rejection of the content half (validation, append-only, a storage constraint) stripped only the upsert, leaving the deletion live: the push reported the id rejected while applying half of its effect anyway. The formal model now states the guarantee as an invariant — `rejectedNoEffect`, an id named in `rejected` holds exactly its pre-push state — with a fault flag (`DELETE_LEAK`) that reproduces the old bug on demand, in the same spirit as `SILENT_DROP`. (Conformance cases 17 and 18.)
 
 **Append-only tables.** Built on the same machinery: `TableConfig.appendOnly` makes a table one where a write naming an id that *already exists* — live or tombstoned — is rejected by id, while **deletes still apply** so parent cascades keep working. It gives an event-log table refusals the client actually *sees*, instead of the insert-only column tricks that silently swallow updates. (Recall from Chapter 3 that this flag lives only on the server engine's table config, not in the schema — one of the few facts about a table the schema literal does not carry.)
 
@@ -1586,7 +1590,7 @@ The omissions are not laziness; they are the offline-first constraint again. A d
 
 # The React Bindings
 
-Chapter 2 showed the modern `useQuery` in one line and promised the mechanism here. This is that chapter. The React bindings live in a single 304-line file (`packages/core/src/react/index.ts`) behind the `@remelondb/core/react` subpath, and their design thesis is a direct consequence of Chapter 6: because *a query is data*, a hook can key its subscription on the query's **structure** rather than its object identity — which erases the single most common footgun in reactive-query hooks. It is a small file that pays off several earlier chapters at once, so read it as a capstone.
+Chapter 2 showed the modern `useQuery` in one line and promised the mechanism here. This is that chapter. The React bindings live in a single file of roughly 550 lines (`packages/core/src/react/index.ts`) behind the `@remelondb/core/react` subpath, and their design thesis is a direct consequence of Chapter 6: because *a query is data*, a hook can key its subscription on the query's **structure** rather than its object identity — which erases the single most common footgun in reactive-query hooks. It is one file that pays off several earlier chapters at once, so read it as a capstone.
 
 ## React as an optional peer
 
@@ -1633,7 +1637,7 @@ The table name plus the JSON-serialized clause tree. Two queries built independe
 
 Compose the three and the result is: N components rendering "the newest todos" share a *single* live observation of that query, started once, stopped when the last of them unmounts, with no memoization anywhere in user code. A test verifies exactly this — two components, one query shape, `observe` called once, both see every emission, registry cleaned on unmount.
 
-Failure is part of the state, not an exception. The store subscribes with the observation's error callback (Chapter 5), so a failed refetch sets `error` while `data` retains the last successful rows — a list that errors mid-session keeps rendering its stale-but-real answer beside the error, instead of flashing empty. Loading, data, and error are one `{ data, isLoading, error }` shape throughout.
+Failure is part of the state, not an exception. The store subscribes with the observation's error callback (Chapter 5), so a failed refetch sets `error` while `data` retains the last successful rows — a list that errors mid-session keeps rendering its stale-but-real answer beside the error, instead of flashing empty. Loading, data, error, and the previous-data flag below are one `{ data, isLoading, error, isPreviousData }` shape throughout.
 
 ## The `select` option
 
@@ -1642,18 +1646,34 @@ A consumer can derive its own value off the shared subscription:
 ```ts
 const select = options?.select
 return useMemo<QueryResult<M> | SelectedResult<T>>(() => {
-  if (!select) return raw
-  return { isLoading: raw.isLoading, error: raw.error, data: select(raw.data) }
-}, [raw, select])
+  const presented: QueryResult<M> = previous
+    ? { data: previous.data, isLoading: false, error: raw.error, isPreviousData: true }
+    : raw
+  if (!select) return presented
+  return {
+    isLoading: presented.isLoading,
+    error: presented.error,
+    isPreviousData: presented.isPreviousData,
+    data: select(presented.data),
+  }
+}, [raw, select, previous])
 ```
+
+(`previous` is the `keepPreviousData` retention explained below; without the option it is always `null` and `presented` is just `raw`.)
 
 The design point is what `select` is — and is not — a dependency of. It keys the **derivation** (`[raw, select]`) but never the **subscription**, which is keyed on the query's structure alone. So changing the selector recomputes the rendered value without ever restarting the shared observation, and a selector that captures changed inputs — filtering by a `now` timestamp, say — always recomputes rather than serving a stale derivation (a test pins exactly this). An inline lambda's fresh identity each render merely re-runs a pure projection over already-fetched rows, which is cheap by construction. Two components can share one observation of "all todos" while one renders `rows.length` and the other `rows[0]`.
 
 Counts get the same treatment: `useQueryCountResult` exposes `{ data, isLoading, error }` with the same structural keying under a distinct key namespace (`c:` versus `q:`, so counts and result sets never collide), backed by the engine's cheaper `observeCount`; `useQueryCount` is its convenience form, returning the bare number.
 
-## Why every hook rides `useSyncExternalStore`
+## `keepPreviousData`: when the query itself must change
 
-All six hooks are built on React's `useSyncExternalStore` (USES), and the reasons are worth understanding because they are the reasons this integration is *correct* and the old hand-rolled one was merely *usually fine*.
+Structural keying makes a *rebuilt-but-equal* query free, but some queries change by design: a search box re-parameterizes a `Q.like` clause on every keystroke, pagination advances a skip, and each new structure is a new subscription that starts empty. By default the hook drops to `isLoading: true` and the list blanks. With `useQuery(query, { keepPreviousData: true })` the hook keeps rendering the previous query's rows until the new one delivers, and flags the transition as `isPreviousData: true` (dim the list); `isLoading` stays reserved for having nothing renderable at all.
+
+The design constraint worth internalizing: retention is strictly **per consumer** — a ref inside the hook instance, never the shared store — so one component's placeholder rows cannot leak into another component that reaches the same new query from a different history. The retention bookkeeping is written only in a commit-phase effect, so a render React abandons never decides what a consumer retains, and retained rows are dropped the moment the database object changes (one account's rows never render under another's database) or the query goes null. An error from the new query surfaces immediately with the previous rows still on screen. The full semantics table lives in `reference/react.md`; the option's escape valve is worth repeating here — for a periodically re-parameterized query over a bounded row set, a stable query plus `select` is still the better shape, because it recomputes locally instead of restarting the observation on every tick.
+
+## Why every read hook rides `useSyncExternalStore`
+
+All five read-side hooks are built on React's `useSyncExternalStore` (USES), and the reasons are worth understanding because they are the reasons this integration is *correct* and the old hand-rolled one was merely *usually fine*. (The write-side `useMutation`, below, is the deliberate exception: it owns transient invocation state, not a snapshot of an external store, so ordinary component state is the right tool there.)
 
 > **Background: what `useSyncExternalStore` is for.** It is a React hook purpose-built for subscribing a component to a store that lives *outside* React — exactly remelonDB's query observations. You give it a `subscribe` function and a `getSnapshot` function, and React handles the subscription lifecycle and, crucially, guarantees the component never renders a *torn* value. "Tearing" is when different parts of one render see different versions of the same external data because the store changed mid-render; it is a real hazard under React's concurrent rendering, where a render can be paused and resumed. A `useState` + `useEffect` bridge like the naive hook above cannot prevent tearing and can miss updates that land between render and effect. USES exists precisely to close those gaps.
 
@@ -1674,6 +1694,15 @@ export function useQuery<R>(query: { observe(cb: (records: R[]) => void): () => 
 Its effect depends on `[query]` — the query object's *identity*. A query rebuilt inline each render is a new object, so the effect tears down and resubscribes *every render*: a resubscribe storm and a flash of empty results. The only defense is for every caller to `useMemo` the query with a correct manual dependency list — the classic two-sided footgun: forget the memo and you get silent thrash; get the dependencies wrong and you get stale data.
 
 `useQuery` avoids this *structurally*. Because it keys on `queryKey(query)` — table plus serialized description — a rebuilt-equivalent query resolves to the same shared store and the observation is never restarted. No `useMemo`, no dependency array, and as a bonus a de-duplication the naive hook cannot offer: N widgets on one query share one observation instead of opening N. A caller simply writes `useQuery(db.get(TodoModel).query(Q.sortBy('created_at', Q.desc)))` inline. It is the clearest single illustration in the codebase of why "a query is data" was worth committing to in Chapter 1 — the payoff lands three layers up, in a React hook, as the disappearance of an entire class of bug.
+
+## `useMutation`: the write side
+
+The read hooks make "render this query" safe to write inline; `useMutation` does the same for "run this write". It wraps an async function and returns two entry points over one piece of state:
+
+- **`mutate(...)`** returns `void` — fire-and-observe, floating-safe *by construction*. A failure never becomes an unhandled rejection; it lands in the hook's `error`. This is the entry point for event handlers, where an ignored promise is otherwise the single most common source of silently-lost failures.
+- **`mutateAsync(...)`** has normal promise semantics — resolves with the result, rejects with the error — for the flows that may continue only after the write commits (clear a form draft, close a dialog).
+
+The state semantics are precise about *overlap*. `isPending` counts every in-flight invocation, so it drains correctly when calls overlap. `data` and `error` belong to the **latest** invocation only, enforced by a generation counter, so a slow older call finishing after a newer one cannot overwrite the newer result. And `reset()` returns to idle immediately by starting a new *era*: completions from before the reset neither write state nor decrement the counter, which is what keeps a reset-then-new-call sequence from corrupting `isPending`. Each guard exists because removing it makes a specific test fail — the suite was built by mutation-testing the guards, not by asserting the happy path.
 
 ## Checkpoint
 
@@ -2079,7 +2108,7 @@ The shipped v0.1.9 surface a consumer touches, by subpath. This appendix records
 - **Manager:** `createDatabaseManager({ open })` → `{ state, database, init(), close(), subscribe() }`.
 - **Collection / Query:** `.query(...clauses)`, `.fetch()`, `.fetchCount()`, `.observe(cb, onError?)`, `.observeCount(cb, onError?)` — without `onError`, observation failures stay unhandled rejections.
 - **Q:** `Q.where`, `Q.and`, `Q.or`, `Q.on`, `Q.joinTables`, `Q.nestedJoin`, `Q.sortBy` (`Q.asc`/`Q.desc`), `Q.take`, `Q.skip`; operators `Q.eq`, `Q.notEq`, `Q.gt`, `Q.gte`, `Q.lt`, `Q.lte`, `Q.oneOf`, `Q.notIn`, `Q.between`, `Q.like`, `Q.notLike`, `Q.includes`, `Q.column`, `Q.escapeLike`; escape hatches `Q.unsafeSqlExpr`, `Q.unsafeSqlQuery`.
-- **Sync:** `synchronize({ database, pullChanges, pushChanges?, validatePullResult?, validatePushResult?, conflictResolver?, sendCreatedAsUpdated?, migrationsEnabledAtVersion?, conflictRetries?, signal?, log? })` → `SynchronizeResult` (`{ lease, resynced, pulled, pushed, rejected, retryCount }`); the transport functions receive `(args, signal?)`.
+- **Sync:** `synchronize({ database, pullChanges, pushChanges?, validatePullResult?, validatePushResult?, conflictResolver?, sendCreatedAsUpdated?, migrationsEnabledAtVersion?, conflictRetries?, signal?, log? })` → `SynchronizeResult` (`{ lease, resynced, pulled, pushed, rejected, rejectedRecords, retryCount }`); the transport functions receive `(args, signal?)`.
 - **Migrations:** `schemaMigrations({ migrations })`, step builders (`createTable`, `addColumns`, `unsafeExecuteSql`).
 
 ## `@remelondb/core/zod`
@@ -2088,7 +2117,7 @@ The shipped v0.1.9 surface a consumer touches, by subpath. This appendix records
 
 ## `@remelondb/core/react`
 
-`DatabaseProvider`, `useDatabase(manager?)`, `useDatabaseState(manager?)`, `useQuery(query, { select? })`, `useQueryCountResult(query)`, `useQueryCount(query)`.
+`DatabaseProvider`, `useDatabase(manager?)`, `useDatabaseState(manager?)`, `useQuery(query, { select?, keepPreviousData? })` (results carry `isPreviousData`), `useQueryCountResult(query)`, `useQueryCount(query)`, `useMutation(fn)` → `{ mutate, mutateAsync, data, error, isPending, reset }`.
 
 ## `@remelondb/core/conformance`
 

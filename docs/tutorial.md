@@ -263,7 +263,8 @@ a sorted list like a local one does. Call the returned function to
 unsubscribe. In React, don't wire this by hand: the bindings in
 [reference/react.md](reference/react.md) wrap observation into
 `useQuery`/`useQueryCount` with subscription sharing and no dependency
-arrays.
+arrays, and wrap writes into `useMutation` (pending and error state
+instead of a bare promise to babysit).
 
 ## 8. Record a review
 
