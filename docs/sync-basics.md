@@ -142,6 +142,54 @@ The retry loop, mid-flight edit safety, and the resync rebuild are
 specified in [reference/sync.md](reference/sync.md); wire validation
 with shared schemas is the [Zod adapter](zod-adapter.md)'s job.
 
+## When the server says no: handling rejections
+
+A sync run can end four ways, and a status indicator that collapses
+them into "synced or failed" will lie to the user in exactly one case:
+
+| Outcome | What happened | What to show |
+| --- | --- | --- |
+| Throw from `synchronize()` | Transport failure: nothing definitive happened | sync failed / offline |
+| Conflict | Another device won a race; handled internally by the retry loop | nothing, it resolved itself |
+| Result with `rejected > 0` | The push **completed** but the server refused specific records | attention required |
+| Clean result | Everything pushed and pulled | synced |
+
+The third row is the one applications get wrong. A push response
+naming rejections is a *successful* sync at the protocol level, so a
+controller that maps every non-throwing run to "synced" reports a
+clean sync while a record silently fails to leave the device. The
+result carries what honesty needs:
+
+```ts
+const result = await synchronize(options)
+
+if (result.rejected > 0) {
+  return {
+    status: 'attention-required',
+    rejected: result.rejected,               // how many
+    rejectedRecords: result.rejectedRecords, // which ones, per table
+  }
+}
+return { status: 'synced' }
+```
+
+Rejected records stay dirty and are retried on every later push. That
+design is correct for *transient* refusals: a row that fails
+validation until a related record arrives will eventually go through.
+A *deterministic* refusal (a unique-constraint duplicate, a
+permanently invalid value) retries forever and will never resolve
+itself; the retry loop is not the fix, the user is. Two consequences:
+
+- **Validate permanent constraints before accepting input.** A
+  uniqueness rule the server enforces deserves an availability check
+  in the form that collects the value; the rejection lane is the
+  safety net behind that check, not a substitute for it.
+- **Surface the record, not just the count.** `rejectedRecords` names
+  the refused ids per table; point the user at the thing that needs
+  changing. Today the app maps table-plus-context to a message it
+  chooses; structured, machine-readable rejection reasons on the wire
+  are a planned extension.
+
 ## Where to go deeper
 
 - [sync-design.md](sync-design.md) — the rationale and the contract.

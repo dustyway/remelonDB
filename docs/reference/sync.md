@@ -133,7 +133,9 @@ deterministic refusal (a unique-constraint duplicate) retries forever
 and will never resolve itself. A status indicator that treats every
 non-throwing run as "synced" is therefore lying whenever `rejected > 0`;
 show an attention state and use `rejectedRecords` to point at the
-record that needs the user.
+record that needs the user. The full recipe — the four run outcomes, a
+controller pattern, and when to validate before accepting input — is
+in [sync-basics.md](../sync-basics.md#when-the-server-says-no-handling-rejections).
 
 ## Conflict semantics (client-resolved)
 
