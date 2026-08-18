@@ -170,7 +170,7 @@ result carries what honesty needs:
 const result = await synchronize(options)
 
 if (result.lease === 'unavailable') {
-  // nothing ran here — another tab or process holds the sync lease;
+  // nothing ran here: another tab or process holds the sync lease;
   // labeling this "synced" would launder a run that never happened
   return { status: 'deferred' }
 }
