@@ -184,6 +184,13 @@ if (result.rejected > 0) {
 return { status: 'synced' }
 ```
 
+One assumption to name: the pattern reads "clean result" as "fully
+synchronized", which holds only when `pushChanges` is configured — a
+pull-only run returns cleanly while local dirty records sit unpushed.
+If your setup ever syncs pull-only, gate the label on
+`!(await hasUnsyncedChanges(database))` instead of on the result
+alone.
+
 Rejected records stay dirty and are retried on every later push. That
 design is correct for *transient* refusals: a row that fails
 validation until a related record arrives will eventually go through.
