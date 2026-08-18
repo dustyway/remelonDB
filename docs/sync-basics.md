@@ -144,18 +144,23 @@ with shared schemas is the [Zod adapter](zod-adapter.md)'s job.
 
 ## When the server says no: handling rejections
 
-A sync run can end four ways, and a status indicator that collapses
-them into "synced or failed" will lie to the user in exactly one case:
+A sync run ends in one of four caller-visible ways, and a status
+indicator that collapses them into "synced or failed" will lie to the
+user in exactly one case:
 
 | Outcome | What happened | What to show |
 | --- | --- | --- |
-| Thrown error | The run did not complete: a transport failure (the offline case), exhausted conflict retries, an abort signal, a response failing validation or a protocol invariant, or a local database failure | sync failed / offline |
+| Thrown error | The run did not complete: a transport failure (the offline case), exhausted conflict retries, an abort signal, a response failing validation or a protocol invariant, or a local database failure | classify the error: "offline" only for transport failures, a real failure state for the rest |
 | Lease denied (`lease: 'unavailable'`) | Another context (tab, process) holds the sync lease; nothing ran here | keep the prior state, another context is syncing |
-| Conflict | Another device won a race; resolved internally by the retry loop, within its bound (`conflictRetries`, default 5), beyond which it becomes a thrown error | nothing, it resolved itself |
 | Result with `rejected > 0` | The push **completed** but the server refused specific records | attention required |
 | Clean result | Everything pushed and pulled | synced |
 
-The third row is the one applications get wrong. A push response
+Conflicts are deliberately absent from this table: a push conflict is
+an internal transition, not an outcome. Resolved within the retry
+bound (`conflictRetries`, default 5) it ends as one of the two
+completion rows; beyond the bound it surfaces as a thrown error.
+
+The rejection row is the one applications get wrong. A push response
 naming rejections is a *successful* sync at the protocol level, so a
 controller that maps every non-throwing run to "synced" reports a
 clean sync while a record silently fails to leave the device. The
