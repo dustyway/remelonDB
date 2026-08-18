@@ -360,6 +360,43 @@ describe('sync engine', () => {
     expect((await db.get('tasks').find('bad'))._status).toBe('created')
   })
 
+  it('reports rejected ids per table in the result', async () => {
+    await db.write(async () => {
+      await db.get('tasks').create({ id: 'ok', name: 'fine' })
+      await db.get('tasks').create({ id: 'bad', name: 'rejected' })
+    })
+    const result = await sync({
+      pushChanges: async (args) => {
+        const r = await server.push(args)
+        if ('conflict' in r) return r
+        return { ...r, rejected: { tasks: ['bad'] } }
+      },
+    })
+    // identity matches the count, table by table
+    expect(result.rejected).toBe(1)
+    expect(result.rejectedRecords).toEqual({ tasks: ['bad'] })
+
+    // the rejected row stayed dirty; the next round (no injected
+    // refusal) pushes it cleanly and the report goes back to empty
+    const again = await sync()
+    expect(again.rejected).toBe(0)
+    expect(again.rejectedRecords).toEqual({})
+  })
+
+  it('omits tables whose rejection list is empty', async () => {
+    await db.write(() => db.get('tasks').create({ id: 'a', name: 'x' }))
+    const result = await sync({
+      pushChanges: async (args) => {
+        const r = await server.push(args)
+        if ('conflict' in r) return r
+        // a server naming a table with zero ids must not surface it
+        return { ...r, rejected: { tasks: [] } }
+      },
+    })
+    expect(result.rejected).toBe(0)
+    expect(result.rejectedRecords).toEqual({})
+  })
+
   it('resyncRequired re-pulls from scratch and reconciles (replacement)', async () => {
     server.seed('keep', { name: 'kept', position: 1 })
     server.seed('gone', { name: 'gone', position: 2 })
@@ -582,6 +619,7 @@ describe('sync engine', () => {
         pulled: 0,
         pushed: 0,
         rejected: 0,
+        rejectedRecords: {},
         retryCount: 0,
       })
     })
@@ -598,6 +636,7 @@ describe('sync engine', () => {
         pulled: 2,
         pushed: 1,
         rejected: 0,
+        rejectedRecords: {},
         retryCount: 0,
       })
     })

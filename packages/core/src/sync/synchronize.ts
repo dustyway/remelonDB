@@ -43,6 +43,12 @@ export interface SynchronizeResult {
   readonly pushed: number
   /** Local rows the server rejected; they stay dirty. */
   readonly rejected: number
+  /**
+   * The rejected rows' ids, per table — identity for the count above,
+   * so an application can surface WHICH record needs attention instead
+   * of only how many. Empty object when nothing was rejected.
+   */
+  readonly rejectedRecords: Readonly<Record<string, readonly string[]>>
   /** Extra pull→push rounds forced by push conflicts. */
   readonly retryCount: number
 }
@@ -196,6 +202,7 @@ async function runSynchronize(
       pulled: 0,
       pushed: 0,
       rejected: 0,
+      rejectedRecords: {},
       retryCount: 0,
     }
   }
@@ -271,6 +278,7 @@ async function runSynchronize(
       pulled: pulledTotal,
       pushed: 0,
       rejected: 0,
+      rejectedRecords: {},
       retryCount: attempt - 1,
     })
 
@@ -315,7 +323,13 @@ async function runSynchronize(
         await database.localStorage.set(CURSOR_KEY, pushResult.cursor)
       }
     })
-    const rejectedCount = Object.values(pushResult.rejected ?? {}).reduce(
+    // one source for count and identity: tables with no rejections are
+    // omitted, so `rejectedRecords` is {} exactly when `rejected` is 0
+    const rejectedRecords: Record<string, readonly string[]> = {}
+    for (const [table, ids] of Object.entries(pushResult.rejected ?? {})) {
+      if (ids.length > 0) rejectedRecords[table] = [...ids]
+    }
+    const rejectedCount = Object.values(rejectedRecords).reduce(
       (total, ids) => total + ids.length,
       0,
     )
@@ -325,6 +339,7 @@ async function runSynchronize(
       pulled: pulledTotal,
       pushed: countRows(localChanges.changes) - rejectedCount,
       rejected: rejectedCount,
+      rejectedRecords,
       retryCount: attempt - 1,
     }
   }

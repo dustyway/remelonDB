@@ -115,6 +115,26 @@ back on the next pull (and are absorbed).
 Sync never blocks the app: reads and writes work throughout; only the
 apply/mark commits hold the writer queue briefly.
 
+## What a run reports
+
+`synchronize()` resolves to a result the application should branch on
+rather than parsing logs:
+
+```ts
+{ lease, resynced, pulled, pushed, rejected, rejectedRecords, retryCount }
+```
+
+The rejection fields matter most for UI honesty. `rejected` is the
+count of rows the server refused this round; `rejectedRecords` names
+them (`{ [table]: ids[] }`, tables with no rejections omitted, so it is
+`{}` exactly when the count is 0). Rejected rows stay dirty and are
+retried on every later push — correct for transient refusals, but a
+deterministic refusal (a unique-constraint duplicate) retries forever
+and will never resolve itself. A status indicator that treats every
+non-throwing run as "synced" is therefore lying whenever `rejected > 0`;
+show an attention state and use `rejectedRecords` to point at the
+record that needs the user.
+
 ## Conflict semantics (client-resolved)
 
 - **Per-column, client-wins**: the merged record is the server version

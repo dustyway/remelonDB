@@ -378,9 +378,11 @@ const result = await synchronize({
   pushChanges: (args) => handlers.push(args),
 })
 // result says what happened — { lease, resynced, pulled, pushed,
-// rejected, retryCount } — so UI state ("recovered from a server
-// reset", "2 changes rejected") comes from data, not log parsing.
-// Ignoring it is fine too.
+// rejected, rejectedRecords, retryCount } — so UI state ("recovered
+// from a server reset", "2 changes rejected") comes from data, not
+// log parsing. rejectedRecords names the refused ids per table:
+// rejected rows stay dirty and retry forever, so anything above 0
+// deserves an attention state, not a "synced" label.
 
 const clean = !(await hasUnsyncedChanges(db))   // true: everything pushed
 ```
