@@ -255,6 +255,28 @@ const unsubscribe = db.get(Card).query(
 ).observeCount((n) => setBadge(n))
 ```
 
+One caveat before wiring a badge to this: `Date.now()` is captured
+when the query is built. Observation re-runs when *records change*,
+not when the clock advances, so a card quietly becoming due does not
+fire the callback. Either rebuild the observation on a timer:
+
+```js fragment
+let stop = observeDue()
+const timer = setInterval(() => {
+  stop()
+  stop = observeDue()   // fresh Date.now() cutoff
+}, 60_000)
+function observeDue() {
+  return db.get(Card).query(
+    Q.where('due_at', Q.lte(Date.now())),
+  ).observeCount((n) => setBadge(n))
+}
+```
+
+or observe a bounded card set once and derive dueness locally (in
+React, a stable query plus the `select` option — the
+[react reference](reference/react.md) shows when each shape fits).
+
 The callback fires immediately with the current count and again
 whenever the count changes. `query(...).observe(cb)` does the same for
 the full result list, re-emitting when membership, order, or the
@@ -269,18 +291,22 @@ instead of a bare promise to babysit).
 ## 8. Record a review
 
 Studying a card produces two writes: an appended review, and a new due
-date on the card. Model updates use a builder:
+date on the card. Prepare both operations and commit them in one batch so
+neither can succeed without the other:
 
 ```js
 const card = dueCards[0]
 const DAY = 24 * 60 * 60 * 1000
+const now = Date.now()
 
-await db.write(async () => {
-  await db.get(Review).create({
-    card_id: card.id, rating: 3, reviewed_at: Date.now(),
-  })
-  await card.update(() => { card.due_at = Date.now() + DAY })
-})
+await db.write(() =>
+  db.batch([
+    db.get(Review).prepareCreate({
+      card_id: card.id, rating: 3, reviewed_at: now,
+    }),
+    card.prepareUpdate(() => { card.due_at = now + DAY }),
+  ]),
+)
 ```
 
 After this commits, the observer from section 7 fires with the new
@@ -351,7 +377,10 @@ const engine = createSyncEngine({
   tables: {
     decks: { validate: (row) => wire.rows.decks.safeParse(row).success },
     cards: { validate: (row) => wire.rows.cards.safeParse(row).success },
-    reviews: { validate: (row) => wire.rows.reviews.safeParse(row).success },
+    reviews: {
+      validate: (row) => wire.rows.reviews.safeParse(row).success,
+      appendOnly: true,
+    },
   },
 })
 const handlers = engine.as('user-1')   // { pull(args), push(args) }
@@ -361,7 +390,10 @@ const handlers = engine.as('user-1')   // { pull(args), push(args) }
 strict row schemas (user columns plus `id`, nothing smuggled), and
 envelope schemas for every message. Here the server side uses the row
 schemas to vet incoming rows — a row failing them is rejected by id
-and stays dirty on the client, per the protocol.
+and stays dirty on the client, per the protocol. `appendOnly` turns
+section 2's "reviews are append-only facts" into an enforced contract:
+a push that rewrites an existing review is rejected by id instead of
+accepted.
 
 The frontend half is `synchronize()` from core. It needs two functions
 that reach those handlers; the engine handles the rest (cursor
@@ -400,12 +432,14 @@ await synchronize({
     const res = await fetch('/sync/pull', {
       method: 'POST', body: JSON.stringify(args),
     })
+    if (!res.ok) throw new Error(`sync pull failed: ${res.status}`)
     return wire.pullResult.parse(await res.json())
   },
   pushChanges: async (args) => {
     const res = await fetch('/sync/push', {
       method: 'POST', body: JSON.stringify(args),
     })
+    if (!res.ok) throw new Error(`sync push failed: ${res.status}`)
     return wire.pushResult.parse(await res.json())
   },
 })

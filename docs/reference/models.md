@@ -59,15 +59,34 @@ await db.write(() =>
 )
 ```
 
-Builder writes flow through the same pipeline as `collection.update`:
-values sanitized per column type, unknown columns impossible (no accessor,
-and TypeScript rejects them), dirty tracking only for values that actually
-changed, `updated_at` auto-touched. `task.markAsDeleted()` /
+Builder writes use the same pipeline as `collection.update`. It sanitizes
+values by column type, tracks only values that changed, and updates
+`updated_at` automatically. Unknown columns have no accessor, and TypeScript
+rejects them. `task.markAsDeleted()` /
 `task.destroyPermanently()` mirror the collection methods.
+
+`update()` commits one update. Use `prepareUpdate()` when that update must
+commit atomically with other work:
+
+```ts
+await db.write(() =>
+  db.batch([
+    auditEvents.prepareCreate({ task_id: task.id, action: 'completed' }),
+    task.prepareUpdate(() => {
+      task.is_done = true
+    }),
+  ]),
+)
+```
+
+The builder can read its pending values, but the cached model remains
+unchanged after `prepareUpdate()` returns. `db.batch()` applies the values
+only after the driver commits the whole batch. A failed batch leaves the
+model unchanged.
 
 ## Identity
 
-One model instance per record id, wrapping the cached raw. `find`,
+Each record id has one model instance wrapping its cached raw. `find`,
 `query().fetch()`, and `create` return the same instance; committed
 updates — including ones applied by **sync** — mutate it in place. Holding
 a model in UI state and observing it is therefore safe and cheap.
@@ -97,14 +116,14 @@ const unsub = task.observe((record) => {
 })
 ```
 
-Emits the record immediately, after every committed update (regardless of
-which columns changed), and `null` on deletion. This is the
-content-granular counterpart to `query().observe()`, which only reacts to
-membership changes ([database.md](database.md#observation)).
+`observe` emits the record immediately, after every committed update
+(regardless of which columns changed), and `null` on deletion. In contrast,
+`query().observe()` re-emits only when the result's membership, order, or
+visible content changes ([database.md](database.md#observation)).
 
 ## Sync
 
-Nothing model-specific: models expose `syncStatus` (the record's
-`_status`), and sync operates below the model layer — a pulled server
+Models expose `syncStatus` (the record's `_status`), but sync otherwise
+operates below the model layer. A pulled server
 update lands in the cached raw, so live model instances reflect it
-instantly. See [sync.md](sync.md).
+after the sync commit. See [sync.md](sync.md).

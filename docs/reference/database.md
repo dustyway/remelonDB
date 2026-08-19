@@ -17,9 +17,10 @@ const db = await Database.open({
 })
 ```
 
-`open()` runs the two-phase init: fresh database → schema DDL; older
-version → migration steps (**a missing migration path throws** — data
-destruction is never implicit); newer version → refuses (app downgrade).
+`open()` reads the stored schema version before choosing a path. It creates
+the schema for a fresh database, migrates an older database, and refuses
+to open a newer one after an app downgrade. A missing migration path
+throws; `open()` never destroys data implicitly.
 
 ## Reads, writes, and the queue
 
@@ -37,12 +38,12 @@ All work is serialized through one strictly-FIFO queue:
 ## Collections and CRUD
 
 `db.get(tasks)` (a table object) or `db.get(Task)` (a model class) returns
-the table's typed Collection:
+the table's typed Collection.
 
 The two forms differ in what the records *are*. Records from a
 collection with a bound model class (listed in `Database.open`'s
-`modelClasses`) are model instances — the `update` builder,
-`markAsDeleted()`, `observe()`, association helpers. Without a bound
+`modelClasses`) are model instances. They provide the `update` builder,
+`markAsDeleted()`, `observe()`, and association helpers. Without a bound
 class, records are plain typed rows: fields read fine, but record
 methods do not exist at runtime even though the table-object form's
 types currently claim they do — calling `record.update()` on an unbound
@@ -64,8 +65,9 @@ const found = await db.get(Task).find('some-id')      // throws if missing
 
 - `create`/`update` auto-stamp `created_at`/`updated_at` when those columns
   exist; updates track changed columns for sync ([records.md](records.md)).
-- `prepareCreate`/`prepareUpdate` build operations without committing —
-  combine several into one atomic `db.batch([...])`.
+- Collection `prepareCreate`/`prepareUpdate` methods build operations without
+  committing them. Bound models also provide `prepareUpdate(builder)`. Combine
+  prepared operations in one `db.batch([...])` when they must commit together.
 - **Identity map**: one record instance per id. `find`, `query`, and
   `create` all return the same object; updates mutate it in place.
 
@@ -73,9 +75,10 @@ const found = await db.get(Task).find('some-id')      // throws if missing
 
 `db.batch(operations)` executes everything in **one driver transaction**.
 On success, caches are updated first, then subscribers are notified — every
-subscriber observes a consistent world. On failure, nothing happened: no
-cache changes, no notifications, records keep their prepared state, and the
-error propagates out of the write block.
+subscriber observes a consistent world. On failure, the transaction rolls
+back. Core does not update caches or notify subscribers, and model updates
+prepared with `prepareUpdate()` remain unapplied. The error propagates out of
+the write block.
 
 ## Observation
 
@@ -90,15 +93,15 @@ const unsub = db.get(Task)
 const unsub2 = db.get(Task).query().observeCount((n) => setBadge(n))
 ```
 
-The second argument is why observation failures are survivable: a
-re-fetch can fail (database gone, driver error), and without the
-callback that failure is an unhandled rejection — the list simply stops
-updating with nothing in the UI to say so. With it, the failure reaches
+The second argument handles observation failures. A re-fetch can fail
+because the database is gone or the driver returns an error. Without the
+callback, that failure is an unhandled rejection: the list stops updating
+without any UI feedback. With the callback, the failure reaches
 the code that can show it. A subscriber that itself throws is an app bug
 and is deliberately not routed here.
 
-One strategy for every query: re-fetch when any of the query's tables
-change, emit the initial results and then whenever the result list
+Every observed query uses one strategy: re-fetch when any of its tables
+change, emit the initial result, then emit again whenever the result list
 differs — by membership, order, or visible-column content.
 
 Notes that follow from the design:
@@ -154,7 +157,7 @@ Lower-level buses, mostly for infrastructure:
 
 ## Local storage
 
-`db.localStorage` — string key-value storage in the core-owned
+`db.localStorage` provides string key-value storage in the core-owned
 `local_storage` table. Sync keeps its cursor here; apps may use it for
 small metadata. `get(key) → string | null`, `set(key, value)`,
 `remove(key)`.

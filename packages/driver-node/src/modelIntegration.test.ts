@@ -115,6 +115,104 @@ describe('Model layer', () => {
     expect(rows[0]?.['name']).toBe('v2')
   })
 
+  it('prepareUpdate() leaves the model unchanged until its batch commits', async () => {
+    const task = await db.write(() =>
+      db.get(Task).create({ id: 't1', name: 'before' }),
+    )
+    const emissions: Task[] = []
+    const unsubscribe = task.observe((record) => {
+      if (record) emissions.push(record)
+    })
+
+    await db.write(async () => {
+      const operation = task.prepareUpdate(() => {
+        task.name = 'after'
+        expect(task.name).toBe('after')
+      })
+
+      expect(task.name).toBe('before')
+      expect(emissions).toHaveLength(1)
+
+      await db.batch([operation])
+    })
+
+    expect(task.name).toBe('after')
+    expect(await db.get(Task).find('t1')).toBe(task)
+    expect(emissions).toEqual([task, task])
+    unsubscribe()
+  })
+
+  it('rolls back a prepared model update with the rest of a failed batch', async () => {
+    const task = await db.write(() =>
+      db.get(Task).create({ id: 't1', name: 'before' }),
+    )
+    let notifications = 0
+    const unsubscribe = task.observe(() => notifications++)
+
+    await expect(
+      db.write(() =>
+        db.batch([
+          task.prepareUpdate(() => {
+            task.name = 'after'
+          }),
+          db.get(Task).prepareCreate({ id: 't1', name: 'duplicate' }),
+        ]),
+      ),
+    ).rejects.toThrow(/unique|constraint/i)
+
+    expect(task.name).toBe('before')
+    expect(notifications).toBe(1)
+    const rows = await driver.query('select "name" from tasks where "id" = ?', [
+      't1',
+    ])
+    expect(rows).toEqual([{ name: 'before' }])
+    unsubscribe()
+  })
+
+  it('rejects updates on a deleted record instead of writing onto the tombstone', async () => {
+    const task = await db.write(() =>
+      db.get(Task).create({ id: 'stale', name: 'before' }),
+    )
+    await db.write(() => task.markAsDeleted())
+
+    // the committed path used to fail on its by-id lookup; the prepared
+    // path must fail equally loudly instead of building an op from the
+    // stale raw
+    expect(() => task.prepareUpdate(() => { task.name = 'after' })).toThrow(
+      /deleted/,
+    )
+    await expect(
+      db.write(() => task.update(() => { task.name = 'after' })),
+    ).rejects.toThrow(/deleted/)
+  })
+
+  it('clears prepared fields after builder errors and rejects reentrant updates', async () => {
+    const task = await db.write(() => db.get(Task).create({ name: 'before' }))
+
+    expect(() =>
+      task.prepareUpdate(() => {
+        task.name = 'discarded'
+        throw new Error('builder failed')
+      }),
+    ).toThrow('builder failed')
+    expect(task.name).toBe('before')
+
+    expect(() =>
+      task.prepareUpdate(() => {
+        task.prepareUpdate(() => {})
+      }),
+    ).toThrow('already updating')
+
+    await db.write(() =>
+      db.batch([
+        task.prepareUpdate(() => {
+          task.name = 'after'
+        }),
+      ]),
+    )
+    expect(task.name).toBe('after')
+  })
+
   it('builder writes are sanitized like any other write', async () => {
     const task = await db.write(() => db.get(Task).create({ name: 'x' }))
     await db.write(() =>

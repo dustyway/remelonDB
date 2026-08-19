@@ -18,8 +18,8 @@
  * defineModelAccessors) — use a different name and read this._raw
  * directly.
  *
- * Writes only work inside the update() builder; they flow through the
- * collection's sanitize + dirty-tracking path.
+ * Writes only work inside an update() or prepareUpdate() builder; they flow
+ * through the collection's sanitize + dirty-tracking path.
  */
 import type { RawRecord, SyncStatus } from '../rawRecord/index'
 import type { Collection, Unsubscribe } from '../database/Collection'
@@ -52,7 +52,8 @@ export interface ModelClass<M extends Model = Model> {
 /**
  * A Model whose fields are inferred from a table definition: the Model
  * behaviors plus mutable properties for every schema column (writes still
- * only work inside update()). `id` comes from Model and stays readonly.
+ * only work inside update or prepareUpdate builders). `id` comes from Model
+ * and stays readonly.
  * @category Models
  */
 export type TypedModel<T extends TableSchema<ColumnsSpec>> = Model &
@@ -112,7 +113,7 @@ export class Model {
   static readonly associations?: AssociationsMap
   static readonly schema?: TableSchema
 
-  /** @internal Non-null only while an update() builder runs. */
+  /** @internal Non-null only while an update builder runs. */
   _pendingFields: { [column: string]: unknown } | null = null
 
   constructor(
@@ -134,8 +135,26 @@ export class Model {
    *   await task.update(() => { task.name = 'new' })
    */
   async update(builder: (record: this) => void): Promise<this> {
+    await this.collection.database.batch([this.prepareUpdate(builder)])
+    return this
+  }
+
+  /**
+   * Build an update operation without committing it. The cached record stays
+   * unchanged until Database.batch commits the operation.
+   */
+  prepareUpdate(builder: (record: this) => void): BatchOperation {
+    // A stale handle to a deleted record must fail loudly, as the
+    // committed path always did via its by-id lookup: the raw here
+    // outlives the cache eviction, and an update op built from it
+    // would quietly write onto a tombstone.
+    if (this._raw._status === 'deleted') {
+      throw new Error(
+        `Model.prepareUpdate: record '${this.collection.table}/${this.id}' is deleted`,
+      )
+    }
     if (this._pendingFields) {
-      throw new Error('Model.update: already updating')
+      throw new Error('Model.prepareUpdate: already updating')
     }
     this._pendingFields = {}
     let fields: { [column: string]: unknown }
@@ -145,8 +164,7 @@ export class Model {
       fields = this._pendingFields
       this._pendingFields = null
     }
-    await this.collection.update(this.id, fields)
-    return this
+    return this.collection.prepareUpdate(this._raw, fields)
   }
 
   markAsDeleted(): Promise<void> {
@@ -229,7 +247,7 @@ export class Model {
 /**
  * Generate get/set accessors for every schema column on a model class
  * prototype. Reads come from the raw (or pending fields mid-update);
- * writes are only legal inside an update() builder.
+ * writes are only legal inside an update() or prepareUpdate() builder.
  */
 const boundClasses = new WeakSet<ModelClass>()
 
@@ -258,7 +276,7 @@ export function defineModelAccessors(
       set(this: Model, value: unknown) {
         if (!this._pendingFields) {
           throw new Error(
-            `Cannot set '${cls.table}.${name}' outside of update() — records are read-only`,
+            `Cannot set '${cls.table}.${name}' outside of update() or prepareUpdate() — records are read-only`,
           )
         }
         this._pendingFields[name] = value
