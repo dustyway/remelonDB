@@ -169,6 +169,33 @@ describe('Model layer', () => {
     unsubscribe()
   })
 
+  it('rolls back a prepared create when the model update fails', async () => {
+    const task = await db.write(() =>
+      db.get(Task).create({ id: 't1', name: 'before' }),
+    )
+    await driver.execute(
+      `create trigger reject_blocked_task
+       before update on tasks when new.name = 'blocked'
+       begin select raise(abort, 'blocked task update'); end`,
+      [],
+    )
+
+    await expect(
+      db.write(() =>
+        db.batch([
+          db.get(Project).prepareCreate({ id: 'p1', name: 'created first' }),
+          task.prepareUpdate(() => {
+            task.name = 'blocked'
+          }),
+        ]),
+      ),
+    ).rejects.toThrow(/blocked task update/)
+
+    expect(task.name).toBe('before')
+    expect(db.get(Project).cache.get('p1')).toBeUndefined()
+    expect(await driver.query('select "id" from projects', [])).toEqual([])
+  })
+
   it('rejects updates on a deleted record instead of writing onto the tombstone', async () => {
     const task = await db.write(() =>
       db.get(Task).create({ id: 'stale', name: 'before' }),

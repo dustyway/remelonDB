@@ -273,9 +273,11 @@ function observeDue() {
 }
 ```
 
-or observe a bounded card set once and derive dueness locally (in
-React, a stable query plus the `select` option — the
-[react reference](reference/react.md) shows when each shape fits).
+or observe a bounded card set once and derive dueness locally. This still
+needs a timer. In React, store the current time in state and capture it in a
+`select` callback; each tick recomputes the selection without restarting the
+query observation. The [react reference](reference/react.md) shows when each
+shape fits.
 
 The callback fires immediately with the current count and again
 whenever the count changes. `query(...).observe(cb)` does the same for
