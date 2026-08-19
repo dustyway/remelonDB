@@ -23,6 +23,11 @@ const expect = (condition, message) => {
 }
 
 const metadataVersion = guide.match(/^version:\s*"([^" ·]+)[^"\n]*"/m)?.[1]
+// The cover date (pandoc's standard `date`, rendered on the title page)
+// must match the version stamp's date part, or the two drift apart.
+const coverDate = guide.match(/^date:\s*"([^"]+)"/m)?.[1]
+const versionDate = guide.match(/^version:\s*"[^"·]*·\s*([^"\s]+)"/m)?.[1]
+expect(coverDate === versionDate, `cover date ${coverDate ?? '<missing>'} != version stamp date ${versionDate ?? '<missing>'}`)
 const proseVersion = guide.match(/describes the codebase at version \*\*([^*]+)\*\* or newer/)?.[1]
 expect(metadataVersion === pkg.version, `metadata version ${metadataVersion ?? '<missing>'} != package version ${pkg.version}`)
 expect(proseVersion === pkg.version, `preface version ${proseVersion ?? '<missing>'} != package version ${pkg.version}`)

@@ -7,6 +7,7 @@
 title: "remelonDB: A Guide to the Codebase"
 subtitle: "How the layers fit together, and why each one exists"
 lang: "en-US"
+date: "2026-08-20"
 version: "0.1.9 · 2026-08-20"
 ---
 
