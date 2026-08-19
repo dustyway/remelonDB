@@ -44,7 +44,7 @@ await synchronize({
 })
 ```
 
-Transport is entirely yours — the engine only sees the two functions. In
+Transport is entirely yours. The engine only sees the two functions. In
 the canonical HTTP binding ([sync-wire.md](../sync-wire.md)) every
 protocol outcome — including `resyncRequired` and `conflict` — is an
 HTTP 200 with the variant in the body, so the adapters stay this thin;
@@ -68,7 +68,7 @@ adapters pure transport.
 
 Validators are parse-shaped: core adopts their **return value**, so they
 may narrow or transform (Zod's `.parse` slots in as-is). An assert-style
-validator that returns nothing makes core consume `undefined` — return
+validator that returns nothing makes core consume `undefined`. Return
 the value.
 `pushChanges` is optional (pull-only replicas). Also exported:
 `hasUnsyncedChanges(db)`, and the lower-level phases
@@ -87,7 +87,7 @@ for building custom flows.
 ```
 
 The cursor is an opaque string; store-and-echo. In the push response,
-`cursor` + `changes` come **as a package** — a cursor without the
+`cursor` + `changes` come **as a package**. A cursor without the
 interleaved foreign changes is rejected as a backend bug (it would
 reintroduce the lost-write race). Degraded backends return
 `cursor: null, changes: null`: correct, but the client's own writes echo
@@ -97,7 +97,7 @@ back on the next pull (and are absorbed).
 
 1. **Pull**: `pullChanges(cursor)` → apply inside one write block →
    store the new cursor. Concurrent `synchronize()` calls for the same
-   database **coalesce** — a call arriving mid-sync joins the running one
+   database **coalesce**. A call arriving mid-sync joins the running one
    (the runner's options apply). Before applying, the stored cursor is
    also re-checked as a guard against out-of-band writers (another tab
    or process); that case aborts with an error.
@@ -128,7 +128,7 @@ The rejection fields matter most for UI honesty. `rejected` is the
 count of rows the server refused this round; `rejectedRecords` names
 them (`{ [table]: ids[] }`, tables with no rejections omitted, so it is
 `{}` exactly when the count is 0). Rejected rows stay dirty and are
-retried on every later push — correct for transient refusals, but a
+retried on every later push. That is correct for transient refusals, but a
 deterministic refusal (a unique-constraint duplicate) retries forever
 and will never resolve itself. A status indicator that treats every
 non-throwing run as "synced" is therefore lying whenever `rejected > 0`;

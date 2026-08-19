@@ -82,7 +82,7 @@ Semantics:
   with respect to cursors; write-time wall clocks cannot satisfy this
   (see sync-design.md, flaw 1).
 - `cursor: null` MUST return the complete current state.
-- With a non-null `migration`, the response MUST additionally include
+- With a non-null `migration`, the response MUST also include
   full current records for the listed tables and for all rows' listed
   columns' tables, regardless of the cursor — the client just gained
   schema it has never synced.

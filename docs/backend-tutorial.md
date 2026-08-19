@@ -3,8 +3,8 @@
 The [tutorial](tutorial.md) ends with a client syncing against the
 in-memory reference store. This walkthrough builds the real thing: the
 same sync engine over Postgres, ready to mount in a server. Everything
-here runs as written — CI executes these blocks against a real
-Postgres — and one docker command gives you the same locally.
+here runs as written. CI executes these blocks against a real
+Postgres, and one Docker command gives you the same locally.
 
 The layers, bottom to top: a Postgres **store**
 (`@remelondb/store-drizzle`), the protocol **engine**
@@ -145,7 +145,7 @@ const secondDevice = await ada.pull({ cursor: null, schemaVersion: 1, migration:
 
 ## Deletion travels as a tombstone
 
-A delete is a write, not a removal — the row stays, marked dead under a
+A delete is a write, not a removal. The row stays, marked dead under a
 fresh revision, so any device can still learn about it
 ([sync-basics](sync-basics.md) has the why):
 
@@ -176,8 +176,8 @@ const grace = await engine.as('grace').pull({ cursor: null, schemaVersion: 1, mi
 ## Mounting it in a server
 
 With NestJS, `@remelondb/nestjs` turns the pieces above into
-`POST /sync/pull` and `POST /sync/push` — hand it the store and the same
-Zod objects, and put your session lookup in `scopeFrom`:
+`POST /sync/pull` and `POST /sync/push`. Give it the store and the same
+Zod objects, then put your session lookup in `scopeFrom`:
 
 ```js fragment
 RemelonSyncModule.forRootAsync({
@@ -195,7 +195,7 @@ RemelonSyncModule.forRootAsync({
 ```
 
 To keep integration tests and production on one configuration, define
-the engine half once and share it — `syncEngineFromOptions` builds the
+the engine half once and share it. `syncEngineFromOptions` builds the
 exact engine the module would, so the two paths cannot drift:
 
 ```js fragment
@@ -213,7 +213,7 @@ const handlers = syncEngineFromOptions(syncConfig).as(userId)
 RemelonSyncModule.forRoot({ ...syncConfig, scopeFrom })
 ```
 
-Without NestJS the handlers bind to any HTTP server in a few lines — the
+Without NestJS the handlers bind to any HTTP server in a few lines. The
 [example server](../examples/todo-sync/backend/server.ts) is the whole
 thing. Either way the wire behavior is fixed by
 [sync-wire.md](sync-wire.md): protocol outcomes are HTTP 200, malformed

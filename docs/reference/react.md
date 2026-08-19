@@ -154,7 +154,7 @@ query's rows until the new one delivers. The transition is visible as
 The semantics, precisely:
 
 - The first delivery of the new query replaces the rows and clears
-  `isPreviousData` — success always wins.
+  `isPreviousData`. Success always wins.
 - If the new query *fails* before its first delivery, the error
   surfaces immediately in `error` while the previous rows stay
   rendered and `isPreviousData` stays true; the first later success
@@ -170,7 +170,7 @@ The semantics, precisely:
 
 One steering note: for a periodically re-parameterized query over a
 bounded row set (a due-by-now clause re-keying every few seconds),
-prefer a stable query plus `select` — it recomputes locally instead of
+prefer a stable query plus `select`. It recomputes locally instead of
 restarting the observation on every tick. `keepPreviousData` is for
 queries that genuinely must change — search, pagination — where the
 row set can't be pulled whole and derived from.
@@ -262,7 +262,7 @@ isLoading: true }` until the first emission for this subscription
 isLoading: false, error: null }` on every emission. If a refetch fails,
 the error lands in `error` with `isLoading: false` while `data` retains
 the last successful rows. `useQueryCountResult` follows the same rule,
-retaining its last successful count. `useQuery` results additionally
+retaining its last successful count. `useQuery` results also
 carry `isPreviousData`, false except during a `keepPreviousData`
 transition (see above).
 
@@ -279,6 +279,6 @@ concept.
 frontend (`frontend/src/App.tsx`) and the React Native client
 (`mobile/App.tsx`) render live todos through `useQuery` and write
 through `useMutation` with no local bridge code. The web frontend's
-search box is a live `keepPreviousData` demonstration — the query's
-structure changes with every keystroke while the list stays rendered —
+search box is a live `keepPreviousData` demonstration. The query's
+structure changes with every keystroke while the list stays rendered,
 and the example e2e suite exercises it against the real sync server.

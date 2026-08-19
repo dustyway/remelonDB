@@ -8,8 +8,8 @@ file: [scripts/check-tutorial.mjs](../scripts/check-tutorial.mjs)
 extracts them and runs them against the built packages on every push,
 so what you read here is code that provably runs. That includes the
 sync hookup, which runs against the real backend engine in-process.
-(Blocks marked as fragments — the migration re-open sketch and the
-HTTP route wiring in section 10 — are illustrative and skipped.) You
+Two illustrative blocks are marked as fragments and skipped: the
+migration re-open sketch and the HTTP route wiring in section 10. You
 can paste the pieces into a Node project and follow along.
 
 The examples use `NodeSqliteDriver` so they run anywhere. In an app you
@@ -92,9 +92,9 @@ const schema = appSchema({ version: 1, tables: [decks, cards, reviews] })
 
 The column vocabulary is `z.string()`, `z.number()`, `z.boolean()`,
 each optionally `.nullable()`. Refinements like `.min(0).max(3)` don't
-change the column type — local writes are not validated (that happens
-at the trust boundary, the sync wire, in section 10). Indexes are a
-database concept Zod has no word for, so they ride in the options bag:
+change the column type. Local writes are not validated; validation
+happens at the trust boundary, the sync wire, in section 10. Indexes are
+a database concept Zod has no word for, so they ride in the options bag:
 `deck_id` and `due_at` back the queries this app runs constantly.
 `created_at`/`updated_at` are auto-stamped on create and update because
 they are declared.
