@@ -1226,7 +1226,7 @@ The preceding layers support the problem introduced in Chapter 1: two devices ma
 
 ## The shape of one cycle
 
-`synchronize({ database, pullChanges, pushChanges })` is the entry point. You supply the database and two functions that talk to your server; the engine decides what to send and how to merge. Since v0.1.9 the promise resolves to a `SynchronizeResult`: `{ lease, resynced, pulled, pushed, rejected, rejectedRecords, retryCount }`. Callers can branch on data instead of parsing log lines.
+`synchronize({ database, pullChanges, pushChanges })` is the entry point. You supply the database and two functions that talk to your server; the engine decides what to send and how to merge. Since v0.1.9 the promise resolves to a `SynchronizeResult`: `{ lease, resynced, pulled, pushed, rejected, retryCount }`, joined in v0.2.0 by `rejectedRecords`. Callers can branch on data instead of parsing log lines.
 
 An optional `signal` (`AbortSignal`) cancels between protocol phases, never inside a write. The engine also passes it to both transport functions so they can abort an in-flight request. Two optional validators, `validatePullResult` and `validatePushResult`, run before the engine inspects any server response: the initial pull, a resync pull, and the push. If validation throws, sync stops without changing local state. The Zod wire schemas from Chapter 3 plug in here. One cycle always runs in this order:
 
