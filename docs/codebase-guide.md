@@ -383,7 +383,7 @@ Read the shape first. `db.write(...)` takes a *function* — the `() => ...` rec
 
 Two rules carry the whole move.
 
-**All mutations happen inside `db.write`. There is no other path.** Reads need no writer gate — fetching or observing works anywhere — but every change goes through the writer. Atomicity belongs to `db.batch`: each collection mutation prepares and commits a batch, and an explicit batch groups several prepared operations into one all-or-nothing unit — creates and updates via `prepareCreate`/`prepareUpdate`, and since v0.1.9 deletes too (`prepareMarkAsDeleted`/`prepareDestroyPermanently`), so a parent-and-children cascade commits as one transaction. Chapter 5 shows the commit point after an atomic driver batch resolves, where caches are updated and then, only then, subscribers are told.
+**All mutations happen inside `db.write`. There is no other path.** Reads need no writer gate — fetching or observing works anywhere — but every change goes through the writer. Atomicity belongs to `db.batch`: each collection mutation prepares and commits a batch, and an explicit batch groups several prepared operations into one all-or-nothing unit — creates and updates via `prepareCreate`/`prepareUpdate`, deletes via `prepareMarkAsDeleted`/`prepareDestroyPermanently`, so a parent-and-children cascade commits as one transaction. Chapter 5 shows the commit point after an atomic driver batch resolves, where caches are updated and then, only then, subscribers are told.
 
 **Deletion is not removal.** `markAsDeleted` flags the row rather than erasing it. The flagged row is a *tombstone*, and it exists so that sync can tell other devices this todo is gone. If the row simply vanished, there would be nothing left to tell them about, and the todo would resurrect the next time another device pushed its copy. Queries hide tombstones by default, so the row is invisible to the application while remaining visible to sync. There is a blunter method, `destroyPermanently`, which really does erase the row; sync never hears about it. It is the right call for data that never left the device, and the wrong call for anything else.
 
@@ -1226,7 +1226,7 @@ The preceding layers support the problem introduced in Chapter 1: two devices ma
 
 ## The shape of one cycle
 
-`synchronize({ database, pullChanges, pushChanges })` is the entry point. You supply the database and two functions that talk to your server; the engine decides what to send and how to merge. Since v0.1.9 the promise resolves to a `SynchronizeResult`: `{ lease, resynced, pulled, pushed, rejected, retryCount }`, joined in v0.2.0 by `rejectedRecords`. Callers can branch on data instead of parsing log lines.
+`synchronize({ database, pullChanges, pushChanges })` is the entry point. You supply the database and two functions that talk to your server; the engine decides what to send and how to merge. The promise resolves to a `SynchronizeResult`: `{ lease, resynced, pulled, pushed, rejected, rejectedRecords, retryCount }`. Callers can branch on data instead of parsing log lines.
 
 An optional `signal` (`AbortSignal`) cancels between protocol phases, never inside a write. The engine also passes it to both transport functions so they can abort an in-flight request. Two optional validators, `validatePullResult` and `validatePushResult`, run before the engine inspects any server response: the initial pull, a resync pull, and the push. If validation throws, sync stops without changing local state. The Zod wire schemas from Chapter 3 plug in here. One cycle always runs in this order:
 
@@ -1430,7 +1430,7 @@ Push is where arbitration happens, and the order of its checks is the design. Be
 Inside the per-scope-serialized transaction, the checks run in a specific order, and each order choice has a reason:
 
 1. **Ownership first.** `foreignIds` are added to `rejected` and stripped — *before* conflict detection, because "a foreign row's revision is incomparable to this scope's cursor and must not force a conflict loop."
-2. An optional cross-record validation hook for referential integrity across the push: `crossValidateChanges` (v0.1.9) receives the full proposed change set per table — rows *and* deletions — and its returned ids are rejected whichever kind they name; the older rows-only `crossValidate` remains supported.
+2. An optional cross-record validation hook for referential integrity across the push: `crossValidateChanges` receives the full proposed change set per table — rows *and* deletions — and its returned ids are rejected whichever kind they name; the older rows-only `crossValidate` remains supported.
 3. **Conflict dominates.** `currentRevs` for every named id; if *any* has moved past the request cursor, the whole push returns `{ conflict: true }` and nothing applies. Conflict is all-or-nothing on purpose — a partial apply under conflict would leave the client guessing which half landed.
 4. **Tombstone and append-only rejection** (the new behavior, below).
 5. **Apply**: `upsert`, then `tombstone`.
