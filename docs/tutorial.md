@@ -519,9 +519,12 @@ arrival — closed immediately, its `init()` rejecting — so a slow open
 can never resurrect a database after logout:
 
 ```js fragment
+// One owner (only onLogin/onLogout touch this) and one transition at
+// a time: never let two of them run concurrently.
 let manager = null
 
-function onLogin(userId) {
+async function onLogin(userId) {
+  await onLogout()   // an account switch closes the old database first
   const name = `user_${hex(userId)}.db`
   manager = createDatabaseManager({
     open: (onTakenOver) =>
@@ -534,10 +537,58 @@ function onLogin(userId) {
 }
 
 async function onLogout() {
-  await manager?.close()
-  manager = null
+  const closing = manager
+  await closing?.close()
+  if (manager === closing) {
+    manager = null   // a login during the await owns the variable now
+  }
 }
 ```
+
+That first comment is load-bearing, and it asks for two things. The
+first is that account transitions run one at a time. A switch that
+logs straight in as another user is the case to watch: assigning a
+new manager over the old one leaves that database open with nothing
+pointing at it, held for the rest of the session. `onLogin` handles
+the sequential form by closing first, which is why it awaits
+`onLogout`. This fragment does not serialize callers; the application
+must do that. Two transitions running concurrently would each be
+closing and assigning under the other, and a mutex or a promise queue
+around the pair is what prevents it.
+
+The second is that no other code path touches the variable. Add one,
+say a route guard reading the profile or a layout component, and "the
+current manager" and "the manager I created" stop being the same
+object. Now `onLogout`'s `close()` can tear down a database another
+caller is still using. The failure is quiet. `close()` returns the
+manager to `idle`, not to an error state, so a component still
+rendering that manager sees no error and no data. The screen is blank
+and nothing calls `init()` again.
+
+The comparison in `onLogout` is the backstop for when that discipline
+slips. A login that begins while the logout waits on `close()`
+installs a new manager, and a bare `manager = null` afterwards would
+discard it. Clearing a shared reference only while it still points at
+what you closed costs one line and settles the question.
+
+If more than one code path needs the database, the rules get
+stricter. One path owns the variable and is the only one that writes
+it. Every other caller borrows: it uses the active manager for the
+same database and never closes it, and it creates a private manager
+only when no suitable one is active, closing exactly the instance it
+created. Borrowing is not politeness. Where `SharedWorker` is
+unavailable the driver falls back to single-owner semantics, so a
+second open of a database that is already open fails rather than
+sharing. The same fallback constrains a private manager for a
+different database, because the SAH pool has one owner per origin
+rather than one per file: an open manager for the outgoing account
+can block a private manager for the incoming one. Close the outgoing
+account's manager before opening it. One thing not to borrow is a
+manager whose owner has already closed it. That manager is back at
+`idle`, which reads exactly like unstarted, so calling `init()` on it
+reopens a database nobody is left to close. A keyed, reference-counted registry that would move
+these rules out of caller discipline and into the library is under
+discussion ([#32](https://github.com/dustyway/remelonDB/issues/32)).
 
 ## Where next
 
