@@ -519,10 +519,12 @@ arrival — closed immediately, its `init()` rejecting — so a slow open
 can never resurrect a database after logout:
 
 ```js fragment
-// One owner: only onLogin/onLogout may read, write, or close this.
+// One owner (only onLogin/onLogout touch this) and one transition at
+// a time: never let two of them run concurrently.
 let manager = null
 
-function onLogin(userId) {
+async function onLogin(userId) {
+  await onLogout()   // an account switch closes the old database first
   const name = `user_${hex(userId)}.db`
   manager = createDatabaseManager({
     open: (onTakenOver) =>
@@ -544,12 +546,15 @@ async function onLogout() {
 ```
 
 That first comment is load-bearing, and it asks for two things. The
-first is that account transitions run one at a time, including a
-switch that logs straight in as another user without logging out
-first. Two overlapping `onLogin` calls leave the second manager in
-the variable and the first one open with nothing pointing at it, so
-that database stays held and no one can close it. Nothing in the
-browser serializes this for you.
+first is that account transitions run one at a time. A switch that
+logs straight in as another user is the case to watch: assigning a
+new manager over the old one leaves that database open with nothing
+pointing at it, held for the rest of the session. `onLogin` handles
+the sequential form by closing first, which is why it awaits
+`onLogout`. What no amount of care inside these two functions can fix
+is two transitions running concurrently, since each would then be
+closing and assigning under the other. Nothing in the browser
+serializes that for you.
 
 The second is that no other code path touches the variable. Add one,
 say a route guard reading the profile or a layout component, and "the
