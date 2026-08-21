@@ -551,10 +551,10 @@ logs straight in as another user is the case to watch: assigning a
 new manager over the old one leaves that database open with nothing
 pointing at it, held for the rest of the session. `onLogin` handles
 the sequential form by closing first, which is why it awaits
-`onLogout`. What no amount of care inside these two functions can fix
-is two transitions running concurrently, since each would then be
-closing and assigning under the other. Nothing in the browser
-serializes that for you.
+`onLogout`. This fragment does not serialize callers; the application
+must do that. Two transitions running concurrently would each be
+closing and assigning under the other, and a mutex or a promise queue
+around the pair is what prevents it.
 
 The second is that no other code path touches the variable. Add one,
 say a route guard reading the profile or a layout component, and "the
@@ -579,7 +579,12 @@ only when no suitable one is active, closing exactly the instance it
 created. Borrowing is not politeness. Where `SharedWorker` is
 unavailable the driver falls back to single-owner semantics, so a
 second open of a database that is already open fails rather than
-sharing. One thing not to borrow is a manager whose owner has already
+sharing. The same fallback constrains a private manager for a
+different database, because the SAH pool has one owner per origin
+rather than one per file: an open manager for the outgoing account
+can block a private manager for the incoming one. Close the outgoing
+account's manager before opening it. One thing not to borrow is a
+manager whose owner has already
 closed it: that manager is back at `idle`, which reads exactly like
 unstarted, and calling `init()` on it reopens a database nobody is
 left to close. A keyed, reference-counted registry that would move
