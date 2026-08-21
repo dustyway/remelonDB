@@ -543,26 +543,28 @@ async function onLogout() {
 }
 ```
 
-That first comment is load-bearing. The fragment is safe only while
-the variable has exactly one owner. When `onLogin` and `onLogout` are
-the only code touching `manager`, "the current manager" and "the
-manager I created" are always the same object. Add a second code
-path, say a route guard reading the profile or a layout component,
-and the two meanings split. Now `onLogout`'s `close()` can tear down
-a database another caller is still using. The failure is quiet.
-`close()` returns the manager to `idle`, not to an error state, so a
-component still rendering that manager sees no error and no data. The
-screen is blank and nothing calls `init()` again.
+That first comment is load-bearing, and it asks for two things. The
+first is that account transitions run one at a time, including a
+switch that logs straight in as another user without logging out
+first. Two overlapping `onLogin` calls leave the second manager in
+the variable and the first one open with nothing pointing at it, so
+that database stays held and no one can close it. Nothing in the
+browser serializes this for you.
 
-One owner is necessary but not sufficient, because that owner's own
-turns can overlap. A login that starts while a logout waits on
-`close()` puts a new manager in the variable, and a bare
-`manager = null` after the await would discard it. The fragment
-compares before it clears, which is the general rule: clear a shared
-reference only while it still points at what you closed. An
-application that serializes account transitions, so a logout always
-finishes before the next login begins, does not need the comparison,
-but nothing in the browser enforces that for you.
+The second is that no other code path touches the variable. Add one,
+say a route guard reading the profile or a layout component, and "the
+current manager" and "the manager I created" stop being the same
+object. Now `onLogout`'s `close()` can tear down a database another
+caller is still using. The failure is quiet. `close()` returns the
+manager to `idle`, not to an error state, so a component still
+rendering that manager sees no error and no data. The screen is blank
+and nothing calls `init()` again.
+
+The comparison in `onLogout` is the backstop for when that discipline
+slips. A login that begins while the logout waits on `close()`
+installs a new manager, and a bare `manager = null` afterwards would
+discard it. Clearing a shared reference only while it still points at
+what you closed costs one line and settles the question.
 
 If more than one code path needs the database, the rules get
 stricter. One path owns the variable and is the only one that writes
