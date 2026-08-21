@@ -519,6 +519,7 @@ arrival — closed immediately, its `init()` rejecting — so a slow open
 can never resurrect a database after logout:
 
 ```js fragment
+// One owner: only onLogin/onLogout may read, write, or close this.
 let manager = null
 
 function onLogin(userId) {
@@ -538,6 +539,27 @@ async function onLogout() {
   manager = null
 }
 ```
+
+That first comment is load-bearing. The fragment is safe only while
+the variable has exactly one owner. When `onLogin` and `onLogout` are
+the only code touching `manager`, "the current manager" and "the
+manager I created" are always the same object. Add a second code
+path, say a route guard reading the profile or a layout component,
+and the two meanings split. Now `onLogout`'s `manager?.close()` can
+tear down a database another caller is still using. The failure is
+quiet. `close()` returns the manager to `idle`, not to an error
+state, so a component still rendering that manager sees no error and
+no data. The screen is blank and nothing calls `init()` again.
+
+If more than one code path needs the database, strict rules keep the
+shared variable safe. One path writes it. Every other caller either
+receives a manager as an argument, or creates a private one and
+closes exactly the instance it created, never the global. Treat
+`idle` as absent. An idle manager is unstarted or closed, and
+adopting one reopens a database nobody will close. A keyed,
+reference-counted registry that moves this from caller discipline
+into the library is planned
+([#32](https://github.com/dustyway/remelonDB/issues/32)).
 
 ## Where next
 
