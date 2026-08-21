@@ -584,10 +584,9 @@ different database, because the SAH pool has one owner per origin
 rather than one per file: an open manager for the outgoing account
 can block a private manager for the incoming one. Close the outgoing
 account's manager before opening it. One thing not to borrow is a
-manager whose owner has already
-closed it: that manager is back at `idle`, which reads exactly like
-unstarted, and calling `init()` on it reopens a database nobody is
-left to close. A keyed, reference-counted registry that would move
+manager whose owner has already closed it. That manager is back at
+`idle`, which reads exactly like unstarted, so calling `init()` on it
+reopens a database nobody is left to close. A keyed, reference-counted registry that would move
 these rules out of caller discipline and into the library is under
 discussion ([#32](https://github.com/dustyway/remelonDB/issues/32)).
 
