@@ -535,8 +535,11 @@ function onLogin(userId) {
 }
 
 async function onLogout() {
-  await manager?.close()
-  manager = null
+  const closing = manager
+  await closing?.close()
+  if (manager === closing) {
+    manager = null   // a login during the await owns the variable now
+  }
 }
 ```
 
@@ -545,21 +548,36 @@ the variable has exactly one owner. When `onLogin` and `onLogout` are
 the only code touching `manager`, "the current manager" and "the
 manager I created" are always the same object. Add a second code
 path, say a route guard reading the profile or a layout component,
-and the two meanings split. Now `onLogout`'s `manager?.close()` can
-tear down a database another caller is still using. The failure is
-quiet. `close()` returns the manager to `idle`, not to an error
-state, so a component still rendering that manager sees no error and
-no data. The screen is blank and nothing calls `init()` again.
+and the two meanings split. Now `onLogout`'s `close()` can tear down
+a database another caller is still using. The failure is quiet.
+`close()` returns the manager to `idle`, not to an error state, so a
+component still rendering that manager sees no error and no data. The
+screen is blank and nothing calls `init()` again.
 
-If more than one code path needs the database, strict rules keep the
-shared variable safe. One path writes it. Every other caller either
-receives a manager as an argument, or creates a private one and
-closes exactly the instance it created, never the global. Treat
-`idle` as absent. An idle manager is unstarted or closed, and
-adopting one reopens a database nobody will close. A keyed,
-reference-counted registry that moves this from caller discipline
-into the library is planned
-([#32](https://github.com/dustyway/remelonDB/issues/32)).
+One owner is necessary but not sufficient, because that owner's own
+turns can overlap. A login that starts while a logout waits on
+`close()` puts a new manager in the variable, and a bare
+`manager = null` after the await would discard it. The fragment
+compares before it clears, which is the general rule: clear a shared
+reference only while it still points at what you closed. An
+application that serializes account transitions, so a logout always
+finishes before the next login begins, does not need the comparison,
+but nothing in the browser enforces that for you.
+
+If more than one code path needs the database, the rules get
+stricter. One path owns the variable and is the only one that writes
+it. Every other caller borrows: it uses the active manager for the
+same database and never closes it, and it creates a private manager
+only when no suitable one is active, closing exactly the instance it
+created. Borrowing is not politeness. Where `SharedWorker` is
+unavailable the driver falls back to single-owner semantics, so a
+second open of a database that is already open fails rather than
+sharing. One thing not to borrow is a manager whose owner has already
+closed it: that manager is back at `idle`, which reads exactly like
+unstarted, and calling `init()` on it reopens a database nobody is
+left to close. A keyed, reference-counted registry that would move
+these rules out of caller discipline and into the library is under
+discussion ([#32](https://github.com/dustyway/remelonDB/issues/32)).
 
 ## Where next
 
