@@ -425,27 +425,42 @@ const clean = !(await hasUnsyncedChanges(db))   // true: everything pushed
 In production the handlers sit behind two routes — every protocol
 outcome is a returned value, so a route handler is one line,
 `res.json(await handlers.push(req.body))` — and the client reaches
-them over HTTP:
+them through `@remelondb/core/transport`. You supply one `post`
+function (the URL and the authentication are yours; here the browser's
+cookie jar carries the session); the transport classifies failures and
+validates every response with the same wire schemas the server uses:
 
 ```js fragment
-await synchronize({
-  database: db,
-  pullChanges: async (args) => {
-    const res = await fetch('/sync/pull', {
-      method: 'POST', body: JSON.stringify(args),
-    })
-    if (!res.ok) throw new Error(`sync pull failed: ${res.status}`)
-    return wire.pullResult.parse(await res.json())
-  },
-  pushChanges: async (args) => {
-    const res = await fetch('/sync/push', {
-      method: 'POST', body: JSON.stringify(args),
-    })
-    if (!res.ok) throw new Error(`sync push failed: ${res.status}`)
-    return wire.pushResult.parse(await res.json())
-  },
+import { createSyncTransport, readSyncResponse } from '@remelondb/core/transport'
+
+const post = (path, body, signal) =>
+  readSyncResponse(path, () =>
+    fetch(`/sync/${path}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      signal,
+    }),
+  )
+
+const { pullChanges, pushChanges } = createSyncTransport({
+  post,
+  validatePullResult: (raw) => wire.pullResult.parse(raw),
+  validatePushResult: (raw) => wire.pushResult.parse(raw),
 })
+
+await synchronize({ database: db, pullChanges, pushChanges })
 ```
+
+A response the engine cannot act on — a 401, a 5xx, no network, a body
+that is not valid JSON or fails the wire schema — throws
+`SyncTransportError` and the run fails with local dirty state
+untouched. Protocol outcomes (`conflict`, `resyncRequired`, rejections)
+pass through as data; that split is what keeps a broken network from
+ever looking like a successful sync. `synchronize` still accepts any
+two functions if your transport is not HTTP; the raw seam is in the
+[sync reference](reference/sync.md).
 
 Changesets are per-table `created`/`updated`/`deleted` groups; the
 cursor is an opaque string the server defines. The memory store is
@@ -505,6 +520,52 @@ function Root() {
 
 The todo-sync example runs this bootstrap on web and native alike
 (`frontend/src/db.ts`, `mobile/src/db.ts`).
+
+### Keeping it synced
+
+Section 10 called `synchronize()` by hand. An app wants that call made
+at the right moments — after a local write, on regaining network, in
+the background — without ever running twice at once, and it wants a
+status to show. `createSyncController` owns the *when* the way the
+manager owns open/close. This block runs in CI against the section-10
+handlers:
+
+```js
+import { createRunSync, createSyncController } from '@remelondb/core'
+
+const controller = createSyncController({
+  runSync: createRunSync({
+    database: db,
+    pullChanges: (args) => handlers.pull(args),
+    pushChanges: (args) => handlers.push(args),
+  }),
+  intervalMs: null,   // no background clock in this script
+})
+
+const firstRun = new Promise((resolve) =>
+  controller.subscribe((state) => {
+    if (state.lastSyncAt !== null) resolve(state)
+  }),
+)
+controller.start()
+const state = await firstRun
+console.log(state.status)                  // 'idle'
+console.log(state.lastResult.rejected)     // 0
+controller.dispose()
+```
+
+In an app you keep the defaults instead: a 60-second interval, a
+2-second debounce behind `notifyLocalWrite()` (call it from your write
+paths; ten quick edits become one sync), and a `triggers` option that
+subscribes platform wake-ups — `online`/`visibilitychange` on the web,
+network-restored and app-foregrounded on native. A "sync now" button is
+`controller.syncNow()`, which also re-arms automatic syncing after an
+auth failure. Status for the UI comes from `subscribe`
+(`idle`/`syncing`/`offline`/`error`/`resync-required`, plus
+`lastResult` with the rejection fields from section 10). And the
+shutdown order is fixed: `controller.dispose()` aborts an in-flight
+run, *then* the database closes — on logout or account switch, always
+dispose first. Details: [sync reference](reference/sync.md).
 
 ### Multiple accounts on one device
 
