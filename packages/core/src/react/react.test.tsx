@@ -6,7 +6,7 @@
  * keys, shared observations, loading states, teardown.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { act, render, renderHook } from '@testing-library/react';
+import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { createElement, StrictMode } from 'react';
 import {
   DatabaseProvider,
@@ -16,6 +16,7 @@ import {
   useQuery,
   useQueryCount,
   useQueryCountResult,
+  useSyncState,
 } from './index';
 import type { Database, DatabaseManager, DatabaseManagerState } from '../index';
 import type { Query } from '../database/Query';
@@ -913,5 +914,39 @@ describe('useMutation hardening', () => {
     await act(async () => {
       await expect(firstMutateAsync()).resolves.toBe('v2');
     });
+  });
+});
+
+describe('useSyncState', () => {
+  it('renders the controller state and re-renders on transitions', async () => {
+    const { createSyncController } = await import('../sync/controller');
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const controller = createSyncController({
+      runSync: async () => {
+        await gate;
+        return { resynced: false, rejected: 2, rejectedRecords: { t: ['a'] } };
+      },
+      intervalMs: null,
+    });
+    function Status() {
+      const { status, lastResult } = useSyncState(controller);
+      return createElement(
+        'div',
+        { 'data-testid': 's' },
+        `${status}:${lastResult?.rejected ?? '-'}`,
+      );
+    }
+    render(createElement(Status));
+    expect(screen.getByTestId('s').textContent).toBe('idle:-');
+    act(() => controller.start());
+    expect(screen.getByTestId('s').textContent).toBe('syncing:-');
+    release();
+    await waitFor(() =>
+      expect(screen.getByTestId('s').textContent).toBe('idle:2'),
+    );
+    controller.dispose();
   });
 });

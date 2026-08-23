@@ -5,7 +5,9 @@ import { createSync } from 'example-todo-sync/client';
 // at a deployed server. The fallbacks are for dev against a local
 // server: Android emulators reach the host machine at 10.0.2.2; iOS
 // simulators share the host's localhost.
-export const { getSyncStatus, getSyncNote, subscribeSyncStatus, runSync } =
+export { toDemoStatus, type SyncStatus } from 'example-todo-sync/client';
+
+export const { getSyncNote, subscribeSyncNote, attach, notifyLocalWrite } =
   createSync(
     process.env.EXPO_PUBLIC_SYNC_URL ??
       (Platform.OS === 'android'

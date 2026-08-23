@@ -21,7 +21,13 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from 'react';
-import type { Database, DatabaseManager, DatabaseManagerState } from '../index';
+import type {
+  Database,
+  DatabaseManager,
+  DatabaseManagerState,
+  SyncController,
+  SyncControllerState,
+} from '../index';
 import type { Query } from '../database/Query';
 
 type Unsubscribe = () => void;
@@ -82,6 +88,24 @@ export function useDatabaseState(
     subscribe,
     () => m.state,
     () => m.state,
+  );
+}
+
+/**
+ * Subscribe a component to a sync controller's state. Tear-safe via
+ * useSyncExternalStore; re-renders exactly on state transitions.
+ *
+ *     const { status, lastResult } = useSyncState(controller)
+ */
+export function useSyncState(controller: SyncController): SyncControllerState {
+  const subscribe = useCallback(
+    (onStoreChange: () => void) => controller.subscribe(onStoreChange),
+    [controller],
+  );
+  return useSyncExternalStore(
+    subscribe,
+    () => controller.state,
+    () => controller.state,
   );
 }
 

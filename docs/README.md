@@ -59,7 +59,7 @@ they track the code and are updated with it.
 | [reference/react.md](reference/react.md) | The React bindings: provider and manager hooks, `useQuery`/`useQueryCount` with structural subscription keys, shared observations, `select`. |
 | [sync-tour.md](sync-tour.md) | The wire protocol in eight real requests and responses — the hands-on companion to the spec, with a clickable .http version in the example. |
 | [sync-wire-walkthrough.md](sync-wire-walkthrough.md) | The narrated long-form of the protocol, written for a consuming team: every wire concept explained in prose with a rendered PDF alongside. Sits between the tour's eight requests and the spec's normative MUSTs. |
-| [reference/sync.md](reference/sync.md) | Using `synchronize`: wire shapes, conflict semantics, resync, migration pulls, testing a backend. |
+| [reference/sync.md](reference/sync.md) | Using `synchronize`: wire shapes, the HTTP transport, the sync controller, conflict semantics, resync, migration pulls, testing a backend. |
 | [sync-triggering.md](sync-triggering.md) | When to call `synchronize`: the trigger set, server-signalled sync and why signals carry no data, battery, and why background sync works on mobile but not on web. |
 | [reference/backend.md](reference/backend.md) | Building a sync backend: the engine/store obligation split, the Postgres table contract, store and endpoint configuration, retention, and certifying a store against the conformance suite. |
 | [reference/schema.md](reference/schema.md) | Defining tables (Zod-first via `zodTable`, hand-written builders as the alternative), inferred record types, standard columns, reserved names, DDL output, migrations and the no-silent-reset contract. |

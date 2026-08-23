@@ -65,16 +65,31 @@ milliseconds or at the moment it was unlocked. Triggers 2 through 4 are the
 moments a user arrives, which is why this set covers most applications with
 no recurring work at all.
 
+`createSyncController` ([sync reference](reference/sync.md#the-sync-controller))
+implements the set: start() covers 2, `notifyLocalWrite()` covers 1
+(debounced), and 3 through 5 plug into its `triggers` option:
+
 ```ts
 // web
-addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') void runSync(db)
+const controller = createSyncController({
+  runSync: createRunSync({ database: db, pullChanges, pushChanges }),
+  triggers: (fire) => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fire()
+    }
+    addEventListener('visibilitychange', onVisible)
+    addEventListener('online', fire)
+    return () => {
+      removeEventListener('visibilitychange', onVisible)
+      removeEventListener('online', fire)
+    }
+  },
 })
-addEventListener('online', () => void runSync(db))
+controller.start()
 ```
 
-Concurrent calls for the same database coalesce — a `synchronize` arriving
-while one is running joins it — so overlapping triggers need no guarding.
+Runs are single flight and concurrent `synchronize` calls for the same
+database coalesce, so overlapping triggers need no guarding either way.
 
 ## Polling
 

@@ -1,13 +1,40 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { Q, type Database } from '@remelondb/core';
-import { useMutation, useQuery } from '@remelondb/core/react';
+import { Q, type Database, type SyncController } from '@remelondb/core';
+import { useMutation, useQuery, useSyncState } from '@remelondb/core/react';
 import { TodoModel } from 'example-todo-sync/schema';
 import {
   getSyncNote,
-  getSyncStatus,
-  runSync,
-  subscribeSyncStatus,
+  attach,
+  notifyLocalWrite,
+  subscribeSyncNote,
+  toDemoStatus,
 } from './sync';
+
+// The status line, gated so useSyncState always has a controller; the
+// first render (before the attach effect) shows the same 'syncing' the
+// demo always started with.
+function SyncBadge(props: {
+  controller: SyncController | null;
+  count: number;
+}) {
+  if (!props.controller)
+    return <SyncBadgeBody status="syncing" count={props.count} />;
+  return <ActiveSyncBadge controller={props.controller} count={props.count} />;
+}
+
+function ActiveSyncBadge(props: { controller: SyncController; count: number }) {
+  const state = useSyncState(props.controller);
+  return <SyncBadgeBody status={toDemoStatus(state)} count={props.count} />;
+}
+
+function SyncBadgeBody(props: { status: string; count: number }) {
+  return (
+    <p id="status" data-sync-status={props.status}>
+      <span className="dot" /> {props.count} todo
+      {props.count === 1 ? '' : 's'} · {props.status}
+    </p>
+  );
+}
 
 type WriteAction =
   | { type: 'add'; text: string }
@@ -34,13 +61,20 @@ export function App({ db }: { db: Database }) {
   );
   const [text, setText] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
-  const syncStatus = useSyncExternalStore(subscribeSyncStatus, getSyncStatus);
-  const syncNote = useSyncExternalStore(subscribeSyncStatus, getSyncNote);
+  const syncNote = useSyncExternalStore(subscribeSyncNote, getSyncNote);
+  const [controller, setController] = useState<SyncController | null>(null);
 
+  // The controller owns when syncs happen (initial, 2s interval, after
+  // writes, on regaining network); this effect only ties its lifetime
+  // to the database's.
   useEffect(() => {
-    void runSync(db);
-    const timer = setInterval(() => void runSync(db), 2000);
-    return () => clearInterval(timer);
+    const sync = attach(db, (fire) => {
+      const onOnline = () => fire();
+      window.addEventListener('online', onOnline);
+      return () => window.removeEventListener('online', onOnline);
+    });
+    setController(sync.controller);
+    return sync.detach;
   }, [db]);
 
   // One mutation owns every write, so the hook's ownership rule — the
@@ -66,7 +100,7 @@ export function App({ db }: { db: Database }) {
           break;
       }
     });
-    void runSync(db);
+    notifyLocalWrite();
   });
 
   // mutateAsync where the caller needs the outcome: the draft is only
@@ -93,10 +127,7 @@ export function App({ db }: { db: Database }) {
   return (
     <>
       <h1>todo-sync</h1>
-      <p id="status" data-sync-status={syncStatus}>
-        <span className="dot" /> {todos.length} todo
-        {todos.length === 1 ? '' : 's'} · {syncStatus}
-      </p>
+      <SyncBadge controller={controller} count={todos.length} />
       {syncNote && <p id="note">{syncNote}</p>}
       <form onSubmit={(event) => void add(event)}>
         <input
