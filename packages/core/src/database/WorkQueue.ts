@@ -11,18 +11,18 @@
  */
 
 interface WorkQueueItem {
-  readonly work: () => Promise<unknown>
-  readonly isWriter: boolean
-  readonly resolve: (value: unknown) => void
-  readonly reject: (error: unknown) => void
+  readonly work: () => Promise<unknown>;
+  readonly isWriter: boolean;
+  readonly resolve: (value: unknown) => void;
+  readonly reject: (error: unknown) => void;
 }
 
 export class WorkQueue {
-  private queue: WorkQueueItem[] = []
-  private executing = false
+  private queue: WorkQueueItem[] = [];
+  private executing = false;
 
   get isWriterRunning(): boolean {
-    return this.executing && this.queue[0]?.isWriter === true
+    return this.executing && this.queue[0]?.isWriter === true;
   }
 
   enqueue<T>(work: () => Promise<T>, isWriter: boolean): Promise<T> {
@@ -32,28 +32,28 @@ export class WorkQueue {
         isWriter,
         resolve: resolve as (value: unknown) => void,
         reject,
-      })
+      });
       if (this.queue.length === 1) {
-        void this.executeNext()
+        void this.executeNext();
       }
-    })
+    });
   }
 
   private async executeNext(): Promise<void> {
-    const item = this.queue[0]
+    const item = this.queue[0];
     if (!item) {
-      return
+      return;
     }
-    this.executing = true
+    this.executing = true;
     try {
-      item.resolve(await item.work())
+      item.resolve(await item.work());
     } catch (error) {
-      item.reject(error)
+      item.reject(error);
     }
-    this.executing = false
-    this.queue.shift()
+    this.executing = false;
+    this.queue.shift();
     if (this.queue.length > 0) {
-      queueMicrotask(() => void this.executeNext())
+      queueMicrotask(() => void this.executeNext());
     }
   }
 }

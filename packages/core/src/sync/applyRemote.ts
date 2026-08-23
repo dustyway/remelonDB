@@ -15,44 +15,44 @@
  *
  * Must be called inside a database.write block.
  */
-import type { Database } from '../database/Database'
-import type { BatchOperation } from '../database/encodeBatch'
-import type { TableSchema } from '../schema/index'
+import type { Database } from '../database/Database';
+import type { BatchOperation } from '../database/encodeBatch';
+import type { TableSchema } from '../schema/index';
 import {
   sanitizedRaw,
   type DirtyRaw,
   type RawRecord,
-} from '../rawRecord/index'
+} from '../rawRecord/index';
 import {
   areRecordsEqual,
   changedColumns,
   queryRows,
   queryRowsByIds,
-} from './helpers'
-import type { SyncChanges } from './types'
+} from './helpers';
+import type { SyncChanges } from './types';
 
 export type ConflictResolver = (
   table: string,
   local: RawRecord,
   remote: DirtyRaw,
   resolved: RawRecord,
-) => RawRecord
+) => RawRecord;
 
 export interface ApplyRemoteOptions {
-  readonly sendCreatedAsUpdated?: boolean
-  readonly conflictResolver?: ConflictResolver
+  readonly sendCreatedAsUpdated?: boolean;
+  readonly conflictResolver?: ConflictResolver;
   /** Resync mode: destroy local synced records absent from the snapshot. */
-  readonly replacement?: boolean
-  readonly log?: (message: string) => void
+  readonly replacement?: boolean;
+  readonly log?: (message: string) => void;
 }
 
 const remoteId = (dirty: DirtyRaw): string => {
-  const id = dirty['id']
+  const id = dirty['id'];
   if (typeof id !== 'string' || id === '') {
-    throw new Error('applyRemoteChanges: remote record has no string id')
+    throw new Error('applyRemoteChanges: remote record has no string id');
   }
-  return id
-}
+  return id;
+};
 
 /** Remote base, local values for locally-changed columns on top. */
 function resolveConflict(
@@ -61,13 +61,18 @@ function resolveConflict(
   table: TableSchema,
 ): RawRecord {
   const resolved = sanitizedRaw(
-    { ...remote, id: local.id, _status: local._status, _changed: local._changed },
+    {
+      ...remote,
+      id: local.id,
+      _status: local._status,
+      _changed: local._changed,
+    },
     table,
-  )
+  );
   for (const column of changedColumns(local)) {
-    resolved[column] = local[column] ?? null
+    resolved[column] = local[column] ?? null;
   }
-  return resolved
+  return resolved;
 }
 
 export async function applyRemoteChanges(
@@ -75,36 +80,38 @@ export async function applyRemoteChanges(
   remoteChanges: SyncChanges,
   options: ApplyRemoteOptions = {},
 ): Promise<void> {
-  const log = options.log ?? (() => {})
-  const operations: BatchOperation[] = []
+  const log = options.log ?? (() => {});
+  const operations: BatchOperation[] = [];
 
   for (const [table, tableChanges] of Object.entries(remoteChanges)) {
     if (!database.schema.tables[table]) {
-      log(`sync: ignoring changes for unknown table '${table}' (forward compat)`)
-      continue
+      log(
+        `sync: ignoring changes for unknown table '${table}' (forward compat)`,
+      );
+      continue;
     }
-    const collection = database.get(table)
-    const schema = collection.schema
+    const collection = database.get(table);
+    const schema = collection.schema;
 
     // One lookup for everything this table's changeset references.
     const referencedIds = [
       ...tableChanges.created.map(remoteId),
       ...tableChanges.updated.map(remoteId),
       ...tableChanges.deleted,
-    ]
-    const localState = new Map<string, 'live' | 'tombstone'>()
-    const liveRecords = new Map<string, RawRecord>()
+    ];
+    const localState = new Map<string, 'live' | 'tombstone'>();
+    const liveRecords = new Map<string, RawRecord>();
     if (referencedIds.length > 0 || options.replacement) {
       const rows = options.replacement
         ? await queryRows(database, table, [])
-        : await queryRowsByIds(database, table, referencedIds)
+        : await queryRowsByIds(database, table, referencedIds);
       for (const row of rows) {
-        const id = row['id'] as string
+        const id = row['id'] as string;
         if (row['_status'] === 'deleted') {
-          localState.set(id, 'tombstone')
+          localState.set(id, 'tombstone');
         } else {
-          localState.set(id, 'live')
-          liveRecords.set(id, collection.cache.recordFromRow(row, schema))
+          localState.set(id, 'live');
+          liveRecords.set(id, collection.cache.recordFromRow(row, schema));
         }
       }
     }
@@ -118,75 +125,79 @@ export async function applyRemoteChanges(
           throw new Error(
             `sync: sparse record from server for '${table}/${String(dirty['id'])}' — ` +
               `missing column '${column.name}'. The protocol requires full records.`,
-          )
+          );
         }
       }
-    }
+    };
 
     const createAsSynced = (dirty: DirtyRaw): BatchOperation => {
       const raw = sanitizedRaw(
         { ...dirty, _status: 'synced', _changed: '' },
         schema,
-      )
-      raw._status = 'synced'
-      raw._changed = ''
-      return { type: 'create', table, raw }
-    }
+      );
+      raw._status = 'synced';
+      raw._changed = '';
+      return { type: 'create', table, raw };
+    };
 
     const updateResolved = (local: RawRecord, dirty: DirtyRaw): void => {
-      let resolved = resolveConflict(local, dirty, schema)
+      let resolved = resolveConflict(local, dirty, schema);
       if (options.conflictResolver) {
-        resolved = options.conflictResolver(table, local, dirty, resolved)
+        resolved = options.conflictResolver(table, local, dirty, resolved);
       }
       // echo/no-op absorption: skip writes that change nothing
       if (local._status === 'synced' && areRecordsEqual(local, resolved)) {
-        return
+        return;
       }
-      operations.push({ type: 'update', table, raw: resolved })
-    }
+      operations.push({ type: 'update', table, raw: resolved });
+    };
 
     for (const dirty of tableChanges.created) {
-      requireFullRecord(dirty)
-      const id = remoteId(dirty)
-      const state = localState.get(id)
+      requireFullRecord(dirty);
+      const id = remoteId(dirty);
+      const state = localState.get(id);
       if (state === 'live') {
         if (!options.replacement) {
           // in replacement mode every record arrives as created — expected
-          log(`sync: server created '${table}/${id}' but it exists — treating as update`)
+          log(
+            `sync: server created '${table}/${id}' but it exists — treating as update`,
+          );
         }
-        updateResolved(liveRecords.get(id)!, dirty)
+        updateResolved(liveRecords.get(id)!, dirty);
       } else if (state === 'tombstone') {
         if (options.replacement) {
           // resync: the offline delete wins locally and is pushed after
           // the rebuild — destroying the tombstone here would silently
           // resurrect the record and lose the user's delete
         } else {
-          log(`sync: server created '${table}/${id}' over local tombstone — replacing`)
+          log(
+            `sync: server created '${table}/${id}' over local tombstone — replacing`,
+          );
           operations.push({
             type: 'destroyPermanently',
             table,
             raw: { id, _status: 'deleted', _changed: '' },
-          })
-          operations.push(createAsSynced(dirty))
+          });
+          operations.push(createAsSynced(dirty));
         }
       } else {
-        operations.push(createAsSynced(dirty))
+        operations.push(createAsSynced(dirty));
       }
     }
 
     for (const dirty of tableChanges.updated) {
-      requireFullRecord(dirty)
-      const id = remoteId(dirty)
-      const state = localState.get(id)
+      requireFullRecord(dirty);
+      const id = remoteId(dirty);
+      const state = localState.get(id);
       if (state === 'live') {
-        updateResolved(liveRecords.get(id)!, dirty)
+        updateResolved(liveRecords.get(id)!, dirty);
       } else if (state === 'tombstone') {
         // local deletion wins locally; it will be pushed later
       } else {
         if (!options.sendCreatedAsUpdated) {
-          log(`sync: server updated unknown '${table}/${id}' — creating it`)
+          log(`sync: server updated unknown '${table}/${id}' — creating it`);
         }
-        operations.push(createAsSynced(dirty))
+        operations.push(createAsSynced(dirty));
       }
     }
 
@@ -197,7 +208,7 @@ export async function applyRemoteChanges(
           type: 'destroyPermanently',
           table,
           raw: { id, _status: 'deleted', _changed: '' },
-        })
+        });
       }
     }
 
@@ -205,14 +216,14 @@ export async function applyRemoteChanges(
       const snapshotIds = new Set([
         ...tableChanges.created.map(remoteId),
         ...tableChanges.updated.map(remoteId),
-      ])
+      ]);
       for (const [id, record] of liveRecords) {
         if (!snapshotIds.has(id) && record._status === 'synced') {
-          operations.push({ type: 'destroyPermanently', table, raw: record })
+          operations.push({ type: 'destroyPermanently', table, raw: record });
         }
       }
     }
   }
 
-  await database.batch(operations)
+  await database.batch(operations);
 }

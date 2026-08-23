@@ -4,7 +4,7 @@
  * apps for small metadata. A core feature over plain SQL — not a driver
  * method (docs/layers.md, decision 2).
  */
-import type { SqliteDriver } from '../driver/SqliteDriver'
+import type { SqliteDriver } from '../driver/SqliteDriver';
 
 /** @category Database & queries */
 export class LocalStorage {
@@ -14,21 +14,21 @@ export class LocalStorage {
     const rows = await this.driver.query(
       'select "value" from "local_storage" where "key" is ?',
       [key],
-    )
-    const value = rows[0]?.['value']
-    return typeof value === 'string' ? value : null
+    );
+    const value = rows[0]?.['value'];
+    return typeof value === 'string' ? value : null;
   }
 
   async set(key: string, value: string): Promise<void> {
     await this.driver.execute(
       'insert or replace into "local_storage" ("key", "value") values (?, ?)',
       [key, value],
-    )
+    );
   }
 
   async remove(key: string): Promise<void> {
     await this.driver.execute('delete from "local_storage" where "key" is ?', [
       key,
-    ])
+    ]);
   }
 }

@@ -4,23 +4,26 @@ import type {
   Row,
   SqlArgs,
   SqliteDriver,
-} from '@remelondb/core'
+} from '@remelondb/core';
 import type {
   Endpoint,
   StorageKind,
   WorkerRequest,
   WorkerResponse,
-} from './protocol'
+} from './protocol';
 
 // structural declarations — no DOM lib needed for typechecking
 declare const Worker: new (
   url: URL,
   options: { type: 'module' },
 ) => {
-  postMessage(message: unknown, transfer?: readonly unknown[]): void
-  addEventListener(type: 'message', listener: (event: { data: unknown }) => void): void
-  terminate(): void
-}
+  postMessage(message: unknown, transfer?: readonly unknown[]): void;
+  addEventListener(
+    type: 'message',
+    listener: (event: { data: unknown }) => void,
+  ): void;
+  terminate(): void;
+};
 
 declare const navigator:
   | {
@@ -29,11 +32,11 @@ declare const navigator:
           name: string,
           options: { ifAvailable?: boolean; steal?: boolean },
           callback: (lock: object | null) => unknown,
-        ): Promise<unknown>
-      }
-      storage?: { getDirectory?: () => Promise<unknown> }
+        ): Promise<unknown>;
+      };
+      storage?: { getDirectory?: () => Promise<unknown> };
     }
-  | undefined
+  | undefined;
 
 /**
  * Thrown when OPFS storage is unavailable in the current browser context —
@@ -45,7 +48,7 @@ declare const navigator:
  * @category Driver
  */
 export class OpfsUnavailableError extends Error {
-  readonly code = 'OPFS_UNAVAILABLE' as const
+  readonly code = 'OPFS_UNAVAILABLE' as const;
   constructor(options?: { cause?: unknown }) {
     super(
       'OPFS storage is unavailable in this browser context (private ' +
@@ -53,10 +56,10 @@ export class OpfsUnavailableError extends Error {
         'Persistent offline mode needs OPFS: allow site data for this site, ' +
         "use a normal window, or open with storage: 'memory' for a " +
         'non-persistent session.',
-    )
-    this.name = 'OpfsUnavailableError'
+    );
+    this.name = 'OpfsUnavailableError';
     if (options?.cause !== undefined) {
-      ;(this as { cause?: unknown }).cause = options.cause
+      (this as { cause?: unknown }).cause = options.cause;
     }
   }
 }
@@ -72,14 +75,14 @@ export class OpfsUnavailableError extends Error {
 export async function probeOpfs(
   storage: { getDirectory?: () => Promise<unknown> } | undefined,
 ): Promise<void> {
-  const getDirectory = storage?.getDirectory
+  const getDirectory = storage?.getDirectory;
   if (!getDirectory) {
-    return
+    return;
   }
   try {
-    await getDirectory.call(storage)
+    await getDirectory.call(storage);
   } catch (error) {
-    throw new OpfsUnavailableError({ cause: error })
+    throw new OpfsUnavailableError({ cause: error });
   }
 }
 
@@ -88,7 +91,7 @@ type RequestPayload = WorkerRequest extends infer R
   ? R extends WorkerRequest
     ? Omit<R, 'id'>
     : never
-  : never
+  : never;
 
 /** @category Driver */
 export interface WebSqliteDriverOptions {
@@ -97,7 +100,7 @@ export interface WebSqliteDriverOptions {
    * Unavailable OPFS is a loud error, never a silent downgrade.
    * 'memory': explicit non-persistent storage (tests, previews).
    */
-  readonly storage?: StorageKind
+  readonly storage?: StorageKind;
   /**
    * The SAH pool allows one owner per origin, so a database can be open
    * in one tab at a time. Default: opening a database another tab holds
@@ -106,9 +109,9 @@ export interface WebSqliteDriverOptions {
    * `onTakenOver` callback fires (in-flight statements there are
    * abandoned; committed data is safe on disk).
    */
-  readonly takeover?: boolean
+  readonly takeover?: boolean;
   /** Called when another tab takes this database over (see `takeover`). */
-  readonly onTakenOver?: () => void
+  readonly onTakenOver?: () => void;
   /**
    * Opt in to the SharedWorker owner (docs/multi-tab.md): all tabs route
    * through one worker, so same-name opens SHARE a live connection —
@@ -117,13 +120,13 @@ export interface WebSqliteDriverOptions {
    * time via a lease. Where `SharedWorker` is unavailable (Chrome for
    * Android), falls back to the default single-owner behavior.
    */
-  readonly shared?: boolean
+  readonly shared?: boolean;
   /**
    * Shared mode: how long a granted sync lease lasts before another tab
    * may take it over. Renewal happens implicitly on each sync tick, so
    * this only matters after the holder goes away. Default 10s.
    */
-  readonly syncLeaseMs?: number
+  readonly syncLeaseMs?: number;
   /**
    * Shared mode: deadline for the broker to answer the open request,
    * after which open() rejects instead of hanging. The default (15s)
@@ -131,9 +134,9 @@ export interface WebSqliteDriverOptions {
    * sqlite-wasm binary over a slow network — with margin; a genuine
    * hang then reports in seconds instead of never.
    */
-  readonly openTimeoutMs?: number
+  readonly openTimeoutMs?: number;
   /** Override the transport — used by tests to run in-process. */
-  readonly createEndpoint?: () => Endpoint
+  readonly createEndpoint?: () => Endpoint;
 }
 
 /**
@@ -143,40 +146,41 @@ export interface WebSqliteDriverOptions {
  * @category Driver
  */
 export class WebSqliteDriver implements SqliteDriver {
-  private endpoint: Endpoint | null = null
-  private name: string | null = null
-  private nextId = 1
+  private endpoint: Endpoint | null = null;
+  private name: string | null = null;
+  private nextId = 1;
   private pending = new Map<
     number,
     { resolve: (value: unknown) => void; reject: (error: Error) => void }
-  >()
-  private releaseTabLock: (() => void) | null = null
-  private takenOver = false
+  >();
+  private releaseTabLock: (() => void) | null = null;
+  private takenOver = false;
   /**
    * @internal The compute worker this tab spawned for the broker, when it
    * was the one asked to host it. It lives and dies with the tab — except
    * in tests, which terminate it explicitly so the SAH pool's handles are
    * released before the next test file needs them.
    */
-  hostedComputeWorker: { terminate(): void } | null = null
-  private externalChangesHandler: ((changes: ExternalChangeSet) => void) | null = null
+  hostedComputeWorker: { terminate(): void } | null = null;
+  private externalChangesHandler:
+    ((changes: ExternalChangeSet) => void) | null = null;
 
   constructor(private readonly options: WebSqliteDriverOptions = {}) {}
 
   /** True when this driver routes through the SharedWorker owner. */
   private get sharedMode(): boolean {
-    return this.options.shared === true && typeof SharedWorker !== 'undefined'
+    return this.options.shared === true && typeof SharedWorker !== 'undefined';
   }
 
   private createEndpoint(): Endpoint {
     if (this.options.createEndpoint) {
-      return this.options.createEndpoint()
+      return this.options.createEndpoint();
     }
     if (this.sharedMode) {
       const shared = new SharedWorker(
         new URL('./shared-worker.ts', import.meta.url),
         { type: 'module' },
-      )
+      );
       // A broker script that fails to load or parse dies silently; without
       // this handler every request would hang instead of failing.
       shared.onerror = () => {
@@ -187,25 +191,25 @@ export class WebSqliteDriver implements SqliteDriver {
               "'@remelondb/driver-web' to optimizeDeps.exclude — see the " +
               'driver README, Bundlers section.',
           ),
-        )
-      }
-      shared.port.start()
+        );
+      };
+      shared.port.start();
       return {
         postMessage: (message) => shared.port.postMessage(message),
         addMessageListener: (listener) =>
           shared.port.addEventListener('message', (event) => {
-            const data = (event as MessageEvent).data as
-              | { control?: string }
-              | null
+            const data = (event as MessageEvent).data as {
+              control?: string;
+            } | null;
             if (data?.control === 'externalChanges') {
               const payload = data as unknown as {
-                name: string
-                changes: ExternalChangeSet
-              }
+                name: string;
+                changes: ExternalChangeSet;
+              };
               if (payload.name === this.name) {
-                this.externalChangesHandler?.(payload.changes)
+                this.externalChangesHandler?.(payload.changes);
               }
-              return
+              return;
             }
             if (data?.control === 'spawnWorker') {
               // The broker cannot spawn workers (no Worker constructor in
@@ -215,33 +219,33 @@ export class WebSqliteDriver implements SqliteDriver {
               const compute = new Worker(
                 new URL('./worker.ts', import.meta.url),
                 { type: 'module' },
-              )
-              this.hostedComputeWorker = compute
-              const channel = new MessageChannel()
+              );
+              this.hostedComputeWorker = compute;
+              const channel = new MessageChannel();
               compute.postMessage({ __remelondbAdoptPort: true }, [
                 channel.port2,
-              ])
+              ]);
               shared.port.postMessage({ control: 'adoptWorkerPort' }, [
                 channel.port1,
-              ])
-              return
+              ]);
+              return;
             }
-            listener(data)
+            listener(data);
           }),
         // closing OUR port must not kill the shared broker — other tabs
         // may be using it; the browser reclaims it with the last tab.
         terminate: () => shared.port.close(),
-      }
+      };
     }
     const worker = new Worker(new URL('./worker.ts', import.meta.url), {
       type: 'module',
-    })
+    });
     return {
       postMessage: (message) => worker.postMessage(message),
       addMessageListener: (listener) =>
         worker.addEventListener('message', (event) => listener(event.data)),
       terminate: () => worker.terminate(),
-    }
+    };
   }
 
   /**
@@ -251,9 +255,10 @@ export class WebSqliteDriver implements SqliteDriver {
    * contexts) — coordination is then skipped and behavior is unchanged.
    */
   private async acquireTabLock(name: string): Promise<boolean> {
-    const locks = typeof navigator === 'undefined' ? undefined : navigator?.locks
+    const locks =
+      typeof navigator === 'undefined' ? undefined : navigator?.locks;
     if (!locks) {
-      return false
+      return false;
     }
     const acquired = await new Promise<boolean>((resolve, reject) => {
       void locks
@@ -264,54 +269,54 @@ export class WebSqliteDriver implements SqliteDriver {
             : { ifAvailable: true },
           (lock) => {
             if (lock === null) {
-              resolve(false)
-              return null
+              resolve(false);
+              return null;
             }
-            resolve(true)
+            resolve(true);
             // hold the lock until close/destroy resolves this promise
             return new Promise<void>((release) => {
-              this.releaseTabLock = release
-            })
+              this.releaseTabLock = release;
+            });
           },
         )
         // a later steal by another tab rejects the request promise —
         // that is how the losing side learns it was taken over
         .catch((error: unknown) => {
           if (this.releaseTabLock !== null) {
-            this.releaseTabLock = null
-            this.handleTakenOver()
+            this.releaseTabLock = null;
+            this.handleTakenOver();
           } else {
-            reject(error instanceof Error ? error : new Error(String(error)))
+            reject(error instanceof Error ? error : new Error(String(error)));
           }
-        })
-    })
+        });
+    });
     if (!acquired) {
       throw new Error(
         `WebSqliteDriver: '${name}' is open in another tab or window — ` +
           `close it there, or open with { takeover: true }`,
-      )
+      );
     }
-    return true
+    return true;
   }
 
   private handleTakenOver(): void {
-    this.takenOver = true
-    this.name = null
-    this.endpoint?.terminate?.()
-    this.endpoint = null
+    this.takenOver = true;
+    this.name = null;
+    this.endpoint?.terminate?.();
+    this.endpoint = null;
     const error = new Error(
       'WebSqliteDriver: the database was taken over by another tab',
-    )
+    );
     for (const request of this.pending.values()) {
-      request.reject(error)
+      request.reject(error);
     }
-    this.pending.clear()
-    this.options.onTakenOver?.()
+    this.pending.clear();
+    this.options.onTakenOver?.();
   }
 
   private releaseLock(): void {
-    this.releaseTabLock?.()
-    this.releaseTabLock = null
+    this.releaseTabLock?.();
+    this.releaseTabLock = null;
   }
 
   private notOpenError(): Error {
@@ -319,82 +324,84 @@ export class WebSqliteDriver implements SqliteDriver {
       this.takenOver
         ? 'WebSqliteDriver: the database was taken over by another tab'
         : 'WebSqliteDriver: database is not open',
-    )
+    );
   }
 
   private request<T>(payload: RequestPayload): Promise<T> {
-    const endpoint = this.endpoint
+    const endpoint = this.endpoint;
     if (!endpoint) {
-      throw this.notOpenError()
+      throw this.notOpenError();
     }
-    const id = this.nextId++
+    const id = this.nextId++;
     return new Promise<T>((resolve, reject) => {
       this.pending.set(id, {
         resolve: resolve as (value: unknown) => void,
         reject,
-      })
-      endpoint.postMessage({ id, ...payload })
-    })
+      });
+      endpoint.postMessage({ id, ...payload });
+    });
   }
 
   private handleResponse(message: unknown): void {
-    const response = message as WorkerResponse
-    const pending = this.pending.get(response.id)
+    const response = message as WorkerResponse;
+    const pending = this.pending.get(response.id);
     if (!pending) {
-      return
+      return;
     }
-    this.pending.delete(response.id)
+    this.pending.delete(response.id);
     if (response.ok) {
-      pending.resolve(response.result)
+      pending.resolve(response.result);
     } else {
-      pending.reject(new Error(response.error))
+      pending.reject(new Error(response.error));
     }
   }
 
   /** Reject every in-flight request — the transport itself is dead. */
   private failAllPending(error: Error): void {
-    const entries = [...this.pending.values()]
-    this.pending.clear()
+    const entries = [...this.pending.values()];
+    this.pending.clear();
     for (const entry of entries) {
-      entry.reject(error)
+      entry.reject(error);
     }
   }
 
   async open(name: string): Promise<{ userVersion: number }> {
     if (this.name !== null) {
-      throw new Error('WebSqliteDriver: database is already open')
+      throw new Error('WebSqliteDriver: database is already open');
     }
-    const storage = this.options.storage ?? 'opfs'
+    const storage = this.options.storage ?? 'opfs';
     // Refuse fast when OPFS is blocked (private mode / blocked site data)
     // rather than spawning a worker that can only fail — and, in shared
     // mode, respawn-loop. Callers catch OpfsUnavailableError to degrade.
     if (storage === 'opfs') {
-      await probeOpfs(navigator?.storage)
+      await probeOpfs(navigator?.storage);
     }
     // Shared mode has a single owner by construction — the Web Lock
     // contention this coordinates simply cannot happen there.
     const coordinated =
       storage === 'opfs' && !this.sharedMode
         ? await this.acquireTabLock(name)
-        : false
-    this.takenOver = false
+        : false;
+    this.takenOver = false;
     if (!this.endpoint) {
-      this.endpoint = this.createEndpoint()
-      this.endpoint.addMessageListener((message) => this.handleResponse(message))
+      this.endpoint = this.createEndpoint();
+      this.endpoint.addMessageListener((message) =>
+        this.handleResponse(message),
+      );
     }
     // After a takeover the losing tab's worker needs a moment to die and
     // release the pool's file locks — retry briefly instead of failing.
-    let attempts = coordinated ? 20 : 1
+    let attempts = coordinated ? 20 : 1;
     for (;;) {
       try {
         const openRequest = this.request<{ userVersion: number }>({
           op: 'open',
           name,
           storage,
-        })
+        });
         // A dead broker answers nothing; the deadline turns a hang into
         // an actionable error.
-        const deadlineMs = this.options.openTimeoutMs ?? 15_000
+        const deadlineMs = this.options.openTimeoutMs ?? 15_000;
         const result = this.sharedMode
           ? await Promise.race([
               openRequest,
@@ -414,25 +421,25 @@ export class WebSqliteDriver implements SqliteDriver {
                 ),
               ),
             ])
-          : await openRequest
-        this.name = name
-        return result
+          : await openRequest;
+        this.name = name;
+        return result;
       } catch (error) {
-        attempts -= 1
+        attempts -= 1;
         if (attempts <= 0) {
-          this.releaseLock()
-          throw error
+          this.releaseLock();
+          throw error;
         }
-        await new Promise((resolve) => setTimeout(resolve, 250))
+        await new Promise((resolve) => setTimeout(resolve, 250));
       }
     }
   }
 
   private get openName(): string {
     if (this.name === null) {
-      throw this.notOpenError()
+      throw this.notOpenError();
     }
-    return this.name
+    return this.name;
   }
 
   /**
@@ -442,15 +449,15 @@ export class WebSqliteDriver implements SqliteDriver {
    */
   async acquireWorkSlot(exclusive: boolean): Promise<() => Promise<void>> {
     if (!this.sharedMode) {
-      return async () => {}
+      return async () => {};
     }
     const { slot } = await this.request<{ slot: number }>({
       op: 'acquireSlot',
       exclusive,
-    })
+    });
     return async () => {
-      await this.request({ op: 'releaseSlot', slot })
-    }
+      await this.request({ op: 'releaseSlot', slot });
+    };
   }
 
   /**
@@ -461,7 +468,7 @@ export class WebSqliteDriver implements SqliteDriver {
    */
   publishChanges(changes: ExternalChangeSet): void {
     if (!this.sharedMode || this.name === null) {
-      return
+      return;
     }
     // best-effort: a lost notification means a stale cache elsewhere
     // until the next commit, and the next real request errors loudly
@@ -469,11 +476,11 @@ export class WebSqliteDriver implements SqliteDriver {
       op: 'publishChanges',
       name: this.name,
       changes,
-    }).catch(() => {})
+    }).catch(() => {});
   }
 
   onExternalChanges(handler: (changes: ExternalChangeSet) => void): void {
-    this.externalChangesHandler = handler
+    this.externalChangesHandler = handler;
   }
 
   /**
@@ -485,33 +492,33 @@ export class WebSqliteDriver implements SqliteDriver {
    */
   async requestSyncTurn(): Promise<boolean> {
     if (!this.sharedMode || this.name === null) {
-      return true
+      return true;
     }
     const { granted } = await this.request<{ granted: boolean }>({
       op: 'syncTurn',
       name: this.name,
       leaseMs: this.options.syncLeaseMs ?? 10_000,
-    })
-    return granted
+    });
+    return granted;
   }
 
   async close(): Promise<void> {
-    const name = this.openName
-    await this.request({ op: 'close', name })
-    this.name = null
+    const name = this.openName;
+    await this.request({ op: 'close', name });
+    this.name = null;
     // a self-created worker dies here, releasing the pool's file locks
     // for other tabs; injected endpoints without terminate are untouched
-    this.endpoint?.terminate?.()
-    this.endpoint = null
-    this.releaseLock()
+    this.endpoint?.terminate?.();
+    this.endpoint = null;
+    this.releaseLock();
   }
 
   async query(sql: string, args: SqlArgs): Promise<Row[]> {
-    return this.request<Row[]>({ op: 'query', name: this.openName, sql, args })
+    return this.request<Row[]>({ op: 'query', name: this.openName, sql, args });
   }
 
   async execute(sql: string, args: SqlArgs): Promise<void> {
-    await this.request({ op: 'execute', name: this.openName, sql, args })
+    await this.request({ op: 'execute', name: this.openName, sql, args });
   }
 
   async executeBatch(statements: readonly BatchStatement[]): Promise<void> {
@@ -519,21 +526,21 @@ export class WebSqliteDriver implements SqliteDriver {
       op: 'executeBatch',
       name: this.openName,
       statements,
-    })
+    });
   }
 
   async setUserVersion(version: number): Promise<void> {
-    await this.request({ op: 'setUserVersion', name: this.openName, version })
+    await this.request({ op: 'setUserVersion', name: this.openName, version });
   }
 
   async destroy(): Promise<void> {
-    const name = this.name
-    this.name = null
+    const name = this.name;
+    this.name = null;
     if (name !== null && this.endpoint) {
-      await this.request({ op: 'destroy', name: name })
+      await this.request({ op: 'destroy', name: name });
     }
-    this.endpoint?.terminate?.()
-    this.endpoint = null
-    this.releaseLock()
+    this.endpoint?.terminate?.();
+    this.endpoint = null;
+    this.releaseLock();
   }
 }

@@ -13,13 +13,15 @@
     "check:guide": "node scripts/check-codebase-guide.mjs",
     "check:wire": "node scripts/check-sync-wire.mjs",
     "check:reference": "node scripts/check-reference.mjs",
-    "guide:epub": "pandoc docs/codebase-guide.md -o remelondb-guide.epub --toc --toc-depth=2 -N --resource-path=docs --css docs/codebase-guide.epub.css"
+    "guide:epub": "pandoc docs/codebase-guide.md -o remelondb-guide.epub --toc --toc-depth=2 -N --resource-path=docs --css docs/codebase-guide.epub.css",
+    "format": "prettier --write \"packages/*/src/**/*.{ts,tsx}\" \"packages/*/e2e/**/*.{ts,tsx}\" \"examples/**/*.{ts,tsx}\" \"scripts/**/*.mjs\""
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.2",
     "@types/node": "^24.13.3",
     "fast-check": "^4.9.0",
     "jsdom": "^30.0.1",
+    "prettier": "^3.9.6",
     "react-dom": "^19.2.7",
     "tsdown": "^0.22.7",
     "typedoc": "^0.28.20",

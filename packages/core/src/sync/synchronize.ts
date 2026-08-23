@@ -9,11 +9,11 @@
  * push is in flight fail the equality gate and stay dirty. Push conflicts
  * loop back to pull, bounded by conflictRetries.
  */
-import type { Database } from '../database/Database'
-import { stepsForMigration } from '../schema/migrations'
-import { applyRemoteChanges, type ConflictResolver } from './applyRemote'
-import { fetchLocalChanges } from './fetchLocal'
-import { markLocalChangesAsSynced } from './markAsSynced'
+import type { Database } from '../database/Database';
+import { stepsForMigration } from '../schema/migrations';
+import { applyRemoteChanges, type ConflictResolver } from './applyRemote';
+import { fetchLocalChanges } from './fetchLocal';
+import { markLocalChangesAsSynced } from './markAsSynced';
 import type {
   Cursor,
   MigrationSyncChanges,
@@ -22,10 +22,10 @@ import type {
   SyncPullResult,
   SyncPushArgs,
   SyncPushResult,
-} from './types'
+} from './types';
 
-export const CURSOR_KEY = '__sync_cursor'
-export const LAST_SCHEMA_VERSION_KEY = '__sync_last_schema_version'
+export const CURSOR_KEY = '__sync_cursor';
+export const LAST_SCHEMA_VERSION_KEY = '__sync_last_schema_version';
 
 /**
  * What a synchronize() run did. Callers branch on this instead of
@@ -34,105 +34,110 @@ export const LAST_SCHEMA_VERSION_KEY = '__sync_last_schema_version'
  */
 export interface SynchronizeResult {
   /** 'unavailable' when another context held the sync lease; nothing ran. */
-  readonly lease: 'acquired' | 'unavailable'
+  readonly lease: 'acquired' | 'unavailable';
   /** The server demanded a full resync and a replacement pull happened. */
-  readonly resynced: boolean
+  readonly resynced: boolean;
   /** Remote rows applied locally: pull phases plus interleaved push changes. */
-  readonly pulled: number
+  readonly pulled: number;
   /** Local rows the server accepted (sent minus per-record rejections). */
-  readonly pushed: number
+  readonly pushed: number;
   /** Local rows the server rejected; they stay dirty. */
-  readonly rejected: number
+  readonly rejected: number;
   /**
    * The rejected rows' ids, per table — identity for the count above,
    * so an application can surface WHICH record needs attention instead
    * of only how many. Empty object when nothing was rejected.
    */
-  readonly rejectedRecords: Readonly<Record<string, readonly string[]>>
+  readonly rejectedRecords: Readonly<Record<string, readonly string[]>>;
   /** Extra pull→push rounds forced by push conflicts. */
-  readonly retryCount: number
+  readonly retryCount: number;
 }
 
 const countRows = (changes: SyncChanges | null | undefined): number => {
-  if (!changes) return 0
-  let total = 0
+  if (!changes) return 0;
+  let total = 0;
   for (const table of Object.values(changes)) {
-    total += table.created.length + table.updated.length + table.deleted.length
+    total += table.created.length + table.updated.length + table.deleted.length;
   }
-  return total
-}
+  return total;
+};
 
 export interface SynchronizeOptions {
-  readonly database: Database
+  readonly database: Database;
   readonly pullChanges: (
     args: SyncPullArgs,
     signal?: AbortSignal,
-  ) => Promise<SyncPullResult>
+  ) => Promise<SyncPullResult>;
   readonly pushChanges?: (
     args: SyncPushArgs,
     signal?: AbortSignal,
-  ) => Promise<SyncPushResult>
+  ) => Promise<SyncPushResult>;
   /** Validate each untrusted pull response before core inspects or applies it. */
-  readonly validatePullResult?: (result: unknown) => SyncPullResult
+  readonly validatePullResult?: (result: unknown) => SyncPullResult;
   /** Validate each untrusted push response before core inspects or applies it. */
-  readonly validatePushResult?: (result: unknown) => SyncPushResult
-  readonly conflictResolver?: ConflictResolver
-  readonly sendCreatedAsUpdated?: boolean
+  readonly validatePushResult?: (result: unknown) => SyncPushResult;
+  readonly conflictResolver?: ConflictResolver;
+  readonly sendCreatedAsUpdated?: boolean;
   /** Opt into migration pulls; the version before your first synced migration. */
-  readonly migrationsEnabledAtVersion?: number
+  readonly migrationsEnabledAtVersion?: number;
   /** Max pull→push rounds when the server reports push conflicts (default 5). */
-  readonly conflictRetries?: number
+  readonly conflictRetries?: number;
   /**
    * Cancels the run between protocol phases and is handed to the
    * transport so in-flight requests can abort. A write in progress is
    * never interrupted; the engine stops before the next phase instead.
    */
-  readonly signal?: AbortSignal
-  readonly log?: (message: string) => void
+  readonly signal?: AbortSignal;
+  readonly log?: (message: string) => void;
 }
 
 const getCursor = async (database: Database): Promise<Cursor | null> =>
-  database.localStorage.get(CURSOR_KEY)
+  database.localStorage.get(CURSOR_KEY);
 
 async function migrationInfo(
   database: Database,
   enabledAtVersion: number | undefined,
   isFirstSync: boolean,
-): Promise<{ migration: MigrationSyncChanges | null; shouldSaveVersion: boolean }> {
-  const currentVersion = database.schema.version
+): Promise<{
+  migration: MigrationSyncChanges | null;
+  shouldSaveVersion: boolean;
+}> {
+  const currentVersion = database.schema.version;
   if (isFirstSync) {
-    return { migration: null, shouldSaveVersion: true }
+    return { migration: null, shouldSaveVersion: true };
   }
   if (enabledAtVersion === undefined) {
-    return { migration: null, shouldSaveVersion: false }
+    return { migration: null, shouldSaveVersion: false };
   }
-  const stored = await database.localStorage.get(LAST_SCHEMA_VERSION_KEY)
-  const migrateFrom = stored !== null ? Number(stored) : enabledAtVersion
+  const stored = await database.localStorage.get(LAST_SCHEMA_VERSION_KEY);
+  const migrateFrom = stored !== null ? Number(stored) : enabledAtVersion;
   if (migrateFrom >= currentVersion) {
-    return { migration: null, shouldSaveVersion: false }
+    return { migration: null, shouldSaveVersion: false };
   }
-  const { migrations } = database
+  const { migrations } = database;
   if (!migrations) {
-    throw new Error('synchronize: migrationsEnabledAtVersion set but the database has no migrations')
+    throw new Error(
+      'synchronize: migrationsEnabledAtVersion set but the database has no migrations',
+    );
   }
   const steps = stepsForMigration(migrations, {
     from: migrateFrom,
     to: currentVersion,
-  })
+  });
   if (steps === null) {
     throw new Error(
       `synchronize: no migration path from synced schema version ${migrateFrom} to ${currentVersion}`,
-    )
+    );
   }
-  const tables: string[] = []
-  const columnsByTable = new Map<string, Set<string>>()
+  const tables: string[] = [];
+  const columnsByTable = new Map<string, Set<string>>();
   for (const step of steps) {
     if (step.type === 'create_table') {
-      tables.push(step.schema.name)
+      tables.push(step.schema.name);
     } else if (step.type === 'add_columns' && !tables.includes(step.table)) {
-      const set = columnsByTable.get(step.table) ?? new Set()
-      step.columns.forEach((column) => set.add(column.name))
-      columnsByTable.set(step.table, set)
+      const set = columnsByTable.get(step.table) ?? new Set();
+      step.columns.forEach((column) => set.add(column.name));
+      columnsByTable.set(step.table, set);
     }
   }
   return {
@@ -145,10 +150,10 @@ async function migrationInfo(
       })),
     },
     shouldSaveVersion: true,
-  }
+  };
 }
 
-const inFlight = new WeakMap<Database, Promise<SynchronizeResult>>()
+const inFlight = new WeakMap<Database, Promise<SynchronizeResult>>();
 
 /**
  * Run one full sync: pull remote changes, apply them (per-column
@@ -174,28 +179,28 @@ const inFlight = new WeakMap<Database, Promise<SynchronizeResult>>()
 export function synchronize(
   options: SynchronizeOptions,
 ): Promise<SynchronizeResult> {
-  const running = inFlight.get(options.database)
+  const running = inFlight.get(options.database);
   if (running) {
-    return running
+    return running;
   }
   const run = runSynchronize(options).finally(() =>
     inFlight.delete(options.database),
-  )
-  inFlight.set(options.database, run)
-  return run
+  );
+  inFlight.set(options.database, run);
+  return run;
 }
 
 async function runSynchronize(
   options: SynchronizeOptions,
 ): Promise<SynchronizeResult> {
-  const { database, log = () => {} } = options
-  const retries = options.conflictRetries ?? 5
-  options.signal?.throwIfAborted()
+  const { database, log = () => {} } = options;
+  const retries = options.conflictRetries ?? 5;
+  options.signal?.throwIfAborted();
 
   // Multi-tab: only the sync-lease holder runs; everyone else's tick is
   // a cheap no-op. Drivers without shared storage have no hook.
   if ((await database.driver.requestSyncTurn?.()) === false) {
-    log('sync turn denied — another context holds the sync lease')
+    log('sync turn denied — another context holds the sync lease');
     return {
       lease: 'unavailable',
       resynced: false,
@@ -204,56 +209,58 @@ async function runSynchronize(
       rejected: 0,
       rejectedRecords: {},
       retryCount: 0,
-    }
+    };
   }
 
-  let resynced = false
-  let pulledTotal = 0
+  let resynced = false;
+  let pulledTotal = 0;
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     // ---- pull phase ----
-    options.signal?.throwIfAborted()
-    const pullCursor = await getCursor(database)
+    options.signal?.throwIfAborted();
+    const pullCursor = await getCursor(database);
     const { migration, shouldSaveVersion } = await migrationInfo(
       database,
       options.migrationsEnabledAtVersion,
       pullCursor === null,
-    )
+    );
     const pull = async (args: SyncPullArgs): Promise<SyncPullResult> => {
-      const result: unknown = await options.pullChanges(args, options.signal)
+      const result: unknown = await options.pullChanges(args, options.signal);
       return options.validatePullResult
         ? options.validatePullResult(result)
-        : (result as SyncPullResult)
-    }
+        : (result as SyncPullResult);
+    };
     let pullResult = await pull({
       cursor: pullCursor,
       schemaVersion: database.schema.version,
       migration,
-    })
-    let replacement = false
+    });
+    let replacement = false;
     if ('resyncRequired' in pullResult) {
-      log('sync: server requires a full resync — re-pulling from scratch')
+      log('sync: server requires a full resync — re-pulling from scratch');
       pullResult = await pull({
         cursor: null,
         schemaVersion: database.schema.version,
         migration: null,
-      })
+      });
       if ('resyncRequired' in pullResult) {
-        throw new Error('synchronize: server demanded resync for a null cursor')
+        throw new Error(
+          'synchronize: server demanded resync for a null cursor',
+        );
       }
-      replacement = true
-      resynced = true
+      replacement = true;
+      resynced = true;
     }
-    const pulled = pullResult
-    pulledTotal += countRows(pulled.changes)
+    const pulled = pullResult;
+    pulledTotal += countRows(pulled.changes);
 
     // abort before the apply write, never inside it
-    options.signal?.throwIfAborted()
+    options.signal?.throwIfAborted();
     await database.write(async () => {
       if ((await getCursor(database)) !== pullCursor) {
         throw new Error(
           'synchronize: another synchronize() committed during the pull — aborting',
-        )
+        );
       }
       await applyRemoteChanges(database, pulled.changes, {
         ...(options.conflictResolver
@@ -262,15 +269,15 @@ async function runSynchronize(
         ...(options.sendCreatedAsUpdated ? { sendCreatedAsUpdated: true } : {}),
         replacement,
         log,
-      })
-      await database.localStorage.set(CURSOR_KEY, pulled.cursor)
+      });
+      await database.localStorage.set(CURSOR_KEY, pulled.cursor);
       if (shouldSaveVersion) {
         await database.localStorage.set(
           LAST_SCHEMA_VERSION_KEY,
           String(database.schema.version),
-        )
+        );
       }
-    })
+    });
 
     const doneWithoutPush = (): SynchronizeResult => ({
       lease: 'acquired',
@@ -280,59 +287,63 @@ async function runSynchronize(
       rejected: 0,
       rejectedRecords: {},
       retryCount: attempt - 1,
-    })
+    });
 
     // ---- push phase ----
     if (!options.pushChanges) {
-      return doneWithoutPush()
+      return doneWithoutPush();
     }
-    const localChanges = await fetchLocalChanges(database)
+    const localChanges = await fetchLocalChanges(database);
     if (localChanges.isEmpty) {
-      return doneWithoutPush()
+      return doneWithoutPush();
     }
-    options.signal?.throwIfAborted()
+    options.signal?.throwIfAborted();
     const unvalidatedPushResult: unknown = await options.pushChanges(
       {
         changes: localChanges.changes,
         cursor: pulled.cursor,
       },
       options.signal,
-    )
+    );
     const pushResult = options.validatePushResult
       ? options.validatePushResult(unvalidatedPushResult)
-      : (unvalidatedPushResult as SyncPushResult)
+      : (unvalidatedPushResult as SyncPushResult);
     if ('conflict' in pushResult) {
-      log(`sync: push conflict (attempt ${attempt}/${retries}) — re-pulling`)
-      continue
+      log(`sync: push conflict (attempt ${attempt}/${retries}) — re-pulling`);
+      continue;
     }
     if (pushResult.cursor !== null && pushResult.changes === null) {
       throw new Error(
         'synchronize: push returned a cursor without interleaved changes — a backend must return both or neither (see docs/sync-design.md)',
-      )
+      );
     }
 
     await database.write(async () => {
-      await markLocalChangesAsSynced(database, localChanges, pushResult.rejected)
+      await markLocalChangesAsSynced(
+        database,
+        localChanges,
+        pushResult.rejected,
+      );
       if (pushResult.cursor !== null && pushResult.changes !== null) {
         if ((await getCursor(database)) !== pulled.cursor) {
-          log('sync: cursor moved during push — skipping cursor adoption')
-          return
+          log('sync: cursor moved during push — skipping cursor adoption');
+          return;
         }
-        await applyRemoteChanges(database, pushResult.changes, { log })
-        pulledTotal += countRows(pushResult.changes)
-        await database.localStorage.set(CURSOR_KEY, pushResult.cursor)
+        await applyRemoteChanges(database, pushResult.changes, { log });
+        pulledTotal += countRows(pushResult.changes);
+        await database.localStorage.set(CURSOR_KEY, pushResult.cursor);
       }
-    })
+    });
     // one source for count and identity: tables with no rejections are
     // omitted, so `rejectedRecords` is {} exactly when `rejected` is 0
-    const rejectedRecords: Record<string, readonly string[]> = {}
+    const rejectedRecords: Record<string, readonly string[]> = {};
     for (const [table, ids] of Object.entries(pushResult.rejected ?? {})) {
-      if (ids.length > 0) rejectedRecords[table] = [...ids]
+      if (ids.length > 0) rejectedRecords[table] = [...ids];
     }
     const rejectedCount = Object.values(rejectedRecords).reduce(
       (total, ids) => total + ids.length,
       0,
-    )
+    );
     return {
       lease: 'acquired',
       resynced,
@@ -341,10 +352,10 @@ async function runSynchronize(
       rejected: rejectedCount,
       rejectedRecords,
       retryCount: attempt - 1,
-    }
+    };
   }
 
   throw new Error(
     `synchronize: push still conflicting after ${retries} attempts — giving up`,
-  )
+  );
 }

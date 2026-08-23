@@ -1,1 +1,1 @@
-export { NodeSqliteDriver } from './NodeSqliteDriver'
+export { NodeSqliteDriver } from './NodeSqliteDriver';

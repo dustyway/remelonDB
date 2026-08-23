@@ -1,18 +1,23 @@
-import { useEffect, useState, useSyncExternalStore } from 'react'
-import { Q, type Database } from '@remelondb/core'
-import { useMutation, useQuery } from '@remelondb/core/react'
-import { TodoModel } from 'example-todo-sync/schema'
-import { getSyncNote, getSyncStatus, runSync, subscribeSyncStatus } from './sync'
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { Q, type Database } from '@remelondb/core';
+import { useMutation, useQuery } from '@remelondb/core/react';
+import { TodoModel } from 'example-todo-sync/schema';
+import {
+  getSyncNote,
+  getSyncStatus,
+  runSync,
+  subscribeSyncStatus,
+} from './sync';
 
 type WriteAction =
   | { type: 'add'; text: string }
   | { type: 'toggle'; todo: TodoModel }
   | { type: 'remove'; todo: TodoModel }
-  | { type: 'edit'; id: string; text: string }
+  | { type: 'edit'; id: string; text: string };
 
 export function App({ db }: { db: Database }) {
-  const [search, setSearch] = useState('')
-  const term = search.trim()
+  const [search, setSearch] = useState('');
+  const term = search.trim();
   // No memo needed: useQuery keys on the query's structure, so
   // rebuilding it every render reuses the same live subscription.
   // Typing in the search box genuinely changes that structure —
@@ -22,23 +27,21 @@ export function App({ db }: { db: Database }) {
     db
       .get(TodoModel)
       .query(
-        ...(term
-          ? [Q.where('text', Q.like(`%${Q.escapeLike(term)}%`))]
-          : []),
+        ...(term ? [Q.where('text', Q.like(`%${Q.escapeLike(term)}%`))] : []),
         Q.sortBy('created_at', Q.desc),
       ),
     { keepPreviousData: true },
-  )
-  const [text, setText] = useState('')
-  const [editing, setEditing] = useState<string | null>(null)
-  const syncStatus = useSyncExternalStore(subscribeSyncStatus, getSyncStatus)
-  const syncNote = useSyncExternalStore(subscribeSyncStatus, getSyncNote)
+  );
+  const [text, setText] = useState('');
+  const [editing, setEditing] = useState<string | null>(null);
+  const syncStatus = useSyncExternalStore(subscribeSyncStatus, getSyncStatus);
+  const syncNote = useSyncExternalStore(subscribeSyncStatus, getSyncNote);
 
   useEffect(() => {
-    void runSync(db)
-    const timer = setInterval(() => void runSync(db), 2000)
-    return () => clearInterval(timer)
-  }, [db])
+    void runSync(db);
+    const timer = setInterval(() => void runSync(db), 2000);
+    return () => clearInterval(timer);
+  }, [db]);
 
   // One mutation owns every write, so the hook's ownership rule — the
   // latest invocation owns `error` — is exactly the banner's rule: a
@@ -48,44 +51,44 @@ export function App({ db }: { db: Database }) {
     await db.write(async () => {
       switch (action.type) {
         case 'add':
-          await db.get(TodoModel).create({ text: action.text, done: false })
-          break
+          await db.get(TodoModel).create({ text: action.text, done: false });
+          break;
         case 'toggle':
           await db
             .get(TodoModel)
-            .update(action.todo.id, { done: !action.todo.done })
-          break
+            .update(action.todo.id, { done: !action.todo.done });
+          break;
         case 'remove':
-          await db.get(TodoModel).markAsDeleted(action.todo.id)
-          break
+          await db.get(TodoModel).markAsDeleted(action.todo.id);
+          break;
         case 'edit':
-          await db.get(TodoModel).update(action.id, { text: action.text })
-          break
+          await db.get(TodoModel).update(action.id, { text: action.text });
+          break;
       }
-    })
-    void runSync(db)
-  })
+    });
+    void runSync(db);
+  });
 
   // mutateAsync where the caller needs the outcome: the draft is only
   // cleared after the write commits, so a failure keeps the text.
   const add = async (event: React.FormEvent) => {
-    event.preventDefault()
-    const trimmed = text.trim()
-    if (!trimmed) return
+    event.preventDefault();
+    const trimmed = text.trim();
+    if (!trimmed) return;
     try {
-      await write.mutateAsync({ type: 'add', text: trimmed })
-      setText('')
+      await write.mutateAsync({ type: 'add', text: trimmed });
+      setText('');
     } catch {
       // the failure is already in write.error
     }
-  }
+  };
 
   const commitEdit = (id: string, draft: string) => {
-    setEditing(null)
-    const trimmed = draft.trim()
-    if (!trimmed) return
-    write.mutate({ type: 'edit', id, text: trimmed })
-  }
+    setEditing(null);
+    const trimmed = draft.trim();
+    if (!trimmed) return;
+    write.mutate({ type: 'edit', id, text: trimmed });
+  };
 
   return (
     <>
@@ -130,10 +133,12 @@ export function App({ db }: { db: Database }) {
                 defaultValue={todo.text}
                 autoFocus
                 onClick={(event) => event.stopPropagation()}
-                onBlur={(event) => commitEdit(todo.id, event.currentTarget.value)}
+                onBlur={(event) =>
+                  commitEdit(todo.id, event.currentTarget.value)
+                }
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter') event.currentTarget.blur()
-                  if (event.key === 'Escape') setEditing(null)
+                  if (event.key === 'Enter') event.currentTarget.blur();
+                  if (event.key === 'Escape') setEditing(null);
                 }}
               />
             ) : (
@@ -142,8 +147,8 @@ export function App({ db }: { db: Database }) {
             <button
               type="button"
               onClick={(event) => {
-                event.stopPropagation()
-                setEditing(todo.id)
+                event.stopPropagation();
+                setEditing(todo.id);
               }}
             >
               Edit
@@ -151,13 +156,13 @@ export function App({ db }: { db: Database }) {
             <button
               type="button"
               onClick={(event) => {
-                event.stopPropagation()
+                event.stopPropagation();
                 if (
                   window.confirm(
                     `Are you sure you want to delete ${todo.text}? It will be gone for good`,
                   )
                 ) {
-                  write.mutate({ type: 'remove', todo })
+                  write.mutate({ type: 'remove', todo });
                 }
               }}
             >
@@ -167,5 +172,5 @@ export function App({ db }: { db: Database }) {
         ))}
       </ul>
     </>
-  )
+  );
 }

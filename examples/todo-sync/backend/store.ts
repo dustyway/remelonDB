@@ -1,5 +1,5 @@
-import { Pool } from 'pg'
-import { drizzle } from 'drizzle-orm/node-postgres'
+import { Pool } from 'pg';
+import { drizzle } from 'drizzle-orm/node-postgres';
 import {
   bigint,
   boolean,
@@ -7,11 +7,11 @@ import {
   pgTable,
   text,
   timestamp,
-} from 'drizzle-orm/pg-core'
-import { createMemoryStore } from '@remelondb/server'
-import type { SyncStore } from '@remelondb/server'
-import { createDrizzleStore } from '@remelondb/store-drizzle'
-import type { DrizzleDb } from '@remelondb/store-drizzle'
+} from 'drizzle-orm/pg-core';
+import { createMemoryStore } from '@remelondb/server';
+import type { SyncStore } from '@remelondb/server';
+import { createDrizzleStore } from '@remelondb/store-drizzle';
+import type { DrizzleDb } from '@remelondb/store-drizzle';
 
 // The store behind the example server: in-memory by default (state
 // lives and dies with the process), Postgres when DATABASE_URL is set.
@@ -26,7 +26,7 @@ export const todos = pgTable('todos', {
   text: text('text').notNull(),
   done: boolean('done').notNull(),
   createdAt: doublePrecision('created_at').notNull(),
-})
+});
 
 const bootstrap = async (db: DrizzleDb): Promise<void> => {
   const statements = [
@@ -42,17 +42,19 @@ const bootstrap = async (db: DrizzleDb): Promise<void> => {
        created_at double precision not null
      )`,
     `create index if not exists todos_owner_rev_idx on todos (owner, rev)`,
-  ]
+  ];
   for (const statement of statements) {
-    await db.execute(statement)
+    await db.execute(statement);
   }
-}
+};
 
 export const createStore = async (): Promise<SyncStore<string>> => {
-  const url = process.env['DATABASE_URL']
-  if (!url) return createMemoryStore()
-  const db = drizzle(new Pool({ connectionString: url })) as unknown as DrizzleDb
-  await bootstrap(db)
+  const url = process.env['DATABASE_URL'];
+  if (!url) return createMemoryStore();
+  const db = drizzle(
+    new Pool({ connectionString: url }),
+  ) as unknown as DrizzleDb;
+  await bootstrap(db);
   return createDrizzleStore<string>({
     db,
     tables: {
@@ -64,5 +66,5 @@ export const createStore = async (): Promise<SyncStore<string>> => {
         scope: todos.owner,
       },
     },
-  })
-}
+  });
+};

@@ -11,16 +11,16 @@
  * derived from the `table()` definition. The builders produce plain
  * ColumnSchema data; everything type-level is phantom and erased.
  */
-import { ensureName } from '../utils/checkName'
-import { deepFreeze } from '../utils/deepFreeze'
+import { ensureName } from '../utils/checkName';
+import { deepFreeze } from '../utils/deepFreeze';
 
-export type ColumnType = 'string' | 'number' | 'boolean'
+export type ColumnType = 'string' | 'number' | 'boolean';
 
 export interface ColumnSchema {
-  readonly name: string
-  readonly type: ColumnType
-  readonly isOptional?: boolean
-  readonly isIndexed?: boolean
+  readonly name: string;
+  readonly type: ColumnType;
+  readonly isOptional?: boolean;
+  readonly isIndexed?: boolean;
 }
 
 /**
@@ -33,11 +33,11 @@ export interface ColumnDef<
   T extends ColumnType = ColumnType,
   Optional extends boolean = boolean,
 > {
-  readonly type: T
-  readonly isOptional: Optional
-  readonly isIndexed: boolean
-  optional(): ColumnDef<T, true>
-  indexed(): ColumnDef<T, Optional>
+  readonly type: T;
+  readonly isOptional: Optional;
+  readonly isIndexed: boolean;
+  optional(): ColumnDef<T, true>;
+  indexed(): ColumnDef<T, Optional>;
 }
 
 function columnDef<T extends ColumnType, Optional extends boolean>(
@@ -50,12 +50,12 @@ function columnDef<T extends ColumnType, Optional extends boolean>(
     isOptional,
     isIndexed,
     optional(): ColumnDef<T, true> {
-      return columnDef(type, true, isIndexed)
+      return columnDef(type, true, isIndexed);
     },
     indexed(): ColumnDef<T, Optional> {
-      return columnDef(type, isOptional, true)
+      return columnDef(type, isOptional, true);
     },
-  })
+  });
 }
 
 /**
@@ -76,16 +76,17 @@ function columnDef<T extends ColumnType, Optional extends boolean>(
 export const column = {
   string: (): ColumnDef<'string', false> => columnDef('string', false, false),
   number: (): ColumnDef<'number', false> => columnDef('number', false, false),
-  boolean: (): ColumnDef<'boolean', false> => columnDef('boolean', false, false),
-}
+  boolean: (): ColumnDef<'boolean', false> =>
+    columnDef('boolean', false, false),
+};
 
 /**
  * The columns map a `table()` definition takes.
  * @category Schema
  */
 export type ColumnsSpec = {
-  readonly [name: string]: ColumnDef<ColumnType, boolean>
-}
+  readonly [name: string]: ColumnDef<ColumnType, boolean>;
+};
 
 /**
  * A table definition — what `table()` returns. Pass it to `appSchema`,
@@ -93,11 +94,11 @@ export type ColumnsSpec = {
  * @category Schema
  */
 export interface TableSchema<Cols extends ColumnsSpec = ColumnsSpec> {
-  readonly name: string
-  readonly columns: { readonly [name: string]: ColumnSchema }
-  readonly columnArray: readonly ColumnSchema[]
+  readonly name: string;
+  readonly columns: { readonly [name: string]: ColumnSchema };
+  readonly columnArray: readonly ColumnSchema[];
   /** Type-only inference carrier; always undefined at runtime. */
-  readonly $cols?: Cols
+  readonly $cols?: Cols;
 }
 
 /**
@@ -106,8 +107,8 @@ export interface TableSchema<Cols extends ColumnsSpec = ColumnsSpec> {
  * @category Schema
  */
 export interface AppSchema {
-  readonly version: number
-  readonly tables: { readonly [name: string]: TableSchema }
+  readonly version: number;
+  readonly tables: { readonly [name: string]: TableSchema };
 }
 
 /**
@@ -134,16 +135,16 @@ export type InferRecord<T extends TableSchema<ColumnsSpec>> =
                   ? number
                   : boolean
               : never)
-          | (Cols[K] extends ColumnDef<ColumnType, true> ? null : never)
+          | (Cols[K] extends ColumnDef<ColumnType, true> ? null : never);
       }
-    : never
+    : never;
 
 /**
  * The column names Q clauses may reference for a table (includes `id`).
  * @category Schema
  */
 export type ColumnName<T extends TableSchema<ColumnsSpec>> =
-  T extends TableSchema<infer Cols> ? (keyof Cols & string) | 'id' : string
+  T extends TableSchema<infer Cols> ? (keyof Cols & string) | 'id' : string;
 
 const RESERVED_COLUMNS = new Set([
   'id',
@@ -153,25 +154,25 @@ const RESERVED_COLUMNS = new Set([
   'rowid',
   'oid',
   '_rowid_',
-])
+]);
 
 export function validateColumnSchema(column: ColumnSchema): ColumnSchema {
-  ensureName(column.name, 'column')
+  ensureName(column.name, 'column');
   if (RESERVED_COLUMNS.has(column.name.toLowerCase())) {
-    throw new Error(`Column name '${column.name}' is reserved`)
+    throw new Error(`Column name '${column.name}' is reserved`);
   }
   if (!['string', 'number', 'boolean'].includes(column.type)) {
     throw new Error(
       `Column '${column.name}' has invalid type '${String(column.type)}'`,
-    )
+    );
   }
   if (
     (column.name === 'created_at' || column.name === 'updated_at') &&
     (column.type !== 'number' || column.isOptional)
   ) {
-    throw new Error(`Column '${column.name}' must be a non-optional number`)
+    throw new Error(`Column '${column.name}' must be a non-optional number`);
   }
-  return column
+  return column;
 }
 
 /** @internal Shared by table() and migrations' createTable. */
@@ -179,21 +180,21 @@ export function buildTableSchema(
   name: string,
   columnArray: readonly ColumnSchema[],
 ): TableSchema {
-  ensureName(name, 'table')
+  ensureName(name, 'table');
   if (name === 'local_storage' || name.startsWith('sqlite_')) {
-    throw new Error(`Table name '${name}' is reserved`)
+    throw new Error(`Table name '${name}' is reserved`);
   }
-  const columns: { [name: string]: ColumnSchema } = {}
+  const columns: { [name: string]: ColumnSchema } = {};
   for (const column of columnArray) {
-    validateColumnSchema(column)
+    validateColumnSchema(column);
     if (columns[column.name]) {
       throw new Error(
         `Table '${name}' declares column '${column.name}' more than once`,
-      )
+      );
     }
-    columns[column.name] = column
+    columns[column.name] = column;
   }
-  return deepFreeze({ name, columns, columnArray: [...columnArray] })
+  return deepFreeze({ name, columns, columnArray: [...columnArray] });
 }
 
 /** @internal Convert a builders map to plain ColumnSchema data. */
@@ -203,7 +204,7 @@ export function columnsFromSpec(spec: ColumnsSpec): ColumnSchema[] {
     type: def.type,
     isOptional: def.isOptional,
     isIndexed: def.isIndexed,
-  }))
+  }));
 }
 
 /**
@@ -225,7 +226,7 @@ export function table<const Cols extends ColumnsSpec>(
   name: string,
   cols: Cols,
 ): TableSchema<Cols> {
-  return buildTableSchema(name, columnsFromSpec(cols)) as TableSchema<Cols>
+  return buildTableSchema(name, columnsFromSpec(cols)) as TableSchema<Cols>;
 }
 
 /**
@@ -240,18 +241,20 @@ export function table<const Cols extends ColumnsSpec>(
  * @category Schema
  */
 export function appSchema(spec: {
-  version: number
-  tables: readonly TableSchema[]
+  version: number;
+  tables: readonly TableSchema[];
 }): AppSchema {
   if (!Number.isInteger(spec.version) || spec.version < 1) {
-    throw new Error(`Schema version must be a positive integer, got ${spec.version}`)
+    throw new Error(
+      `Schema version must be a positive integer, got ${spec.version}`,
+    );
   }
-  const tables: { [name: string]: TableSchema } = {}
+  const tables: { [name: string]: TableSchema } = {};
   for (const table of spec.tables) {
     if (tables[table.name]) {
-      throw new Error(`Schema declares table '${table.name}' more than once`)
+      throw new Error(`Schema declares table '${table.name}' more than once`);
     }
-    tables[table.name] = table
+    tables[table.name] = table;
   }
-  return deepFreeze({ version: spec.version, tables })
+  return deepFreeze({ version: spec.version, tables });
 }

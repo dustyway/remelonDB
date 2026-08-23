@@ -1,6 +1,6 @@
-import { z } from 'zod'
-import { appSchema, ModelFor, type InferRecord } from '@remelondb/core'
-import { syncSchemas, zodTable } from '@remelondb/core/zod'
+import { z } from 'zod';
+import { appSchema, ModelFor, type InferRecord } from '@remelondb/core';
+import { syncSchemas, zodTable } from '@remelondb/core/zod';
 
 // One Zod object is the single source of truth. Everything below —
 // the client table, the record types, the model class, and the sync
@@ -11,15 +11,15 @@ export const Todo = z.object({
   text: z.string().min(1),
   done: z.boolean(),
   created_at: z.number().int(),
-})
+});
 
-export const todos = zodTable('todos', Todo, { indexed: ['created_at'] })
-export const schema = appSchema({ version: 1, tables: [todos] })
+export const todos = zodTable('todos', Todo, { indexed: ['created_at'] });
+export const schema = appSchema({ version: 1, tables: [todos] });
 
 // Typed accessors come from the table definition; nothing to declare.
 export class TodoModel extends ModelFor(todos) {}
 
 // Wire validators for pull/push, shared by client and server.
-export const wire = syncSchemas({ todos: Todo })
+export const wire = syncSchemas({ todos: Todo });
 
-export type TodoRecord = InferRecord<typeof todos>
+export type TodoRecord = InferRecord<typeof todos>;

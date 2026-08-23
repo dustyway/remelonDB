@@ -28,16 +28,16 @@ import {
   type Value,
   type Where,
   type WhereDescription,
-} from './ast'
-import { deepFreeze } from '../utils/deepFreeze'
-import { ensureName } from '../utils/checkName'
+} from './ast';
+import { deepFreeze } from '../utils/deepFreeze';
+import { ensureName } from '../utils/checkName';
 
 function isColumn(value: unknown): value is ColumnDescription {
   return (
     typeof value === 'object' &&
     value !== null &&
     (value as { type?: unknown }).type === columnTag
-  )
+  );
 }
 
 function isComparison(value: unknown): value is Comparison {
@@ -45,15 +45,15 @@ function isComparison(value: unknown): value is Comparison {
     typeof value === 'object' &&
     value !== null &&
     (value as { type?: unknown }).type === comparisonTag
-  )
+  );
 }
 
 function ensureValue(value: unknown): Value {
   if (value === undefined) {
-    throw new Error('Q: value cannot be undefined — did you mean null?')
+    throw new Error('Q: value cannot be undefined — did you mean null?');
   }
   if (typeof value === 'number' && !Number.isFinite(value)) {
-    throw new Error(`Q: value cannot be ${value}`)
+    throw new Error(`Q: value cannot be ${value}`);
   }
   if (
     value !== null &&
@@ -61,24 +61,24 @@ function ensureValue(value: unknown): Value {
     typeof value !== 'number' &&
     typeof value !== 'boolean'
   ) {
-    throw new Error(`Q: invalid value ${String(value)} — must be a primitive`)
+    throw new Error(`Q: invalid value ${String(value)} — must be a primitive`);
   }
-  return value as Value
+  return value as Value;
 }
 
 function ensureNonNullValue(value: unknown): NonNullValue {
-  const checked = ensureValue(value)
+  const checked = ensureValue(value);
   if (checked === null) {
-    throw new Error('Q: null is not allowed here')
+    throw new Error('Q: null is not allowed here');
   }
-  return checked
+  return checked;
 }
 
 function comparison(
   operator: ComparisonOperator,
   right: Comparison['right'],
 ): Comparison {
-  return { type: comparisonTag, operator, right }
+  return { type: comparisonTag, operator, right };
 }
 
 function valueOrColumn(
@@ -87,83 +87,83 @@ function valueOrColumn(
   ensure: (value: unknown) => Value = ensureValue,
 ): Comparison {
   if (isColumn(right)) {
-    return comparison(operator, { column: right.column })
+    return comparison(operator, { column: right.column });
   }
-  return comparison(operator, { value: ensure(right) })
+  return comparison(operator, { value: ensure(right) });
 }
 
 // --- comparisons ---
 
 export function column(name: string): ColumnDescription {
-  return { type: columnTag, column: ensureName(name, 'column') }
+  return { type: columnTag, column: ensureName(name, 'column') };
 }
 
 export function eq(value: Value | ColumnDescription): Comparison {
-  return valueOrColumn('eq', value)
+  return valueOrColumn('eq', value);
 }
 
 export function notEq(value: Value | ColumnDescription): Comparison {
-  return valueOrColumn('notEq', value)
+  return valueOrColumn('notEq', value);
 }
 
 export function gt(value: NonNullValue | ColumnDescription): Comparison {
-  return valueOrColumn('gt', value, ensureNonNullValue)
+  return valueOrColumn('gt', value, ensureNonNullValue);
 }
 
 export function gte(value: NonNullValue | ColumnDescription): Comparison {
-  return valueOrColumn('gte', value, ensureNonNullValue)
+  return valueOrColumn('gte', value, ensureNonNullValue);
 }
 
 export function lt(value: NonNullValue | ColumnDescription): Comparison {
-  return valueOrColumn('lt', value, ensureNonNullValue)
+  return valueOrColumn('lt', value, ensureNonNullValue);
 }
 
 export function lte(value: NonNullValue | ColumnDescription): Comparison {
-  return valueOrColumn('lte', value, ensureNonNullValue)
+  return valueOrColumn('lte', value, ensureNonNullValue);
 }
 
 export function oneOf(values: readonly NonNullValue[]): Comparison {
   if (!Array.isArray(values)) {
-    throw new Error('Q.oneOf: expected an array')
+    throw new Error('Q.oneOf: expected an array');
   }
-  return comparison('oneOf', { values: values.map(ensureNonNullValue) })
+  return comparison('oneOf', { values: values.map(ensureNonNullValue) });
 }
 
 export function notIn(values: readonly NonNullValue[]): Comparison {
   if (!Array.isArray(values)) {
-    throw new Error('Q.notIn: expected an array')
+    throw new Error('Q.notIn: expected an array');
   }
-  return comparison('notIn', { values: values.map(ensureNonNullValue) })
+  return comparison('notIn', { values: values.map(ensureNonNullValue) });
 }
 
 export function between(start: number, end: number): Comparison {
   if (typeof start !== 'number' || typeof end !== 'number') {
-    throw new Error('Q.between: expected two numbers')
+    throw new Error('Q.between: expected two numbers');
   }
   return comparison('between', {
     values: [ensureNonNullValue(start), ensureNonNullValue(end)],
-  })
+  });
 }
 
 export function like(pattern: string): Comparison {
   if (typeof pattern !== 'string') {
-    throw new Error('Q.like: expected a string')
+    throw new Error('Q.like: expected a string');
   }
-  return comparison('like', { value: pattern })
+  return comparison('like', { value: pattern });
 }
 
 export function notLike(pattern: string): Comparison {
   if (typeof pattern !== 'string') {
-    throw new Error('Q.notLike: expected a string')
+    throw new Error('Q.notLike: expected a string');
   }
-  return comparison('notLike', { value: pattern })
+  return comparison('notLike', { value: pattern });
 }
 
 export function includes(substring: string): Comparison {
   if (typeof substring !== 'string') {
-    throw new Error('Q.includes: expected a string')
+    throw new Error('Q.includes: expected a string');
   }
-  return comparison('includes', { value: substring })
+  return comparison('includes', { value: substring });
 }
 
 /**
@@ -172,7 +172,7 @@ export function includes(substring: string): Comparison {
  * literally: Q.like(`%${Q.escapeLike(userInput)}%`).
  */
 export function escapeLike(value: string): string {
-  return value.replace(/[\\%_]/g, '\\$&')
+  return value.replace(/[\\%_]/g, '\\$&');
 }
 
 // --- conditions ---
@@ -182,26 +182,26 @@ function ensureConditions(
   context: string,
 ): readonly Where[] {
   if (clauses.length === 0) {
-    throw new Error(`${context}: at least one condition is required`)
+    throw new Error(`${context}: at least one condition is required`);
   }
   for (const clause of clauses) {
     const type =
       typeof clause === 'object' && clause !== null
         ? (clause as { type?: unknown }).type
-        : undefined
+        : undefined;
     const ok =
       type === 'where' ||
       type === 'and' ||
       type === 'or' ||
       type === 'on' ||
-      type === 'sqlExpr'
+      type === 'sqlExpr';
     if (!ok) {
       throw new Error(
         `${context}: invalid condition — use Q.where/Q.and/Q.or/Q.on/Q.unsafeSqlExpr`,
-      )
+      );
     }
   }
-  return clauses as readonly Where[]
+  return clauses as readonly Where[];
 }
 
 export function where<C extends string>(
@@ -210,96 +210,96 @@ export function where<C extends string>(
 ): WhereDescription<C> {
   const comp = isComparison(valueOrComparisonArg)
     ? valueOrComparisonArg
-    : eq(ensureValue(valueOrComparisonArg))
+    : eq(ensureValue(valueOrComparisonArg));
   return {
     type: 'where',
     left: ensureName(left, 'column') as C,
     comparison: comp,
-  }
+  };
 }
 
 export function and<C extends string>(...conditions: Where<C>[]): And<C> {
   return {
     type: 'and',
     conditions: ensureConditions(conditions, 'Q.and') as readonly Where<C>[],
-  }
+  };
 }
 
 export function or<C extends string>(...conditions: Where<C>[]): Or<C> {
   return {
     type: 'or',
     conditions: ensureConditions(conditions, 'Q.or') as readonly Where<C>[],
-  }
+  };
 }
 
 export function on(
   table: string,
   left: string,
   valueOrComparison: Value | Comparison,
-): On
-export function on(table: string, ...conditions: Where[]): On
+): On;
+export function on(table: string, ...conditions: Where[]): On;
 export function on(table: string, ...args: readonly unknown[]): On {
-  const tableName = ensureName(table, 'table')
-  const [first] = args
+  const tableName = ensureName(table, 'table');
+  const [first] = args;
   if (typeof first === 'string') {
     if (args.length !== 2) {
-      throw new Error('Q.on: shorthand form is Q.on(table, column, value)')
+      throw new Error('Q.on: shorthand form is Q.on(table, column, value)');
     }
     return {
       type: 'on',
       table: tableName,
       conditions: [where(first, args[1] as Value | Comparison)],
-    }
+    };
   }
   return {
     type: 'on',
     table: tableName,
     conditions: ensureConditions(args, 'Q.on'),
-  }
+  };
 }
 
 // --- other clauses ---
 
-export const asc: SortOrder = 'asc'
-export const desc: SortOrder = 'desc'
+export const asc: SortOrder = 'asc';
+export const desc: SortOrder = 'desc';
 
 export function sortBy<C extends string>(
   sortColumn: C,
   sortOrder: SortOrder = asc,
 ): SortBy<C> {
   if (sortOrder !== 'asc' && sortOrder !== 'desc') {
-    throw new Error(`Q.sortBy: invalid sort order '${String(sortOrder)}'`)
+    throw new Error(`Q.sortBy: invalid sort order '${String(sortOrder)}'`);
   }
   return {
     type: 'sortBy',
     sortColumn: ensureName(sortColumn, 'column') as C,
     sortOrder,
-  }
+  };
 }
 
 function ensureCount(count: number, context: string): number {
   if (!Number.isInteger(count) || count < 0) {
-    throw new Error(`${context}: expected a non-negative integer`)
+    throw new Error(`${context}: expected a non-negative integer`);
   }
-  return count
+  return count;
 }
 
 export function take(count: number): Take {
-  return { type: 'take', count: ensureCount(count, 'Q.take') }
+  return { type: 'take', count: ensureCount(count, 'Q.take') };
 }
 
 export function skip(count: number): Skip {
-  return { type: 'skip', count: ensureCount(count, 'Q.skip') }
+  return { type: 'skip', count: ensureCount(count, 'Q.skip') };
 }
 
 export function joinTables(tables: readonly string[]): JoinTables {
   if (!Array.isArray(tables)) {
-    throw new Error('Q.joinTables: expected an array of table names')
+    throw new Error('Q.joinTables: expected an array of table names');
   }
   return {
     type: 'joinTables',
     tables: tables.map((table) => ensureName(table, 'table')),
-  }
+  };
 }
 
 export function nestedJoin(from: string, to: string): NestedJoinTable {
@@ -307,16 +307,16 @@ export function nestedJoin(from: string, to: string): NestedJoinTable {
     type: 'nestedJoinTable',
     from: ensureName(from, 'table'),
     to: ensureName(to, 'table'),
-  }
+  };
 }
 
 // --- unsafe escape hatches ---
 
 export function unsafeSqlExpr(sql: string): UnsafeSqlExpr {
   if (typeof sql !== 'string') {
-    throw new Error('Q.unsafeSqlExpr: expected a string')
+    throw new Error('Q.unsafeSqlExpr: expected a string');
   }
-  return { type: 'sqlExpr', sql }
+  return { type: 'sqlExpr', sql };
 }
 
 export function unsafeSqlQuery(
@@ -324,12 +324,12 @@ export function unsafeSqlQuery(
   values: readonly Value[] = [],
 ): UnsafeSqlQuery {
   if (typeof sql !== 'string') {
-    throw new Error('Q.unsafeSqlQuery: expected a string')
+    throw new Error('Q.unsafeSqlQuery: expected a string');
   }
   if (!Array.isArray(values)) {
-    throw new Error('Q.unsafeSqlQuery: expected an array of values')
+    throw new Error('Q.unsafeSqlQuery: expected an array of values');
   }
-  return { type: 'sqlQuery', sql, values: values.map(ensureValue) }
+  return { type: 'sqlQuery', sql, values: values.map(ensureValue) };
 }
 
 // --- assembly ---
@@ -337,13 +337,13 @@ export function unsafeSqlQuery(
 export function buildQueryDescription(
   clauses: readonly Clause[],
 ): QueryDescription {
-  const whereConditions: Where[] = []
-  const joined: string[] = []
-  const nestedJoined: NestedJoinTable[] = []
-  const sorts: SortBy[] = []
-  let takeCount: number | undefined
-  let skipCount: number | undefined
-  let sql: UnsafeSqlQuery | undefined
+  const whereConditions: Where[] = [];
+  const joined: string[] = [];
+  const nestedJoined: NestedJoinTable[] = [];
+  const sorts: SortBy[] = [];
+  let takeCount: number | undefined;
+  let skipCount: number | undefined;
+  let sql: UnsafeSqlQuery | undefined;
 
   for (const clause of clauses) {
     switch (clause.type) {
@@ -351,48 +351,48 @@ export function buildQueryDescription(
       case 'and':
       case 'or':
       case 'sqlExpr':
-        whereConditions.push(clause)
-        break
+        whereConditions.push(clause);
+        break;
       case 'on':
-        whereConditions.push(clause)
-        joined.push(clause.table)
-        break
+        whereConditions.push(clause);
+        joined.push(clause.table);
+        break;
       case 'joinTables':
-        joined.push(...clause.tables)
-        break
+        joined.push(...clause.tables);
+        break;
       case 'nestedJoinTable':
-        nestedJoined.push(clause)
-        break
+        nestedJoined.push(clause);
+        break;
       case 'sortBy':
-        sorts.push(clause)
-        break
+        sorts.push(clause);
+        break;
       case 'take':
         if (takeCount !== undefined) {
-          throw new Error('Q: duplicate Q.take clause')
+          throw new Error('Q: duplicate Q.take clause');
         }
-        takeCount = clause.count
-        break
+        takeCount = clause.count;
+        break;
       case 'skip':
         if (skipCount !== undefined) {
-          throw new Error('Q: duplicate Q.skip clause')
+          throw new Error('Q: duplicate Q.skip clause');
         }
-        skipCount = clause.count
-        break
+        skipCount = clause.count;
+        break;
       case 'sqlQuery':
         if (sql !== undefined) {
-          throw new Error('Q: duplicate Q.unsafeSqlQuery clause')
+          throw new Error('Q: duplicate Q.unsafeSqlQuery clause');
         }
-        sql = clause
-        break
+        sql = clause;
+        break;
       default:
         throw new Error(
           `Q: invalid clause ${String((clause as { type?: unknown }).type)}`,
-        )
+        );
     }
   }
 
   if (skipCount !== undefined && takeCount === undefined) {
-    throw new Error('Q.skip requires Q.take')
+    throw new Error('Q.skip requires Q.take');
   }
   if (
     sql !== undefined &&
@@ -403,7 +403,7 @@ export function buildQueryDescription(
   ) {
     throw new Error(
       'Q.unsafeSqlQuery replaces the whole query — it can only be combined with Q.joinTables/Q.nestedJoin',
-    )
+    );
   }
 
   const description: QueryDescription = {
@@ -414,10 +414,10 @@ export function buildQueryDescription(
     ...(takeCount !== undefined ? { take: takeCount } : {}),
     ...(skipCount !== undefined ? { skip: skipCount } : {}),
     ...(sql !== undefined ? { sql } : {}),
-  }
+  };
 
   if (process.env.NODE_ENV !== 'production') {
-    deepFreeze(description)
+    deepFreeze(description);
   }
-  return description
+  return description;
 }

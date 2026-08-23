@@ -1,9 +1,9 @@
-import { createReferenceServer, registerServerConformance } from './index'
+import { createReferenceServer, registerServerConformance } from './index';
 
 // The suite proven against its own reference implementation: a server
 // known to satisfy the wire spec passes every scenario.
-let counter = 0
-const newId = (): string => `row-${++counter}`
+let counter = 0;
+const newId = (): string => `row-${++counter}`;
 
 registerServerConformance({
   name: 'in-memory reference server',
@@ -11,11 +11,11 @@ registerServerConformance({
     const server = createReferenceServer({
       validate: { tasks: (row) => row['name'] !== '' },
       appendOnly: ['events'],
-    })
+    });
     return {
       handlers: server.as('user-a'),
       secondUser: server.as('user-b'),
-    }
+    };
   },
   fixtures: {
     tasks: {
@@ -31,4 +31,4 @@ registerServerConformance({
       mutate: (row) => ({ ...row, note: 'rewritten' }),
     },
   },
-})
+});

@@ -1,5 +1,5 @@
-import { StatusBar } from 'expo-status-bar'
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { StatusBar } from 'expo-status-bar';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import {
   FlatList,
   Pressable,
@@ -7,31 +7,31 @@ import {
   Text,
   TextInput,
   View,
-} from 'react-native'
-import { Q, type Database } from '@remelondb/core'
-import { TodoModel } from 'example-todo-sync/schema'
-import { useDatabaseState, useMutation, useQuery } from '@remelondb/core/react'
-import { TodoItem } from './components/TodoItem'
-import { manager } from './src/db'
+} from 'react-native';
+import { Q, type Database } from '@remelondb/core';
+import { TodoModel } from 'example-todo-sync/schema';
+import { useDatabaseState, useMutation, useQuery } from '@remelondb/core/react';
+import { TodoItem } from './components/TodoItem';
+import { manager } from './src/db';
 import {
   getSyncNote,
   getSyncStatus,
   runSync,
   subscribeSyncStatus,
-} from './src/sync'
-import { theme } from './theme'
+} from './src/sync';
+import { theme } from './theme';
 
 type WriteAction =
   | { type: 'add'; text: string }
   | { type: 'toggle'; todo: TodoModel }
   | { type: 'remove'; todo: TodoModel }
-  | { type: 'edit'; id: string; text: string }
+  | { type: 'edit'; id: string; text: string };
 
 export default function App() {
-  const { status, error } = useDatabaseState(manager)
+  const { status, error } = useDatabaseState(manager);
   useEffect(() => {
-    void manager.init().catch(() => {}) // errors surface through the state
-  }, [])
+    void manager.init().catch(() => {}); // errors surface through the state
+  }, []);
   return (
     <View style={styles.container}>
       {status === 'ready' ? (
@@ -43,30 +43,30 @@ export default function App() {
       )}
       <StatusBar style="auto" />
     </View>
-  )
+  );
 }
 
 const dotColors: Record<string, string> = {
   synced: '#2e7d32',
   offline: '#c62828',
   syncing: '#bbbbbb',
-}
+};
 
 function Todos({ db }: { db: Database }) {
   // Structural keying: no memo, the rebuilt query reuses the
   // subscription.
   const { data: todos } = useQuery(
     db.get(TodoModel).query(Q.sortBy('created_at', Q.desc)),
-  )
-  const [text, setText] = useState('')
-  const syncStatus = useSyncExternalStore(subscribeSyncStatus, getSyncStatus)
-  const syncNote = useSyncExternalStore(subscribeSyncStatus, getSyncNote)
+  );
+  const [text, setText] = useState('');
+  const syncStatus = useSyncExternalStore(subscribeSyncStatus, getSyncStatus);
+  const syncNote = useSyncExternalStore(subscribeSyncStatus, getSyncNote);
 
   useEffect(() => {
-    void runSync(db)
-    const timer = setInterval(() => void runSync(db), 2000)
-    return () => clearInterval(timer)
-  }, [db])
+    void runSync(db);
+    const timer = setInterval(() => void runSync(db), 2000);
+    return () => clearInterval(timer);
+  }, [db]);
 
   // One mutation owns every write, so the hook's ownership rule — the
   // latest invocation owns `error` — is exactly the banner's rule: a
@@ -76,36 +76,36 @@ function Todos({ db }: { db: Database }) {
     await db.write(async () => {
       switch (action.type) {
         case 'add':
-          await db.get(TodoModel).create({ text: action.text, done: false })
-          break
+          await db.get(TodoModel).create({ text: action.text, done: false });
+          break;
         case 'toggle':
           await db
             .get(TodoModel)
-            .update(action.todo.id, { done: !action.todo.done })
-          break
+            .update(action.todo.id, { done: !action.todo.done });
+          break;
         case 'remove':
-          await db.get(TodoModel).markAsDeleted(action.todo.id)
-          break
+          await db.get(TodoModel).markAsDeleted(action.todo.id);
+          break;
         case 'edit':
-          await db.get(TodoModel).update(action.id, { text: action.text })
-          break
+          await db.get(TodoModel).update(action.id, { text: action.text });
+          break;
       }
-    })
-    void runSync(db)
-  })
+    });
+    void runSync(db);
+  });
 
   // mutateAsync where the caller needs the outcome: the draft is only
   // cleared after the write commits, so a failure keeps the text.
   const add = async () => {
-    const trimmed = text.trim()
-    if (!trimmed) return
+    const trimmed = text.trim();
+    if (!trimmed) return;
     try {
-      await write.mutateAsync({ type: 'add', text: trimmed })
-      setText('')
+      await write.mutateAsync({ type: 'add', text: trimmed });
+      setText('');
     } catch {
       // the failure is already in write.error
     }
-  }
+  };
 
   return (
     <>
@@ -150,7 +150,7 @@ function Todos({ db }: { db: Database }) {
         )}
       />
     </>
-  )
+  );
 }
 
 const styles = StyleSheet.create({
@@ -185,4 +185,4 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   list: { flex: 1 },
-})
+});

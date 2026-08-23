@@ -1,1 +1,1 @@
-export { RnSqliteDriver } from './RnSqliteDriver'
+export { RnSqliteDriver } from './RnSqliteDriver';

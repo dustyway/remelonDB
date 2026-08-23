@@ -9,34 +9,34 @@
  * JS-side convention: booleans are real booleans (the driver seam stores
  * them as 0/1; sanitization converts 0/1 back on read).
  */
-import type { SqlValue } from '../driver/SqliteDriver'
-import type { ColumnSchema, TableSchema } from '../schema/index'
-import { randomId } from '../utils/randomId'
+import type { SqlValue } from '../driver/SqliteDriver';
+import type { ColumnSchema, TableSchema } from '../schema/index';
+import { randomId } from '../utils/randomId';
 
-export type SyncStatus = 'synced' | 'created' | 'updated' | 'deleted'
+export type SyncStatus = 'synced' | 'created' | 'updated' | 'deleted';
 
 export interface RawRecord {
-  id: string
-  _status: SyncStatus
-  _changed: string
-  [column: string]: SqlValue
+  id: string;
+  _status: SyncStatus;
+  _changed: string;
+  [column: string]: SqlValue;
 }
 
 /** Untrusted input: an adapter row, a sync payload, user data. */
-export type DirtyRaw = { readonly [key: string]: unknown }
+export type DirtyRaw = { readonly [key: string]: unknown };
 
 /** The value an absent/invalid field falls back to, per column schema. */
 export function nullValue(column: ColumnSchema): SqlValue {
   if (column.isOptional) {
-    return null
+    return null;
   }
   switch (column.type) {
     case 'string':
-      return ''
+      return '';
     case 'number':
-      return 0
+      return 0;
     case 'boolean':
-      return false
+      return false;
   }
 }
 
@@ -44,27 +44,27 @@ function sanitizeValue(value: unknown, column: ColumnSchema): SqlValue {
   switch (column.type) {
     case 'string':
       if (typeof value === 'string') {
-        return value
+        return value;
       }
-      break
+      break;
     case 'number':
       if (typeof value === 'number' && Number.isFinite(value)) {
-        return value
+        return value;
       }
-      break
+      break;
     case 'boolean':
       if (typeof value === 'boolean') {
-        return value
+        return value;
       }
       if (value === 1) {
-        return true
+        return true;
       }
       if (value === 0) {
-        return false
+        return false;
       }
-      break
+      break;
   }
-  return nullValue(column)
+  return nullValue(column);
 }
 
 function isSyncStatus(value: unknown): value is SyncStatus {
@@ -73,22 +73,22 @@ function isSyncStatus(value: unknown): value is SyncStatus {
     value === 'created' ||
     value === 'updated' ||
     value === 'deleted'
-  )
+  );
 }
 
 export function sanitizedRaw(dirty: DirtyRaw, table: TableSchema): RawRecord {
-  const id = dirty['id']
-  const status = dirty['_status']
-  const changed = dirty['_changed']
+  const id = dirty['id'];
+  const status = dirty['_status'];
+  const changed = dirty['_changed'];
   const raw: RawRecord = {
     id: typeof id === 'string' && id !== '' ? id : randomId(),
     _status: isSyncStatus(status) ? status : 'created',
     _changed: typeof changed === 'string' ? changed : '',
-  }
+  };
   for (const column of table.columnArray) {
-    raw[column.name] = sanitizeValue(dirty[column.name], column)
+    raw[column.name] = sanitizeValue(dirty[column.name], column);
   }
-  return raw
+  return raw;
 }
 
 /** Sanitize a single value into an existing raw (record updates). */
@@ -97,7 +97,7 @@ export function setRawSanitized(
   value: unknown,
   column: ColumnSchema,
 ): void {
-  raw[column.name] = sanitizeValue(value, column)
+  raw[column.name] = sanitizeValue(value, column);
 }
 
 /**
@@ -108,12 +108,12 @@ export function setRawSanitized(
  */
 export function markAsChanged(raw: RawRecord, columnName: string): void {
   if (raw._status === 'created' || raw._status === 'deleted') {
-    return
+    return;
   }
-  raw._status = 'updated'
-  const changed = raw._changed === '' ? [] : raw._changed.split(',')
+  raw._status = 'updated';
+  const changed = raw._changed === '' ? [] : raw._changed.split(',');
   if (!changed.includes(columnName)) {
-    changed.push(columnName)
-    raw._changed = changed.join(',')
+    changed.push(columnName);
+    raw._changed = changed.join(',');
   }
 }

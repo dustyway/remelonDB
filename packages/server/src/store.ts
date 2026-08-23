@@ -4,16 +4,16 @@
  * about cursors, conflicts, or the wire. Nine methods; every protocol
  * semantic lives in the engine above.
  */
-import type { DirtyRaw } from '@remelondb/core'
+import type { DirtyRaw } from '@remelondb/core';
 
-export type WireRow = DirtyRaw & { readonly id: string }
+export type WireRow = DirtyRaw & { readonly id: string };
 
 /** One row's sync-relevant state: wire-ready, or a tombstone. */
 export interface StoredChange {
-  readonly id: string
-  readonly rev: number
+  readonly id: string;
+  readonly rev: number;
   /** null = tombstone */
-  readonly row: WireRow | null
+  readonly row: WireRow | null;
 }
 
 export interface SyncStoreTx<Scope> {
@@ -22,27 +22,27 @@ export interface SyncStoreTx<Scope> {
     table: string,
     scope: Scope,
     since: number,
-  ): Promise<readonly StoredChange[]>
+  ): Promise<readonly StoredChange[]>;
   /** Highest revision among the scope's rows (0 when none). */
-  maxRev(scope: Scope): Promise<number>
+  maxRev(scope: Scope): Promise<number>;
   /** Current revisions of the given ids within the scope (absent = unknown). */
   currentRevs(
     table: string,
     scope: Scope,
     ids: readonly string[],
-  ): Promise<ReadonlyMap<string, number>>
+  ): Promise<ReadonlyMap<string, number>>;
   /** Ids among `ids` that exist but belong outside the scope. */
   foreignIds(
     table: string,
     scope: Scope,
     ids: readonly string[],
-  ): Promise<readonly string[]>
+  ): Promise<readonly string[]>;
   /** Ids among `ids` that are tombstones within the scope. */
   tombstonedIds(
     table: string,
     scope: Scope,
     ids: readonly string[],
-  ): Promise<readonly string[]>
+  ): Promise<readonly string[]>;
   /**
    * Idempotent upserts, stamped with fresh revisions. MUST NOT touch
    * creation stamps of existing rows and MUST NOT resurrect tombstones.
@@ -57,11 +57,11 @@ export interface SyncStoreTx<Scope> {
     table: string,
     scope: Scope,
     rows: readonly WireRow[],
-  ): Promise<void | readonly string[]>
+  ): Promise<void | readonly string[]>;
   /** Tombstone the ids (fresh revisions); unknown ids are a no-op. */
-  tombstone(table: string, scope: Scope, ids: readonly string[]): Promise<void>
+  tombstone(table: string, scope: Scope, ids: readonly string[]): Promise<void>;
   /** Oldest revision still fully served (tombstone retention floor). */
-  gcFloor(): Promise<number>
+  gcFloor(): Promise<number>;
 }
 
 export interface SyncStore<Scope> {
@@ -74,5 +74,5 @@ export interface SyncStore<Scope> {
     scope: Scope,
     mode: 'pull' | 'push',
     work: (tx: SyncStoreTx<Scope>) => Promise<T>,
-  ): Promise<T>
+  ): Promise<T>;
 }

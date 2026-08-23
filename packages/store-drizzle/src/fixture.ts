@@ -1,7 +1,7 @@
-import { PGlite } from '@electric-sql/pglite'
-import { drizzle } from 'drizzle-orm/pglite'
-import { bigint, boolean, pgTable, text, timestamp } from 'drizzle-orm/pg-core'
-import type { DrizzleDb } from './store'
+import { PGlite } from '@electric-sql/pglite';
+import { drizzle } from 'drizzle-orm/pglite';
+import { bigint, boolean, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import type { DrizzleDb } from './store';
 
 // Shared by the pglite test suites: the four machinery columns plus two
 // user columns. Not published (see package.json files).
@@ -12,7 +12,7 @@ export const tasks = pgTable('tasks', {
   owner: text('owner').notNull(),
   name: text('name').notNull(),
   done: boolean('done').notNull(),
-})
+});
 
 // A third table with a database-enforced unique column: constraint
 // violations must surface as per-record rejections, never thrown.
@@ -22,7 +22,7 @@ export const profiles = pgTable('profiles', {
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
   owner: text('owner').notNull(),
   handle: text('handle').unique(),
-})
+});
 
 // A second table used only by conformance case 13 (appendOnly).
 export const events = pgTable('events', {
@@ -31,10 +31,10 @@ export const events = pgTable('events', {
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
   owner: text('owner').notNull(),
   note: text('note').notNull(),
-})
+});
 
 export const freshDb = async (): Promise<{ client: PGlite; db: DrizzleDb }> => {
-  const client = new PGlite()
+  const client = new PGlite();
   await client.exec(`
     create sequence remelon_rev;
     create table remelon_sync_meta (key text primary key, value bigint not null);
@@ -60,6 +60,6 @@ export const freshDb = async (): Promise<{ client: PGlite; db: DrizzleDb }> => {
       owner text not null,
       handle text unique
     );
-  `)
-  return { client, db: drizzle(client) as unknown as DrizzleDb }
-}
+  `);
+  return { client, db: drizzle(client) as unknown as DrizzleDb };
+};

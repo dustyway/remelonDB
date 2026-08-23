@@ -1,20 +1,20 @@
-import { createSyncEngine } from '@remelondb/server'
-import { registerServerConformance } from '@remelondb/server/conformance'
-import { events, freshDb, profiles, tasks } from './fixture'
-import { createDrizzleStore } from './store'
+import { createSyncEngine } from '@remelondb/server';
+import { registerServerConformance } from '@remelondb/server/conformance';
+import { events, freshDb, profiles, tasks } from './fixture';
+import { createDrizzleStore } from './store';
 
 // The drizzle store over real Postgres (pglite, in-process) must pass
 // the full backend contract, engine included — the same registration as
 // the memory store's. Item 4 (write during a pull) needs two
 // interleaved connections and pglite has one; the deterministic
 // construction in store.race.test.ts covers that property instead.
-let counter = 0
-const newId = (): string => `row-${++counter}`
+let counter = 0;
+const newId = (): string => `row-${++counter}`;
 
 registerServerConformance({
   name: 'engine over DrizzleStore (pglite)',
   makeContext: async () => {
-    const { db } = await freshDb()
+    const { db } = await freshDb();
     const store = createDrizzleStore<string>({
       db,
       tables: {
@@ -41,7 +41,7 @@ registerServerConformance({
           scrub: { handle: null },
         },
       },
-    })
+    });
     const engine = createSyncEngine({
       store,
       tables: {
@@ -52,18 +52,18 @@ registerServerConformance({
       // conformance cases 15/16 prove this wiring survives the stack:
       // reject 'cross-reject' rows as upserts, keystone ids as deletions
       crossValidateChanges: async (_tx, _scope, changes) => {
-        const tasks = changes['tasks']
-        if (!tasks) return {}
+        const tasks = changes['tasks'];
+        if (!tasks) return {};
         const refused = [
           ...tasks.rows
             .filter((row) => row['name'] === 'cross-reject')
             .map((row) => row.id),
           ...tasks.deleted.filter((id) => id.startsWith('keystone-')),
-        ]
-        return refused.length > 0 ? { tasks: refused } : {}
+        ];
+        return refused.length > 0 ? { tasks: refused } : {};
       },
-    })
-    return { handlers: engine.as('scope-a'), secondUser: engine.as('scope-b') }
+    });
+    return { handlers: engine.as('scope-a'), secondUser: engine.as('scope-b') };
   },
   fixtures: {
     tasks: {
@@ -86,7 +86,14 @@ registerServerConformance({
   crossValidation: {
     table: 'tasks',
     rejectedRow: () => ({ id: newId(), name: 'cross-reject', done: false }),
-    undeletableRow: () => ({ id: `keystone-${++counter}`, name: 'a task', done: false }),
-    mutateUndeletableRow: (row) => ({ ...row, name: `${String(row['name'])} (rewritten)` }),
+    undeletableRow: () => ({
+      id: `keystone-${++counter}`,
+      name: 'a task',
+      done: false,
+    }),
+    mutateUndeletableRow: (row) => ({
+      ...row,
+      name: `${String(row['name'])} (rewritten)`,
+    }),
   },
-})
+});

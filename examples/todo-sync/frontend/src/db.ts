@@ -1,6 +1,6 @@
-import { createDatabaseManager, Database } from '@remelondb/core'
-import { WebSqliteDriver } from '@remelondb/driver-web'
-import { schema, TodoModel } from 'example-todo-sync/schema'
+import { createDatabaseManager, Database } from '@remelondb/core';
+import { WebSqliteDriver } from '@remelondb/driver-web';
+import { schema, TodoModel } from 'example-todo-sync/schema';
 
 // The manager owns the lifecycle: one shared open, retryable failure,
 // takeover bookkeeping. `shared: true` puts every tab live on one
@@ -10,9 +10,13 @@ import { schema, TodoModel } from 'example-todo-sync/schema'
 export const manager = createDatabaseManager({
   open: (onTakenOver) =>
     Database.open({
-      driver: new WebSqliteDriver({ shared: true, takeover: true, onTakenOver }),
+      driver: new WebSqliteDriver({
+        shared: true,
+        takeover: true,
+        onTakenOver,
+      }),
       schema,
       modelClasses: [TodoModel],
       name: 'todo-sync.db',
     }),
-})
+});

@@ -1,8 +1,8 @@
-import { tmpdir } from 'node:os'
-import { registerDriverConformance } from '@remelondb/core/conformance'
-import { NodeSqliteDriver } from './NodeSqliteDriver'
+import { tmpdir } from 'node:os';
+import { registerDriverConformance } from '@remelondb/core/conformance';
+import { NodeSqliteDriver } from './NodeSqliteDriver';
 
-let counter = 0
+let counter = 0;
 
 registerDriverConformance({
   name: 'node (better-sqlite3)',
@@ -11,4 +11,4 @@ registerDriverConformance({
     databaseName: () =>
       `${tmpdir()}/wm-conformance-${process.pid}-${counter++}.db`,
   },
-})
+});

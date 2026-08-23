@@ -6,7 +6,7 @@ export type {
   SqliteDriver,
   ExternalChange,
   ExternalChangeSet,
-} from './driver/SqliteDriver'
+} from './driver/SqliteDriver';
 
 /**
  * The query DSL. Clauses are plain serializable data (that is what makes
@@ -24,9 +24,9 @@ export type {
  * ```
  * @category Database & queries
  */
-export * as Q from './query/Q'
+export * as Q from './query/Q';
 
-export { appSchema, column, table } from './schema/index'
+export { appSchema, column, table } from './schema/index';
 export type {
   AppSchema,
   ColumnDef,
@@ -36,7 +36,7 @@ export type {
   ColumnType,
   InferRecord,
   TableSchema,
-} from './schema/index'
+} from './schema/index';
 
 export {
   schemaMigrations,
@@ -44,58 +44,75 @@ export {
   addColumns,
   unsafeExecuteSql,
   stepsForMigration,
-} from './schema/migrations'
-export type { SchemaMigrations, Migration, MigrationStep } from './schema/migrations'
+} from './schema/migrations';
+export type {
+  SchemaMigrations,
+  Migration,
+  MigrationStep,
+} from './schema/migrations';
 
-export { encodeSchema, encodeTable, encodeMigrationSteps } from './schema/encodeSchema'
+export {
+  encodeSchema,
+  encodeTable,
+  encodeMigrationSteps,
+} from './schema/encodeSchema';
 
-export { sanitizedRaw, setRawSanitized, nullValue, markAsChanged } from './rawRecord/index'
-export type { RawRecord, DirtyRaw, SyncStatus } from './rawRecord/index'
+export {
+  sanitizedRaw,
+  setRawSanitized,
+  nullValue,
+  markAsChanged,
+} from './rawRecord/index';
+export type { RawRecord, DirtyRaw, SyncStatus } from './rawRecord/index';
 
-export { randomId } from './utils/randomId'
+export { randomId } from './utils/randomId';
 
-export { Database } from './database/Database'
-export { createDatabaseManager } from './database/DatabaseManager'
+export { Database } from './database/Database';
+export { createDatabaseManager } from './database/DatabaseManager';
 export type {
   DatabaseManager,
   DatabaseManagerOptions,
   DatabaseManagerState,
   DatabaseManagerStatus,
-} from './database/DatabaseManager'
+} from './database/DatabaseManager';
 export type {
   DatabaseOptions,
   DatabaseChangeSet,
   ObservationDiagnostic,
-} from './database/Database'
-export { Collection } from './database/Collection'
+} from './database/Database';
+export { Collection } from './database/Collection';
 export type {
   ChangeType,
   CollectionChange,
   CollectionChangeSet,
   Unsubscribe,
-} from './database/Collection'
-export { Query } from './database/Query'
-export { LocalStorage } from './database/LocalStorage'
-export { WorkQueue } from './database/WorkQueue'
-export { encodeBatch } from './database/encodeBatch'
-export type { BatchOperation } from './database/encodeBatch'
+} from './database/Collection';
+export { Query } from './database/Query';
+export { LocalStorage } from './database/LocalStorage';
+export { WorkQueue } from './database/WorkQueue';
+export { encodeBatch } from './database/encodeBatch';
+export type { BatchOperation } from './database/encodeBatch';
 
-export { Model, ModelFor, defineModelAccessors } from './model/Model'
+export { Model, ModelFor, defineModelAccessors } from './model/Model';
 export type {
   AssociationsMap,
   ColumnsOf,
   ModelClass,
   TypedModel,
   TypedModelClass,
-} from './model/Model'
+} from './model/Model';
 
-export { synchronize, CURSOR_KEY, LAST_SCHEMA_VERSION_KEY } from './sync/synchronize'
-export type { SynchronizeOptions, SynchronizeResult } from './sync/synchronize'
-export { fetchLocalChanges, hasUnsyncedChanges } from './sync/fetchLocal'
-export type { LocalChanges } from './sync/fetchLocal'
-export { applyRemoteChanges } from './sync/applyRemote'
-export type { ApplyRemoteOptions, ConflictResolver } from './sync/applyRemote'
-export { markLocalChangesAsSynced } from './sync/markAsSynced'
+export {
+  synchronize,
+  CURSOR_KEY,
+  LAST_SCHEMA_VERSION_KEY,
+} from './sync/synchronize';
+export type { SynchronizeOptions, SynchronizeResult } from './sync/synchronize';
+export { fetchLocalChanges, hasUnsyncedChanges } from './sync/fetchLocal';
+export type { LocalChanges } from './sync/fetchLocal';
+export { applyRemoteChanges } from './sync/applyRemote';
+export type { ApplyRemoteOptions, ConflictResolver } from './sync/applyRemote';
+export { markLocalChangesAsSynced } from './sync/markAsSynced';
 export type {
   Cursor,
   SyncChanges,
@@ -105,16 +122,16 @@ export type {
   SyncPullResult,
   SyncPushArgs,
   SyncPushResult,
-} from './sync/types'
+} from './sync/types';
 
-export { encodeQuery } from './query/encodeQuery'
+export { encodeQuery } from './query/encodeQuery';
 export type {
   AssociationInfo,
   QueryAssociation,
   CompilableQuery,
   EncodeQueryOptions,
   CompiledQuery,
-} from './query/encodeQuery'
+} from './query/encodeQuery';
 
 export type {
   Value,
@@ -138,4 +155,4 @@ export type {
   UnsafeSqlQuery,
   Clause,
   QueryDescription,
-} from './query/ast'
+} from './query/ast';

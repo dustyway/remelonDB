@@ -3,8 +3,8 @@ import type {
   Row,
   SqlArgs,
   SqliteDriver,
-} from '@remelondb/core'
-import NativeRemelonDriver from './specs/NativeRemelonDriver'
+} from '@remelondb/core';
+import NativeRemelonDriver from './specs/NativeRemelonDriver';
 
 /**
  * SqliteDriver over the NativeRemelonDriver C++ TurboModule.
@@ -26,50 +26,50 @@ import NativeRemelonDriver from './specs/NativeRemelonDriver'
  * @category Driver
  */
 export class RnSqliteDriver implements SqliteDriver {
-  private name: string | null = null
+  private name: string | null = null;
 
   private get openName(): string {
     if (this.name === null) {
-      throw new Error('RnSqliteDriver: database is not open')
+      throw new Error('RnSqliteDriver: database is not open');
     }
-    return this.name
+    return this.name;
   }
 
   async open(name: string): Promise<{ userVersion: number }> {
     if (this.name !== null) {
-      throw new Error('RnSqliteDriver: database is already open')
+      throw new Error('RnSqliteDriver: database is already open');
     }
-    const userVersion = NativeRemelonDriver.openDatabase(name)
-    this.name = name
-    return { userVersion }
+    const userVersion = NativeRemelonDriver.openDatabase(name);
+    this.name = name;
+    return { userVersion };
   }
 
   async close(): Promise<void> {
-    NativeRemelonDriver.close(this.openName)
-    this.name = null
+    NativeRemelonDriver.close(this.openName);
+    this.name = null;
   }
 
   async query(sql: string, args: SqlArgs): Promise<Row[]> {
-    return NativeRemelonDriver.query(this.openName, sql, args) as Row[]
+    return NativeRemelonDriver.query(this.openName, sql, args) as Row[];
   }
 
   async execute(sql: string, args: SqlArgs): Promise<void> {
-    NativeRemelonDriver.execute(this.openName, sql, args)
+    NativeRemelonDriver.execute(this.openName, sql, args);
   }
 
   async executeBatch(statements: readonly BatchStatement[]): Promise<void> {
-    NativeRemelonDriver.executeBatch(this.openName, statements)
+    NativeRemelonDriver.executeBatch(this.openName, statements);
   }
 
   async setUserVersion(version: number): Promise<void> {
-    NativeRemelonDriver.setUserVersion(this.openName, version)
+    NativeRemelonDriver.setUserVersion(this.openName, version);
   }
 
   async destroy(): Promise<void> {
-    const name = this.name
-    this.name = null
+    const name = this.name;
+    this.name = null;
     if (name !== null) {
-      NativeRemelonDriver.destroy(name)
+      NativeRemelonDriver.destroy(name);
     }
   }
 }

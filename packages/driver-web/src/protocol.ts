@@ -5,39 +5,50 @@
  * Node: the same server code runs against a real browser Worker or an
  * in-process message channel.
  */
-import type { ExternalChangeSet, SqlValue } from '@remelondb/core'
+import type { ExternalChangeSet, SqlValue } from '@remelondb/core';
 
 export interface Endpoint {
-  postMessage(message: unknown): void
-  addMessageListener(listener: (message: unknown) => void): void
+  postMessage(message: unknown): void;
+  addMessageListener(listener: (message: unknown) => void): void;
   /** Tear down the transport (a real Worker terminates — this is what
    * releases the SAH pool's file locks). In-process endpoints may omit it. */
-  terminate?(): void
+  terminate?(): void;
 }
 
-export type StorageKind = 'opfs' | 'memory'
+export type StorageKind = 'opfs' | 'memory';
 
 export type WorkerRequest = { readonly id: number } & (
-  | { readonly op: 'open'; readonly name: string; readonly storage: StorageKind }
+  | {
+      readonly op: 'open';
+      readonly name: string;
+      readonly storage: StorageKind;
+    }
   | { readonly op: 'close'; readonly name: string }
   | {
-      readonly op: 'query'
-      readonly name: string
-      readonly sql: string
-      readonly args: readonly SqlValue[]
+      readonly op: 'query';
+      readonly name: string;
+      readonly sql: string;
+      readonly args: readonly SqlValue[];
     }
   | {
-      readonly op: 'execute'
-      readonly name: string
-      readonly sql: string
-      readonly args: readonly SqlValue[]
+      readonly op: 'execute';
+      readonly name: string;
+      readonly sql: string;
+      readonly args: readonly SqlValue[];
     }
   | {
-      readonly op: 'executeBatch'
-      readonly name: string
-      readonly statements: readonly (readonly [string, readonly (readonly SqlValue[])[]])[]
+      readonly op: 'executeBatch';
+      readonly name: string;
+      readonly statements: readonly (readonly [
+        string,
+        readonly (readonly SqlValue[])[],
+      ])[];
     }
-  | { readonly op: 'setUserVersion'; readonly name: string; readonly version: number }
+  | {
+      readonly op: 'setUserVersion';
+      readonly name: string;
+      readonly version: number;
+    }
   | { readonly op: 'destroy'; readonly name: string }
   /** Liveness probe (the broker checks its compute channel with it). */
   | { readonly op: 'ping' }
@@ -53,17 +64,17 @@ export type WorkerRequest = { readonly id: number } & (
    * a committed change set to every OTHER tab holding `name` open.
    */
   | {
-      readonly op: 'publishChanges'
-      readonly name: string
-      readonly changes: ExternalChangeSet
+      readonly op: 'publishChanges';
+      readonly name: string;
+      readonly changes: ExternalChangeSet;
     }
   /**
    * Sync-lease request (broker-answered): granted when the asker holds
    * the lease, or it is free or expired. Asking again renews.
    */
   | { readonly op: 'syncTurn'; readonly name: string; readonly leaseMs: number }
-)
+);
 
 export type WorkerResponse =
   | { readonly id: number; readonly ok: true; readonly result: unknown }
-  | { readonly id: number; readonly ok: false; readonly error: string }
+  | { readonly id: number; readonly ok: false; readonly error: string };

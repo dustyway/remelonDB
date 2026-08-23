@@ -13,33 +13,33 @@
  *     persistence: { databaseName: () => `/tmp/db-${counter++}.db` },
  *   })
  */
-import { describe } from 'vitest'
-import type { SqliteDriver } from '../index'
-import { contractSuite } from './contract'
-import { queryCorpusSuite } from './queryCorpus'
-import { schemaSuite } from './schemaSuite'
-import { recordsSuite } from './recordsSuite'
+import { describe } from 'vitest';
+import type { SqliteDriver } from '../index';
+import { contractSuite } from './contract';
+import { queryCorpusSuite } from './queryCorpus';
+import { schemaSuite } from './schemaSuite';
+import { recordsSuite } from './recordsSuite';
 
 export interface DriverConformanceOptions {
   /** Suite display name, e.g. "web (sqlite-wasm, memory)". */
-  readonly name: string
+  readonly name: string;
   /** A fresh, unopened driver. Called once per test. */
-  readonly createDriver: () => SqliteDriver | Promise<SqliteDriver>
+  readonly createDriver: () => SqliteDriver | Promise<SqliteDriver>;
   /** Name for throwaway databases (default ':memory:'). */
-  readonly ephemeralName?: () => string
+  readonly ephemeralName?: () => string;
   /**
    * If the driver persists across open/close cycles, provide unique
    * database names so persistence semantics (user_version survival,
    * destroy) can be verified. `false` skips those tests.
    */
-  readonly persistence?: { readonly databaseName: () => string } | false
+  readonly persistence?: { readonly databaseName: () => string } | false;
 }
 
 export interface ResolvedOptions {
-  readonly name: string
-  readonly createDriver: () => SqliteDriver | Promise<SqliteDriver>
-  readonly ephemeralName: () => string
-  readonly persistence: { readonly databaseName: () => string } | false
+  readonly name: string;
+  readonly createDriver: () => SqliteDriver | Promise<SqliteDriver>;
+  readonly ephemeralName: () => string;
+  readonly persistence: { readonly databaseName: () => string } | false;
 }
 
 /**
@@ -64,11 +64,11 @@ export function registerDriverConformance(
     ephemeralName: () => ':memory:',
     persistence: false,
     ...options,
-  }
+  };
   describe(`SqliteDriver conformance: ${resolved.name}`, () => {
-    contractSuite(resolved)
-    queryCorpusSuite(resolved)
-    schemaSuite(resolved)
-    recordsSuite(resolved)
-  })
+    contractSuite(resolved);
+    queryCorpusSuite(resolved);
+    schemaSuite(resolved);
+    recordsSuite(resolved);
+  });
 }

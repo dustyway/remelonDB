@@ -12,23 +12,26 @@
  */
 
 /** The entire value vocabulary that crosses the seam, in either direction. */
-export type SqlValue = string | number | boolean | null
+export type SqlValue = string | number | boolean | null;
 
-export type SqlArgs = readonly SqlValue[]
+export type SqlArgs = readonly SqlValue[];
 
 /**
  * One result row, keyed by column name. SQLite has no boolean storage class,
  * so values read back are never `boolean` — columns written as booleans come
  * back as 0/1. Interpreting them is the core's job (it knows the schema).
  */
-export type Row = Record<string, SqlValue>
+export type Row = Record<string, SqlValue>;
 
 /**
  * One entry of an atomic batch: an SQL statement plus the argument sets to
  * run it with. Grouping arg sets under one statement lets drivers prepare
  * once and run many times.
  */
-export type BatchStatement = readonly [sql: string, argSets: readonly SqlArgs[]]
+export type BatchStatement = readonly [
+  sql: string,
+  argSets: readonly SqlArgs[],
+];
 
 export interface SqliteDriver {
   /**
@@ -36,26 +39,26 @@ export interface SqliteDriver {
    * `PRAGMA user_version`. Core uses the version to decide fresh setup vs
    * migration vs ready — the driver only reports it.
    */
-  open(name: string): Promise<{ userVersion: number }>
+  open(name: string): Promise<{ userVersion: number }>;
 
-  close(): Promise<void>
+  close(): Promise<void>;
 
   /** Run a SELECT and return all result rows. */
-  query(sql: string, args: SqlArgs): Promise<Row[]>
+  query(sql: string, args: SqlArgs): Promise<Row[]>;
 
   /** Run a single non-SELECT statement (DDL during setup, PRAGMAs). */
-  execute(sql: string, args: SqlArgs): Promise<void>
+  execute(sql: string, args: SqlArgs): Promise<void>;
 
   /**
    * Run all statements in one transaction: all commit or none do. This is
    * the sole mutation path for records, tombstones, and local storage.
    */
-  executeBatch(statements: readonly BatchStatement[]): Promise<void>
+  executeBatch(statements: readonly BatchStatement[]): Promise<void>;
 
-  setUserVersion(version: number): Promise<void>
+  setUserVersion(version: number): Promise<void>;
 
   /** Delete the database and its sidecar files. Used by database reset. */
-  destroy(): Promise<void>
+  destroy(): Promise<void>;
 
   /**
    * Optional cross-context arbitration (docs/multi-tab.md): when the same
@@ -66,7 +69,7 @@ export interface SqliteDriver {
    * slot. Drivers with exclusive storage omit it — the in-process work
    * queue already serializes locally, and core skips the hook entirely.
    */
-  acquireWorkSlot?(exclusive: boolean): Promise<() => Promise<void>>
+  acquireWorkSlot?(exclusive: boolean): Promise<() => Promise<void>>;
 
   /**
    * Optional change propagation, the sending half (docs/multi-tab.md):
@@ -75,7 +78,7 @@ export interface SqliteDriver {
    * best-effort and fire-and-forget — a lost notification means a stale
    * cache elsewhere until the next one, never data loss.
    */
-  publishChanges?(changes: ExternalChangeSet): void
+  publishChanges?(changes: ExternalChangeSet): void;
 
   /**
    * Optional change propagation, the receiving half: the driver invokes
@@ -83,7 +86,7 @@ export interface SqliteDriver {
    * them into `database.applyExternalChanges`. At most one handler; a
    * driver that implements one of the propagation members implements both.
    */
-  onExternalChanges?(handler: (changes: ExternalChangeSet) => void): void
+  onExternalChanges?(handler: (changes: ExternalChangeSet) => void): void;
 
   /**
    * Optional sync ownership (docs/multi-tab.md): when storage is shared
@@ -92,16 +95,16 @@ export interface SqliteDriver {
    * `synchronize` consults this at entry and returns early when denied.
    * Drivers with exclusive storage omit it — they always own sync.
    */
-  requestSyncTurn?(): Promise<boolean>
+  requestSyncTurn?(): Promise<boolean>;
 }
 
 /** One committed change, as propagated between contexts. */
 export interface ExternalChange {
-  readonly record: { readonly id: string } & Record<string, unknown>
-  readonly type: 'created' | 'updated' | 'destroyed'
+  readonly record: { readonly id: string } & Record<string, unknown>;
+  readonly type: 'created' | 'updated' | 'destroyed';
 }
 
 /** A batch's changes keyed by table — the shape the change buses deliver. */
 export type ExternalChangeSet = {
-  readonly [table: string]: readonly ExternalChange[]
-}
+  readonly [table: string]: readonly ExternalChange[];
+};

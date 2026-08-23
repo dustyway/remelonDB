@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -7,25 +7,25 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-} from 'react-native'
-import type { TodoModel } from 'example-todo-sync/schema'
-import { theme } from '../theme'
+} from 'react-native';
+import type { TodoModel } from 'example-todo-sync/schema';
+import { theme } from '../theme';
 
 type Props = {
-  todo: TodoModel
-  onToggle: () => void
-  onDelete: () => void
-  onEdit: (text: string) => void
-}
+  todo: TodoModel;
+  onToggle: () => void;
+  onDelete: () => void;
+  onEdit: (text: string) => void;
+};
 
 export function TodoItem({ todo, onToggle, onDelete, onEdit }: Props) {
-  const [draft, setDraft] = useState<string | null>(null)
+  const [draft, setDraft] = useState<string | null>(null);
 
   const commitEdit = () => {
-    const trimmed = draft?.trim()
-    setDraft(null)
-    if (trimmed && trimmed !== todo.text) onEdit(trimmed)
-  }
+    const trimmed = draft?.trim();
+    setDraft(null);
+    if (trimmed && trimmed !== todo.text) onEdit(trimmed);
+  };
 
   const confirmDelete = () => {
     Alert.alert(
@@ -35,8 +35,8 @@ export function TodoItem({ todo, onToggle, onDelete, onEdit }: Props) {
         { text: 'Yes', onPress: onDelete, style: 'destructive' },
         { text: 'Cancel', style: 'cancel' },
       ],
-    )
-  }
+    );
+  };
 
   return (
     <View style={styles.itemContainer}>
@@ -77,7 +77,7 @@ export function TodoItem({ todo, onToggle, onDelete, onEdit }: Props) {
         <Text style={styles.buttonText}>Delete</Text>
       </TouchableOpacity>
     </View>
-  )
+  );
 }
 
 const styles = StyleSheet.create({
@@ -115,4 +115,4 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
-})
+});

@@ -22,42 +22,42 @@
  * Typed structurally instead of via lib "WebWorker" so the workspace
  * can typecheck without conflicting global libs (same as worker.ts).
  */
-import type { WorkerRequest, WorkerResponse } from './protocol'
+import type { WorkerRequest, WorkerResponse } from './protocol';
 
-const PING_DEADLINE_MS = 1000
+const PING_DEADLINE_MS = 1000;
 
 interface PortLike {
-  postMessage(message: unknown, transfer?: readonly unknown[]): void
+  postMessage(message: unknown, transfer?: readonly unknown[]): void;
   addEventListener(
     type: 'message',
     listener: (event: { data: unknown; ports?: readonly PortLike[] }) => void,
-  ): void
-  start?(): void
+  ): void;
+  start?(): void;
 }
 
 interface Route {
-  readonly port: PortLike
-  readonly originalId: number
+  readonly port: PortLike;
+  readonly originalId: number;
   /** The as-sent request, so an epoch reset can replay instead of fail. */
-  readonly request: WorkerRequest
+  readonly request: WorkerRequest;
   /** Reshape the worker's result before answering (synthesized requests). */
-  readonly transform?: (result: unknown) => unknown
+  readonly transform?: (result: unknown) => unknown;
 }
 
 const scope = globalThis as unknown as {
   addEventListener(
     type: 'connect',
     listener: (event: { ports: readonly PortLike[] }) => void,
-  ): void
-}
+  ): void;
+};
 
-let computePort: PortLike | null = null
+let computePort: PortLike | null = null;
 /** False while a fresh compute is re-opening held databases. */
-let computeReady = false
+let computeReady = false;
 /** Held databases to restore on the next adopt (set by resetEpoch). */
-let namesToRestore: string[] = []
-let lastResponseAt = 0
-let watchdogTimer: ReturnType<typeof setTimeout> | null = null
+let namesToRestore: string[] = [];
+let lastResponseAt = 0;
+let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
  * New connections probe the compute channel, but a lone surviving tab
@@ -67,21 +67,21 @@ let watchdogTimer: ReturnType<typeof setTimeout> | null = null
  */
 const scheduleWatchdog = (): void => {
   if (watchdogTimer !== null) {
-    return
+    return;
   }
   watchdogTimer = setTimeout(() => {
-    watchdogTimer = null
+    watchdogTimer = null;
     if (!computePort || routes.size === 0) {
-      return
+      return;
     }
     if (Date.now() - lastResponseAt >= 2000) {
-      probeCompute()
+      probeCompute();
     }
-    scheduleWatchdog()
-  }, 2500)
-}
-let spawnRequested = false
-let hostedWorker: { terminate(): void } | null = null
+    scheduleWatchdog();
+  }, 2500);
+};
+let spawnRequested = false;
+let hostedWorker: { terminate(): void } | null = null;
 
 /**
  * Firefox exposes the Worker constructor in SharedWorkerGlobalScope
@@ -96,14 +96,14 @@ declare const Worker:
       url: URL,
       options?: { type: string },
     ) => PortLike & {
-      terminate(): void
-      addEventListener(type: 'error', listener: () => void): void
+      terminate(): void;
+      addEventListener(type: 'error', listener: () => void): void;
     })
-  | undefined
+  | undefined;
 
 const spawnComputeHere = (): boolean => {
   if (typeof Worker !== 'function') {
-    return false
+    return false;
   }
   try {
     // the literal `new Worker(new URL(...))` shape is load-bearing:
@@ -112,39 +112,39 @@ const spawnComputeHere = (): boolean => {
     // 404s in production
     const worker = new Worker(new URL('./worker.ts', import.meta.url), {
       type: 'module',
-    })
+    });
     worker.addEventListener('error', () => {
       // the hosted worker failed to load or crashed on startup: fall
       // back to tab-hosted compute instead of hanging every request
       if (hostedWorker === worker) {
-        hostedWorker = null
-        computePort = null
-        spawnRequested = false
-        worker.terminate()
-        const asker = backlog[0]?.port
+        hostedWorker = null;
+        computePort = null;
+        spawnRequested = false;
+        worker.terminate();
+        const asker = backlog[0]?.port;
         if (asker) {
-          spawnRequested = true
-          asker.postMessage({ control: 'spawnWorker' })
+          spawnRequested = true;
+          asker.postMessage({ control: 'spawnWorker' });
         }
       }
-    })
-    hostedWorker = worker
-    adoptComputePort(worker)
-    return true
+    });
+    hostedWorker = worker;
+    adoptComputePort(worker);
+    return true;
   } catch {
-    hostedWorker = null
-    return false
+    hostedWorker = null;
+    return false;
   }
-}
-let nextRouteId = 1
-const routes = new Map<number, Route>()
-const holders = new Map<string, Set<PortLike>>()
-const syncLeases = new Map<string, { port: PortLike; expiresAt: number }>()
+};
+let nextRouteId = 1;
+const routes = new Map<number, Route>();
+const holders = new Map<string, Set<PortLike>>();
+const syncLeases = new Map<string, { port: PortLike; expiresAt: number }>();
 const backlog: Array<{
-  port: PortLike
-  request: WorkerRequest
-  transform?: (result: unknown) => unknown
-}> = []
+  port: PortLike;
+  request: WorkerRequest;
+  transform?: (result: unknown) => unknown;
+}> = [];
 
 /**
  * The compute channel is gone. Instead of failing everything pending
@@ -154,19 +154,19 @@ const backlog: Array<{
  * no respawn path exists does the failure surface.
  */
 const resetEpoch = (reason: string): void => {
-  hostedWorker?.terminate()
-  hostedWorker = null
-  computePort = null
-  computeReady = false
-  spawnRequested = false
+  hostedWorker?.terminate();
+  hostedWorker = null;
+  computePort = null;
+  computeReady = false;
+  spawnRequested = false;
   // ping probes are self-addressed bookkeeping, not user work: they
   // must never be replayed, and above all never chosen as the spawn
   // asker — their fake port swallows the spawnWorker control and the
   // whole respawn dies silently
   const pending = [...routes.values()].filter(
     (route) => route.request.op !== 'ping',
-  )
-  routes.clear()
+  );
+  routes.clear();
   // holders are NOT cleared: they are exactly the state a fresh compute
   // must restore, so surviving tabs keep working (their queries would
   // otherwise hit a blank worker as "database is not open"). Names
@@ -175,61 +175,73 @@ const resetEpoch = (reason: string): void => {
   const replayedOpens = new Set(
     pending
       .concat(backlog.map((item) => ({ request: item.request })) as never[])
-      .filter((route) => (route as { request: WorkerRequest }).request.op === 'open')
-      .map((route) => ((route as { request: WorkerRequest }).request as { name: string }).name),
-  )
-  namesToRestore = [...holders.keys()].filter((name) => !replayedOpens.has(name))
+      .filter(
+        (route) => (route as { request: WorkerRequest }).request.op === 'open',
+      )
+      .map(
+        (route) =>
+          ((route as { request: WorkerRequest }).request as { name: string })
+            .name,
+      ),
+  );
+  namesToRestore = [...holders.keys()].filter(
+    (name) => !replayedOpens.has(name),
+  );
   if (pending.length > 0) {
     for (const route of pending) {
       backlog.push(
         route.transform
-          ? { port: route.port, request: route.request, transform: route.transform }
+          ? {
+              port: route.port,
+              request: route.request,
+              transform: route.transform,
+            }
           : { port: route.port, request: route.request },
-      )
+      );
     }
-    spawnRequested = true
+    spawnRequested = true;
     if (!spawnComputeHere()) {
-      const asker = pending[0]!.port
-      let asked = false
+      const asker = pending[0]!.port;
+      let asked = false;
       try {
-        asker.postMessage({ control: 'spawnWorker' })
-        asked = true
+        asker.postMessage({ control: 'spawnWorker' });
+        asked = true;
       } catch {
-        asked = false
+        asked = false;
       }
       if (!asked) {
-        spawnRequested = false
+        spawnRequested = false;
         for (const item of backlog.splice(0)) {
           item.port.postMessage({
             id: item.request.id,
             ok: false,
             error: `WebSqliteDriver: ${reason}`,
-          } satisfies WorkerResponse)
+          } satisfies WorkerResponse);
         }
       }
     }
   }
-}
+};
 
 const adoptComputePort = (port: PortLike): void => {
-  computePort = port
-  spawnRequested = false
+  computePort = port;
+  spawnRequested = false;
   port.addEventListener('message', (event) => {
-    const response = event.data as WorkerResponse
-    const route = routes.get(response.id)
+    const response = event.data as WorkerResponse;
+    const route = routes.get(response.id);
     if (!route) {
-      return
+      return;
     }
-    lastResponseAt = Date.now()
-    routes.delete(response.id)
+    lastResponseAt = Date.now();
+    routes.delete(response.id);
     if (response.ok && route.transform) {
       route.port.postMessage({
         id: route.originalId,
         ok: true,
         result: route.transform(response.result),
-      } satisfies WorkerResponse)
+      } satisfies WorkerResponse);
     } else {
-      route.port.postMessage({ ...response, id: route.originalId })
+      route.port.postMessage({ ...response, id: route.originalId });
     }
     // A self-hosted compute worker holds the SAH pool for the broker's
     // lifetime, which outlives every tab. Release it when nothing is
@@ -240,52 +252,52 @@ const adoptComputePort = (port: PortLike): void => {
       routes.size === 0 &&
       backlog.length === 0
     ) {
-      hostedWorker.terminate()
-      hostedWorker = null
-      computePort = null
-      spawnRequested = false
+      hostedWorker.terminate();
+      hostedWorker = null;
+      computePort = null;
+      spawnRequested = false;
     }
-  })
-  port.start?.()
-  const heldNames = namesToRestore
-  namesToRestore = []
+  });
+  port.start?.();
+  const heldNames = namesToRestore;
+  namesToRestore = [];
   if (heldNames.length === 0) {
-    computeReady = true
-    flushBacklog()
-    return
+    computeReady = true;
+    flushBacklog();
+    return;
   }
   // restore held databases before anything else runs against the fresh
   // compute; the backlog flushes when the last re-open answers
-  let reopensPending = heldNames.length
+  let reopensPending = heldNames.length;
   for (const name of heldNames) {
-    const routeId = nextRouteId++
-    const request = { id: -1, op: 'open', name, storage: 'opfs' } as const
+    const routeId = nextRouteId++;
+    const request = { id: -1, op: 'open', name, storage: 'opfs' } as const;
     routes.set(routeId, {
       request,
       originalId: -1,
       port: {
         postMessage: () => {
-          reopensPending -= 1
+          reopensPending -= 1;
           if (reopensPending === 0) {
-            computeReady = true
-            flushBacklog()
+            computeReady = true;
+            flushBacklog();
           }
         },
         addEventListener: () => {},
       },
-    })
-    port.postMessage({ ...request, id: routeId } satisfies WorkerRequest)
+    });
+    port.postMessage({ ...request, id: routeId } satisfies WorkerRequest);
   }
-}
+};
 
 const flushBacklog = (): void => {
-  const queued = backlog.splice(0)
+  const queued = backlog.splice(0);
   for (const item of queued) {
     // replay the SEND, not the routing decision — holder bookkeeping
     // already happened when the request was first handled
-    send(item.port, item.request, item.transform)
+    send(item.port, item.request, item.transform);
   }
-}
+};
 
 /** Post to the compute channel (requires computePort to be live). */
 const send = (
@@ -293,12 +305,12 @@ const send = (
   request: WorkerRequest,
   transform?: (result: unknown) => unknown,
 ): void => {
-  const routeId = nextRouteId++
-  const base = { port, originalId: request.id, request }
-  routes.set(routeId, transform ? { ...base, transform } : base)
-  computePort!.postMessage({ ...request, id: routeId })
-  scheduleWatchdog()
-}
+  const routeId = nextRouteId++;
+  const base = { port, originalId: request.id, request };
+  routes.set(routeId, transform ? { ...base, transform } : base);
+  computePort!.postMessage({ ...request, id: routeId });
+  scheduleWatchdog();
+};
 
 const forward = (
   port: PortLike,
@@ -306,24 +318,24 @@ const forward = (
   transform?: (result: unknown) => unknown,
 ): void => {
   if (!computePort || !computeReady) {
-    const entry = { port, request }
-    backlog.push(transform ? { ...entry, transform } : entry)
+    const entry = { port, request };
+    backlog.push(transform ? { ...entry, transform } : entry);
     // spawn only when there is no compute at all — during the re-open
     // gate a live compute exists and must not get a twin
     if (!computePort && !spawnRequested) {
-      spawnRequested = true
+      spawnRequested = true;
       if (!spawnComputeHere()) {
-        port.postMessage({ control: 'spawnWorker' })
+        port.postMessage({ control: 'spawnWorker' });
       }
     }
-    return
+    return;
   }
-  send(port, request, transform)
-}
+  send(port, request, transform);
+};
 
 const answer = (port: PortLike, id: number, result: unknown): void => {
-  port.postMessage({ id, ok: true, result } satisfies WorkerResponse)
-}
+  port.postMessage({ id, ok: true, result } satisfies WorkerResponse);
+};
 
 /**
  * Write-block arbitration (docs/multi-tab.md): a plain token queue. An
@@ -332,62 +344,64 @@ const answer = (port: PortLike, id: number, result: unknown): void => {
  * FIFO — a waiting writer blocks later readers, so writers can't starve.
  */
 interface SlotWaiter {
-  readonly port: PortLike
-  readonly requestId: number
-  readonly exclusive: boolean
+  readonly port: PortLike;
+  readonly requestId: number;
+  readonly exclusive: boolean;
 }
 
-let nextSlot = 1
-const heldSlots = new Map<number, { exclusive: boolean }>()
-const slotQueue: SlotWaiter[] = []
+let nextSlot = 1;
+const heldSlots = new Map<number, { exclusive: boolean }>();
+const slotQueue: SlotWaiter[] = [];
 
 const heldExclusive = (): boolean =>
-  [...heldSlots.values()].some((slot) => slot.exclusive)
+  [...heldSlots.values()].some((slot) => slot.exclusive);
 
 const grantSlots = (): void => {
   while (slotQueue.length > 0) {
-    const head = slotQueue[0]!
-    const canGrant = head.exclusive
-      ? heldSlots.size === 0
-      : !heldExclusive()
+    const head = slotQueue[0]!;
+    const canGrant = head.exclusive ? heldSlots.size === 0 : !heldExclusive();
     if (!canGrant) {
-      return
+      return;
     }
-    slotQueue.shift()
-    const slot = nextSlot++
-    heldSlots.set(slot, { exclusive: head.exclusive })
-    answer(head.port, head.requestId, { slot })
+    slotQueue.shift();
+    const slot = nextSlot++;
+    heldSlots.set(slot, { exclusive: head.exclusive });
+    answer(head.port, head.requestId, { slot });
     if (head.exclusive) {
-      return // exclusive holder: nothing else runs until release
+      return; // exclusive holder: nothing else runs until release
     }
   }
-}
+};
 
 const handle = (port: PortLike, request: WorkerRequest): void => {
   switch (request.op) {
     case 'acquireSlot': {
-      slotQueue.push({ port, requestId: request.id, exclusive: request.exclusive })
-      grantSlots()
-      return
+      slotQueue.push({
+        port,
+        requestId: request.id,
+        exclusive: request.exclusive,
+      });
+      grantSlots();
+      return;
     }
     case 'releaseSlot': {
-      heldSlots.delete(request.slot)
-      answer(port, request.id, null)
-      grantSlots()
-      return
+      heldSlots.delete(request.slot);
+      answer(port, request.id, null);
+      grantSlots();
+      return;
     }
     case 'syncTurn': {
-      const now = Date.now()
-      const lease = syncLeases.get(request.name)
-      const granted = !lease || lease.port === port || lease.expiresAt <= now
+      const now = Date.now();
+      const lease = syncLeases.get(request.name);
+      const granted = !lease || lease.port === port || lease.expiresAt <= now;
       if (granted) {
         syncLeases.set(request.name, {
           port,
           expiresAt: now + request.leaseMs,
-        })
+        });
       }
-      answer(port, request.id, { granted })
-      return
+      answer(port, request.id, { granted });
+      return;
     }
     case 'publishChanges': {
       // fan out to every OTHER tab holding this database; the sender's
@@ -398,16 +412,16 @@ const handle = (port: PortLike, request: WorkerRequest): void => {
             control: 'externalChanges',
             name: request.name,
             changes: request.changes,
-          })
+          });
         }
       }
-      answer(port, request.id, null)
-      return
+      answer(port, request.id, null);
+      return;
     }
     case 'open': {
-      const existing = holders.get(request.name)
+      const existing = holders.get(request.name);
       if (existing && existing.size > 0) {
-        existing.add(port)
+        existing.add(port);
         // joiner — even when the compute is not up yet: the first
         // open is already queued ahead of this pragma, so replay order
         // serves it correctly. Gating on a live compute made two
@@ -425,85 +439,88 @@ const handle = (port: PortLike, request: WorkerRequest): void => {
           },
           (rows) => ({
             userVersion: Number(
-              (rows as readonly { user_version?: unknown }[])[0]?.user_version ?? 0,
+              (rows as readonly { user_version?: unknown }[])[0]
+                ?.user_version ?? 0,
             ),
           }),
-        )
-        return
+        );
+        return;
       }
-      const set = holders.get(request.name) ?? new Set<PortLike>()
-      set.add(port)
-      holders.set(request.name, set)
-      forward(port, request)
-      return
+      const set = holders.get(request.name) ?? new Set<PortLike>();
+      set.add(port);
+      holders.set(request.name, set);
+      forward(port, request);
+      return;
     }
     case 'close': {
-      const holding = holders.get(request.name)
-      holding?.delete(port)
+      const holding = holders.get(request.name);
+      holding?.delete(port);
       if (holding && holding.size > 0) {
-        answer(port, request.id, null) // others still hold it open
-        return
+        answer(port, request.id, null); // others still hold it open
+        return;
       }
-      holders.delete(request.name)
-      forward(port, request)
-      return
+      holders.delete(request.name);
+      forward(port, request);
+      return;
     }
     case 'destroy': {
-      holders.delete(request.name)
-      forward(port, request)
-      return
+      holders.delete(request.name);
+      forward(port, request);
+      return;
     }
     default:
-      forward(port, request)
+      forward(port, request);
   }
-}
+};
 
 /** Probe the compute channel; reset the epoch when it stopped answering. */
 const probeCompute = (): void => {
-  const target = computePort
+  const target = computePort;
   if (!target) {
-    return
+    return;
   }
-  const routeId = nextRouteId++
-  const ping = { id: routeId, op: 'ping' } satisfies WorkerRequest
-  let answered = false
+  const routeId = nextRouteId++;
+  const ping = { id: routeId, op: 'ping' } satisfies WorkerRequest;
+  let answered = false;
   routes.set(routeId, {
     // a self-addressed route: mark answered, deliver to nobody (and if
     // an epoch reset replays it, a ping is a harmless no-op)
     request: ping,
     port: {
       postMessage: () => {
-        answered = true
+        answered = true;
       },
       addEventListener: () => {},
     },
     originalId: -1,
-  })
-  target.postMessage(ping)
+  });
+  target.postMessage(ping);
   setTimeout(() => {
-    routes.delete(routeId)
+    routes.delete(routeId);
     if (!answered && computePort === target) {
-      resetEpoch('the database worker went away (its host tab closed?) — retry')
+      resetEpoch(
+        'the database worker went away (its host tab closed?) — retry',
+      );
     }
-  }, PING_DEADLINE_MS)
-}
+  }, PING_DEADLINE_MS);
+};
 
 scope.addEventListener('connect', (event) => {
-  const port = event.ports[0]
+  const port = event.ports[0];
   if (!port) {
-    return
+    return;
   }
   port.addEventListener('message', (messageEvent) => {
-    const data = messageEvent.data as { control?: string } | null
+    const data = messageEvent.data as { control?: string } | null;
     if (data?.control === 'adoptWorkerPort') {
-      const transferred = messageEvent.ports?.[0]
+      const transferred = messageEvent.ports?.[0];
       if (transferred) {
-        adoptComputePort(transferred)
+        adoptComputePort(transferred);
       }
-      return
+      return;
     }
-    handle(port, messageEvent.data as WorkerRequest)
-  })
-  port.start?.()
-  probeCompute()
-})
+    handle(port, messageEvent.data as WorkerRequest);
+  });
+  port.start?.();
+  probeCompute();
+});

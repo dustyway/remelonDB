@@ -1,4 +1,4 @@
-export { createDrizzleStore, drizzleSyncTable } from './store'
+export { createDrizzleStore, drizzleSyncTable } from './store';
 export type {
   DrizzleDb,
   DrizzleStore,
@@ -6,4 +6,4 @@ export type {
   DrizzleTableConfig,
   DrizzleTx,
   TableOverrides,
-} from './store'
+} from './store';

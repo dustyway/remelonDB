@@ -3,10 +3,10 @@ export {
   RemelonSyncController,
   RemelonSyncModule,
   syncEngineFromOptions,
-} from './module'
+} from './module';
 export type {
   RemelonSyncAsyncOptions,
   RemelonSyncOptions,
   SyncEngineConfig,
   SyncRuntime,
-} from './module'
+} from './module';

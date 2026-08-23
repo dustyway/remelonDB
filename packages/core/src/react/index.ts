@@ -20,16 +20,16 @@ import {
   useState,
   useSyncExternalStore,
   type ReactNode,
-} from 'react'
-import type { Database, DatabaseManager, DatabaseManagerState } from '../index'
-import type { Query } from '../database/Query'
+} from 'react';
+import type { Database, DatabaseManager, DatabaseManagerState } from '../index';
+import type { Query } from '../database/Query';
 
-type Unsubscribe = () => void
+type Unsubscribe = () => void;
 
 // ---------------------------------------------------------------------------
 // Provider
 
-const ManagerContext = createContext<DatabaseManager | null>(null)
+const ManagerContext = createContext<DatabaseManager | null>(null);
 
 /**
  * Provide a database manager to the zero-argument hooks below.
@@ -37,25 +37,25 @@ const ManagerContext = createContext<DatabaseManager | null>(null)
  *     <DatabaseProvider manager={manager}><App /></DatabaseProvider>
  */
 export function DatabaseProvider(props: {
-  manager: DatabaseManager
-  children?: ReactNode
+  manager: DatabaseManager;
+  children?: ReactNode;
 }) {
   return createElement(
     ManagerContext.Provider,
     { value: props.manager },
     props.children,
-  )
+  );
 }
 
 function useManager(manager?: DatabaseManager): DatabaseManager {
-  const fromContext = useContext(ManagerContext)
-  const resolved = manager ?? fromContext
+  const fromContext = useContext(ManagerContext);
+  const resolved = manager ?? fromContext;
   if (!resolved) {
     throw new Error(
       'remelonDB: no database manager. Pass one explicitly or wrap the tree in <DatabaseProvider>.',
-    )
+    );
   }
-  return resolved
+  return resolved;
 }
 
 // ---------------------------------------------------------------------------
@@ -68,19 +68,21 @@ function useManager(manager?: DatabaseManager): DatabaseManager {
  *
  *     const { status, error } = useDatabaseState()
  */
-export function useDatabaseState(manager?: DatabaseManager): DatabaseManagerState {
-  const m = useManager(manager)
+export function useDatabaseState(
+  manager?: DatabaseManager,
+): DatabaseManagerState {
+  const m = useManager(manager);
   // stable per manager: a fresh subscribe function every render would
   // make useSyncExternalStore resubscribe on every render
   const subscribe = useCallback(
     (onStoreChange: () => void) => m.subscribe(onStoreChange),
     [m],
-  )
+  );
   return useSyncExternalStore(
     subscribe,
     () => m.state,
     () => m.state,
-  )
+  );
 }
 
 /**
@@ -90,37 +92,37 @@ export function useDatabaseState(manager?: DatabaseManager): DatabaseManagerStat
  *     const { data } = useQuery(db && getDecksQuery(db))
  */
 export function useDatabase(manager?: DatabaseManager): Database | null {
-  const m = useManager(manager)
+  const m = useManager(manager);
   const subscribe = useCallback(
     (onStoreChange: () => void) => m.subscribe(onStoreChange),
     [m],
-  )
+  );
   return useSyncExternalStore(
     subscribe,
     () => (m.state.status === 'ready' ? m.database : null),
     () => null,
-  )
+  );
 }
 
 // ---------------------------------------------------------------------------
 // Query hooks
 
 export interface QueryResult<M> {
-  readonly data: M[]
-  readonly isLoading: boolean
-  readonly error: Error | null
+  readonly data: M[];
+  readonly isLoading: boolean;
+  readonly error: Error | null;
   /**
    * True while `keepPreviousData` is showing the previous query's rows
    * because the current query has not delivered yet. Always false
    * without the option.
    */
-  readonly isPreviousData: boolean
+  readonly isPreviousData: boolean;
 }
 
 export interface QueryCountResult {
-  readonly data: number
-  readonly isLoading: boolean
-  readonly error: Error | null
+  readonly data: number;
+  readonly isLoading: boolean;
+  readonly error: Error | null;
 }
 
 /** Shared refcounted store: starts the observation on first subscriber,
@@ -129,30 +131,30 @@ function createStore<T>(
   initial: T,
   start: (set: (value: T) => void) => Unsubscribe,
 ) {
-  let value = initial
-  let stop: Unsubscribe | null = null
-  const listeners = new Set<() => void>()
+  let value = initial;
+  let stop: Unsubscribe | null = null;
+  const listeners = new Set<() => void>();
   return {
     subscribe(listener: () => void): Unsubscribe {
-      listeners.add(listener)
+      listeners.add(listener);
       if (listeners.size === 1) {
         stop = start((next) => {
-          value = next
-          for (const l of listeners) l()
-        })
+          value = next;
+          for (const l of listeners) l();
+        });
       }
       return () => {
-        listeners.delete(listener)
+        listeners.delete(listener);
         if (listeners.size === 0 && stop) {
-          stop()
-          stop = null
-          value = initial
+          stop();
+          stop = null;
+          value = initial;
         }
-      }
+      };
     },
     snapshot: () => value,
     idle: () => listeners.size === 0,
-  }
+  };
 }
 
 const LOADING: QueryResult<never> = {
@@ -160,21 +162,23 @@ const LOADING: QueryResult<never> = {
   isLoading: true,
   error: null,
   isPreviousData: false,
-}
+};
 const NO_QUERY: QueryResult<never> = {
   data: [],
   isLoading: false,
   error: null,
   isPreviousData: false,
-}
+};
 const noStore = {
-  subscribe: (_: () => void): Unsubscribe => () => {},
+  subscribe:
+    (_: () => void): Unsubscribe =>
+    () => {},
   snapshot: () => NO_QUERY,
-}
+};
 
 /** Structural identity: same table, same clauses → same subscription. */
 function queryKey(query: Query<unknown>): string {
-  return `${query.collection.schema.name}:${JSON.stringify(query.description)}`
+  return `${query.collection.schema.name}:${JSON.stringify(query.description)}`;
 }
 
 /**
@@ -183,35 +187,39 @@ function queryKey(query: Query<unknown>): string {
  * subscriber leaves). This is what keeps a screen with five widgets on
  * the same query at one subscription instead of five.
  */
-const registries = new WeakMap<object, Map<string, ReturnType<typeof createStore<never>>>>()
+const registries = new WeakMap<
+  object,
+  Map<string, ReturnType<typeof createStore<never>>>
+>();
 
 function sharedStore<T>(
   database: object,
   key: string,
   make: () => ReturnType<typeof createStore<T>>,
 ): ReturnType<typeof createStore<T>> {
-  let registry = registries.get(database)
+  let registry = registries.get(database);
   if (!registry) {
-    registry = new Map()
-    registries.set(database, registry)
+    registry = new Map();
+    registries.set(database, registry);
   }
-  let store = registry.get(key) as ReturnType<typeof createStore<T>> | undefined
+  let store = registry.get(key) as
+    ReturnType<typeof createStore<T>> | undefined;
   if (!store) {
-    const created = make()
+    const created = make();
     store = {
       subscribe(listener) {
-        const stop = created.subscribe(listener)
+        const stop = created.subscribe(listener);
         return () => {
-          stop()
-          if (created.idle()) registry!.delete(key)
-        }
+          stop();
+          if (created.idle()) registry!.delete(key);
+        };
       },
       snapshot: created.snapshot,
       idle: created.idle,
-    }
-    registry.set(key, store as ReturnType<typeof createStore<never>>)
+    };
+    registry.set(key, store as ReturnType<typeof createStore<never>>);
   }
-  return store
+  return store;
 }
 
 /**
@@ -225,11 +233,11 @@ function sharedStore<T>(
  *     const { data: decks, isLoading } = useQuery(db && getDecksQuery(db))
  */
 export interface SelectedResult<T> {
-  readonly data: T
-  readonly isLoading: boolean
-  readonly error: Error | null
+  readonly data: T;
+  readonly isLoading: boolean;
+  readonly error: Error | null;
   /** See {@link QueryResult.isPreviousData}. */
-  readonly isPreviousData: boolean
+  readonly isPreviousData: boolean;
 }
 
 export interface UseQueryOptions<M, T> {
@@ -240,7 +248,7 @@ export interface UseQueryOptions<M, T> {
    * Changing the function recomputes the selected value without
    * restarting the shared query observation.
    */
-  select?: (rows: M[]) => T
+  select?: (rows: M[]) => T;
   /**
    * When the query's structure changes (a new search term, another
    * page), keep rendering the previous query's rows until the new one
@@ -260,7 +268,7 @@ export interface UseQueryOptions<M, T> {
    * tick. This option is for queries that must change — search,
    * pagination — where the row set can't be pulled whole.
    */
-  keepPreviousData?: boolean
+  keepPreviousData?: boolean;
 }
 
 // The select overload comes FIRST and is spelled out concretely: a
@@ -270,44 +278,49 @@ export interface UseQueryOptions<M, T> {
 export function useQuery<M, T>(
   query: Query<M> | null | undefined,
   options: {
-    select: (rows: M[]) => T
-    keepPreviousData?: boolean
+    select: (rows: M[]) => T;
+    keepPreviousData?: boolean;
   },
-): SelectedResult<T>
+): SelectedResult<T>;
 export function useQuery<M>(
   query: Query<M> | null | undefined,
   options?: { keepPreviousData?: boolean },
-): QueryResult<M>
+): QueryResult<M>;
 export function useQuery<M, T>(
   query: Query<M> | null | undefined,
   options?: UseQueryOptions<M, T>,
 ): QueryResult<M> | SelectedResult<T> {
-  const database = query ? query.collection.database : null
-  const key = query ? queryKey(query) : null
+  const database = query ? query.collection.database : null;
+  const key = query ? queryKey(query) : null;
   // The first structurally-equal query instance is captured for the
   // subscription; later equivalent instances are deliberately ignored.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const store = useMemo(() => {
-    if (!query || !database || !key) return noStore
+    if (!query || !database || !key) return noStore;
     return sharedStore<QueryResult<M>>(database, `q:${key}`, () => {
-      let latest: M[] = []
+      let latest: M[] = [];
       return createStore<QueryResult<M>>(LOADING as QueryResult<M>, (set) =>
         query.observe(
           (data) => {
-            latest = data
-            set({ data, isLoading: false, error: null, isPreviousData: false })
+            latest = data;
+            set({ data, isLoading: false, error: null, isPreviousData: false });
           },
           (error) =>
-            set({ data: latest, isLoading: false, error, isPreviousData: false }),
+            set({
+              data: latest,
+              isLoading: false,
+              error,
+              isPreviousData: false,
+            }),
         ),
-      )
-    })
-  }, [database, key])
+      );
+    });
+  }, [database, key]);
   const raw = useSyncExternalStore(
     store.subscribe,
     store.snapshot,
     store.snapshot,
-  ) as QueryResult<M>
+  ) as QueryResult<M>;
 
   // keepPreviousData retention is deliberately consumer-local: a ref in
   // this hook instance, never the shared store, so one consumer's
@@ -316,22 +329,25 @@ export function useQuery<M, T>(
   // React abandons must not decide what this consumer retains — so the
   // render path just reads the last committed entry and re-checks every
   // guard against the current props.
-  const keep = options?.keepPreviousData === true
-  const heldRef = useRef<{ db: object; key: string; data: M[] } | null>(null)
+  const keep = options?.keepPreviousData === true;
+  const heldRef = useRef<{ db: object; key: string; data: M[] } | null>(null);
   useEffect(() => {
     // Retention is dropped when the option is off or the database is
     // no longer the one the rows came from. A null query has a null
     // database, so "query became null" is the same clear — and it must
     // happen here, not just be filtered at render time, or the rows
     // could resurface when their database comes back later.
-    if (!keep || (heldRef.current !== null && heldRef.current.db !== database)) {
-      heldRef.current = null
+    if (
+      !keep ||
+      (heldRef.current !== null && heldRef.current.db !== database)
+    ) {
+      heldRef.current = null;
     }
     if (keep && database && key && !raw.isLoading && raw.error === null) {
-      heldRef.current = { db: database, key, data: raw.data }
+      heldRef.current = { db: database, key, data: raw.data };
     }
-  }, [keep, database, key, raw])
-  const held = heldRef.current
+  }, [keep, database, key, raw]);
+  const held = heldRef.current;
   // Previous rows show while the current key has not succeeded yet —
   // loading, or failed before its first delivery. Success always wins.
   // The db guard repeats here because the effect clear lands one commit
@@ -343,9 +359,9 @@ export function useQuery<M, T>(
     held.key !== key &&
     (raw.isLoading || raw.error !== null)
       ? held
-      : null
+      : null;
 
-  const select = options?.select
+  const select = options?.select;
   return useMemo<QueryResult<M> | SelectedResult<T>>(() => {
     const presented: QueryResult<M> = previous
       ? {
@@ -354,15 +370,15 @@ export function useQuery<M, T>(
           error: raw.error,
           isPreviousData: true,
         }
-      : raw
-    if (!select) return presented
+      : raw;
+    if (!select) return presented;
     return {
       isLoading: presented.isLoading,
       error: presented.error,
       isPreviousData: presented.isPreviousData,
       data: select(presented.data),
-    }
-  }, [raw, select, previous])
+    };
+  }, [raw, select, previous]);
 }
 
 /**
@@ -375,45 +391,45 @@ export function useQuery<M, T>(
 export function useQueryCountResult(
   query: Query<unknown> | null | undefined,
 ): QueryCountResult {
-  const database = query ? query.collection.database : null
-  const key = query ? queryKey(query) : null
+  const database = query ? query.collection.database : null;
+  const key = query ? queryKey(query) : null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const store = useMemo(() => {
-    if (!query || !database || !key) return null
+    if (!query || !database || !key) return null;
     return sharedStore<QueryCountResult>(database, `c:${key}`, () => {
-      let latest = 0
+      let latest = 0;
       return createStore<QueryCountResult>(
         { data: 0, isLoading: true, error: null },
         (set) =>
           query.observeCount(
             (data) => {
-              latest = data
-              set({ data, isLoading: false, error: null })
+              latest = data;
+              set({ data, isLoading: false, error: null });
             },
             (error) => set({ data: latest, isLoading: false, error }),
           ),
-      )
-    })
-  }, [database, key])
+      );
+    });
+  }, [database, key]);
   return useSyncExternalStore(
     store ? store.subscribe : noStore.subscribe,
     store ? store.snapshot : () => NO_COUNT,
     store ? store.snapshot : () => NO_COUNT,
-  ) as QueryCountResult
+  ) as QueryCountResult;
 }
 
 const NO_COUNT: QueryCountResult = {
   data: 0,
   isLoading: false,
   error: null,
-}
+};
 
 /** Backward-compatible convenience form; use `useQueryCountResult` when
  * loading and error state matter. */
 export function useQueryCount(
   query: Query<unknown> | null | undefined,
 ): number {
-  return useQueryCountResult(query).data
+  return useQueryCountResult(query).data;
 }
 
 // ---------------------------------------------------------------------------
@@ -426,22 +442,22 @@ export interface UseMutationResult<Args extends unknown[], Result> {
    * construction. Failure never becomes an unhandled rejection; it
    * lands in `error`.
    */
-  mutate: (...args: Args) => void
+  mutate: (...args: Args) => void;
   /**
    * Awaitable form with normal promise semantics: resolves with the
    * mutation result, rejects with the original error. For workflows
    * that must continue only after success (close a dialog once the
    * write commits). Drives the same state as `mutate`.
    */
-  mutateAsync: (...args: Args) => Promise<Result>
+  mutateAsync: (...args: Args) => Promise<Result>;
   /** Result of the most recent completed invocation that still owns state. */
-  data: Result | undefined
+  data: Result | undefined;
   /** Failure of the owning invocation; cleared when a new one starts. */
-  error: unknown
+  error: unknown;
   /** True while any tracked invocation is in flight. */
-  isPending: boolean
+  isPending: boolean;
   /** Back to idle: clears data and error, in-flight completions are ignored. */
-  reset: () => void
+  reset: () => void;
 }
 
 /**
@@ -461,72 +477,76 @@ export function useMutation<Args extends unknown[], Result>(
   mutationFn: (...args: Args) => Promise<Result> | Result,
 ): UseMutationResult<Args, Result> {
   const [state, setState] = useState<{
-    data: Result | undefined
-    error: unknown
-    pendingCount: number
-  }>(IDLE_MUTATION)
+    data: Result | undefined;
+    error: unknown;
+    pendingCount: number;
+  }>(IDLE_MUTATION);
 
-  const fnRef = useRef(mutationFn)
-  fnRef.current = mutationFn
+  const fnRef = useRef(mutationFn);
+  fnRef.current = mutationFn;
   // generation guards ownership: bumped by each invocation and by reset,
   // so stale completions cannot write data/error. era guards pending:
   // reset zeroes the counter and starts a new era, so completions from
   // before the reset must not drain what they no longer belong to.
   // mountedRef guards against state updates after unmount.
-  const generationRef = useRef(0)
-  const eraRef = useRef(0)
-  const mountedRef = useRef(true)
+  const generationRef = useRef(0);
+  const eraRef = useRef(0);
+  const mountedRef = useRef(true);
   useEffect(() => {
-    mountedRef.current = true
+    mountedRef.current = true;
     return () => {
-      mountedRef.current = false
-    }
-  }, [])
+      mountedRef.current = false;
+    };
+  }, []);
 
   const mutateAsync = useCallback(async (...args: Args): Promise<Result> => {
-    const generation = ++generationRef.current
-    const era = eraRef.current
+    const generation = ++generationRef.current;
+    const era = eraRef.current;
     if (mountedRef.current) {
-      setState((s) => ({ ...s, error: null, pendingCount: s.pendingCount + 1 }))
+      setState((s) => ({
+        ...s,
+        error: null,
+        pendingCount: s.pendingCount + 1,
+      }));
     }
     const settle = (
       apply: (s: {
-        data: Result | undefined
-        error: unknown
-        pendingCount: number
+        data: Result | undefined;
+        error: unknown;
+        pendingCount: number;
       }) => { data: Result | undefined; error: unknown },
     ) => {
-      if (!mountedRef.current) return
-      if (eraRef.current !== era) return
+      if (!mountedRef.current) return;
+      if (eraRef.current !== era) return;
       setState((s) => ({
         ...(generationRef.current === generation ? apply(s) : s),
         pendingCount: s.pendingCount - 1,
-      }))
-    }
+      }));
+    };
     try {
-      const result = await fnRef.current(...args)
-      settle((s) => ({ ...s, data: result, error: null }))
-      return result
+      const result = await fnRef.current(...args);
+      settle((s) => ({ ...s, data: result, error: null }));
+      return result;
     } catch (error) {
-      settle((s) => ({ ...s, error }))
-      throw error
+      settle((s) => ({ ...s, error }));
+      throw error;
     }
-  }, [])
+  }, []);
 
   const mutate = useCallback(
     (...args: Args): void => {
       mutateAsync(...args).catch(() => {
         // failure is owned by the hook state; a floating mutate is safe
-      })
+      });
     },
     [mutateAsync],
-  )
+  );
 
   const reset = useCallback(() => {
-    generationRef.current++
-    eraRef.current++
-    setState(IDLE_MUTATION)
-  }, [])
+    generationRef.current++;
+    eraRef.current++;
+    setState(IDLE_MUTATION);
+  }, []);
 
   return {
     mutate,
@@ -535,11 +555,11 @@ export function useMutation<Args extends unknown[], Result>(
     error: state.error,
     isPending: state.pendingCount > 0,
     reset,
-  }
+  };
 }
 
 const IDLE_MUTATION = {
   data: undefined,
   error: null,
   pendingCount: 0,
-}
+};

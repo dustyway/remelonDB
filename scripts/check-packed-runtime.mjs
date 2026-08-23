@@ -4,33 +4,33 @@
 // inline shell so it can run locally.
 //
 // Run: node scripts/check-packed-runtime.mjs <tarball-dir>
-import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 
-const tarballDir = process.argv[2]
+const tarballDir = process.argv[2];
 if (!tarballDir) {
-  console.error('usage: node scripts/check-packed-runtime.mjs <tarball-dir>')
-  process.exit(1)
+  console.error('usage: node scripts/check-packed-runtime.mjs <tarball-dir>');
+  process.exit(1);
 }
 const find = (prefix) => {
   const matches = readdirSync(tarballDir).filter(
     (f) => f.startsWith(prefix) && f.endsWith('.tgz'),
-  )
+  );
   if (matches.length !== 1) {
     // two matches = a stale tarball from an earlier local run; picking
     // one silently would test an arbitrary version
     console.error(
       `expected exactly one ${prefix}*.tgz in ${tarballDir}, found ${matches.length}`,
-    )
-    process.exit(1)
+    );
+    process.exit(1);
   }
-  return join(resolve(tarballDir), matches[0])
-}
-const core = find('remelondb-core-')
-const nodeDriver = find('remelondb-driver-node-')
-const server = find('remelondb-server-')
+  return join(resolve(tarballDir), matches[0]);
+};
+const core = find('remelondb-core-');
+const nodeDriver = find('remelondb-driver-node-');
+const server = find('remelondb-server-');
 
 const MAIN = `
 import { appSchema, column as c, table, Database, ModelFor, Q } from '@remelondb/core'
@@ -58,9 +58,9 @@ const again = await h.pull({ cursor: null, schemaVersion: 1, migration: null })
 syncSchemas({ items: Item }).pullResult.parse(again)
 if (again.changes.items.updated.length !== 1) throw new Error('server roundtrip failed')
 console.log('pack-consume OK')
-`
+`;
 
-const dir = mkdtempSync(join(tmpdir(), 'packed-runtime-'))
+const dir = mkdtempSync(join(tmpdir(), 'packed-runtime-'));
 try {
   writeFileSync(
     join(dir, 'package.json'),
@@ -80,14 +80,14 @@ try {
       null,
       2,
     ),
-  )
+  );
   // scripts allowed: driver-node's better-sqlite3 needs its native build
   execFileSync('npm', ['install', '--no-audit', '--no-fund'], {
     cwd: dir,
     stdio: 'inherit',
-  })
-  writeFileSync(join(dir, 'main.mjs'), MAIN)
-  execFileSync('node', ['main.mjs'], { cwd: dir, stdio: 'inherit' })
+  });
+  writeFileSync(join(dir, 'main.mjs'), MAIN);
+  execFileSync('node', ['main.mjs'], { cwd: dir, stdio: 'inherit' });
 } finally {
-  rmSync(dir, { recursive: true, force: true })
+  rmSync(dir, { recursive: true, force: true });
 }

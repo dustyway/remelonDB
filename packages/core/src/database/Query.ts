@@ -8,10 +8,10 @@
  * each emission keeps a column snapshot to compare against. Bookkeeping
  * changes (_status/_changed, e.g. sync marking records synced) don't count.
  */
-import { encodeQuery } from '../query/encodeQuery'
-import type { QueryDescription } from '../query/ast'
-import type { RawRecord } from '../rawRecord/index'
-import type { Collection, Unsubscribe } from './Collection'
+import { encodeQuery } from '../query/encodeQuery';
+import type { QueryDescription } from '../query/ast';
+import type { RawRecord } from '../rawRecord/index';
+import type { Collection, Unsubscribe } from './Collection';
 
 /**
  * A fetchable, observable query — a Collection plus Q clauses. Get one
@@ -31,27 +31,29 @@ export class Query<M = RawRecord> {
       this.collection.table,
       ...this.description.joinTables,
       ...this.description.nestedJoinTables.map((join) => join.to),
-    ]
+    ];
   }
 
   /** Raw-level fetch — the engine path (observation internals, sync). */
   async fetchRaws(): Promise<RawRecord[]> {
-    const { database, schema } = this.collection
+    const { database, schema } = this.collection;
     const [sql, args] = encodeQuery({
       table: this.collection.table,
       description: this.description,
       associations: database.associations,
-    })
-    const rows = await database.driver.query(sql, args)
-    return rows.map((row) => this.collection.cache.recordFromRow(row, schema))
+    });
+    const rows = await database.driver.query(sql, args);
+    return rows.map((row) => this.collection.cache.recordFromRow(row, schema));
   }
 
   async fetch(): Promise<M[]> {
-    return (await this.fetchRaws()).map((raw) => this.collection._recordFor(raw))
+    return (await this.fetchRaws()).map((raw) =>
+      this.collection._recordFor(raw),
+    );
   }
 
   async fetchCount(): Promise<number> {
-    const { database } = this.collection
+    const { database } = this.collection;
     const [sql, args] = encodeQuery(
       {
         table: this.collection.table,
@@ -59,9 +61,9 @@ export class Query<M = RawRecord> {
         associations: database.associations,
       },
       { mode: 'count' },
-    )
-    const count = (await database.driver.query(sql, args))[0]?.['count']
-    return typeof count === 'number' ? count : 0
+    );
+    const count = (await database.driver.query(sql, args))[0]?.['count'];
+    return typeof count === 'number' ? count : 0;
   }
 
   /**
@@ -73,11 +75,11 @@ export class Query<M = RawRecord> {
     subscriber: (records: M[]) => void,
     onError?: (error: Error) => void,
   ): Unsubscribe {
-    const columns = ['id', ...Object.keys(this.collection.schema.columns)]
-    let unsubscribed = false
-    let previous: { raw: RawRecord; content: RawRecord }[] | null = null
-    let generation = 0
-    const diagnostics = this.collection.database.onObservation
+    const columns = ['id', ...Object.keys(this.collection.schema.columns)];
+    let unsubscribed = false;
+    let previous: { raw: RawRecord; content: RawRecord }[] | null = null;
+    let generation = 0;
+    const diagnostics = this.collection.database.onObservation;
 
     const report = (
       started: number,
@@ -86,7 +88,7 @@ export class Query<M = RawRecord> {
       resultCount?: number,
       error?: Error,
     ) => {
-      if (!diagnostics) return
+      if (!diagnostics) return;
       try {
         diagnostics({
           kind: 'records',
@@ -97,71 +99,71 @@ export class Query<M = RawRecord> {
           durationMs: Date.now() - started,
           ...(resultCount === undefined ? {} : { resultCount }),
           ...(error ? { error } : {}),
-        })
+        });
       } catch {
         // Diagnostics are passive and must never affect query behavior.
       }
-    }
+    };
 
     const differs = (records: readonly RawRecord[]): boolean => {
       if (previous === null || previous.length !== records.length) {
-        return true
+        return true;
       }
       return records.some((raw, index) => {
-        const before = previous![index]!
+        const before = previous![index]!;
         return (
           before.raw !== raw ||
           columns.some((name) => before.content[name] !== raw[name])
-        )
-      })
-    }
+        );
+      });
+    };
 
     const refetch = (trigger: 'initial' | 'change') => {
-      const current = ++generation
-      const started = diagnostics ? Date.now() : 0
+      const current = ++generation;
+      const started = diagnostics ? Date.now() : 0;
       // Two-argument then: the failure handler sees only fetch rejections.
       // A subscriber that throws is an app bug and stays a loud unhandled
       // rejection rather than masquerading as a query error.
       void this.fetchRaws().then(
         (records) => {
           if (unsubscribed || current !== generation) {
-            report(started, trigger, 'discarded')
-            return
+            report(started, trigger, 'discarded');
+            return;
           }
-          report(started, trigger, 'success', records.length)
+          report(started, trigger, 'success', records.length);
           if (!differs(records)) {
-            return
+            return;
           }
-          previous = records.map((raw) => ({ raw, content: { ...raw } }))
-          subscriber(records.map((raw) => this.collection._recordFor(raw)))
+          previous = records.map((raw) => ({ raw, content: { ...raw } }));
+          subscriber(records.map((raw) => this.collection._recordFor(raw)));
         },
         onError || diagnostics
           ? (cause: unknown) => {
               if (unsubscribed || current !== generation) {
-                report(started, trigger, 'discarded')
-                return
+                report(started, trigger, 'discarded');
+                return;
               }
               const error =
-                cause instanceof Error ? cause : new Error(String(cause))
-              report(started, trigger, 'error', undefined, error)
+                cause instanceof Error ? cause : new Error(String(cause));
+              report(started, trigger, 'error', undefined, error);
               if (onError) {
-                onError(error)
+                onError(error);
               } else {
-                throw error
+                throw error;
               }
             }
           : undefined,
-      )
-    }
+      );
+    };
 
     const unsubscribe = this.collection.database.onChange(this.allTables, () =>
       refetch('change'),
-    )
-    refetch('initial')
+    );
+    refetch('initial');
     return () => {
-      unsubscribed = true
-      unsubscribe()
-    }
+      unsubscribed = true;
+      unsubscribe();
+    };
   }
 
   /** Observe the result count. Emits initially and whenever it changes. */
@@ -169,10 +171,10 @@ export class Query<M = RawRecord> {
     subscriber: (count: number) => void,
     onError?: (error: Error) => void,
   ): Unsubscribe {
-    let unsubscribed = false
-    let previous: number | null = null
-    let generation = 0
-    const diagnostics = this.collection.database.onObservation
+    let unsubscribed = false;
+    let previous: number | null = null;
+    let generation = 0;
+    const diagnostics = this.collection.database.onObservation;
 
     const report = (
       started: number,
@@ -181,7 +183,7 @@ export class Query<M = RawRecord> {
       resultCount?: number,
       error?: Error,
     ) => {
-      if (!diagnostics) return
+      if (!diagnostics) return;
       try {
         diagnostics({
           kind: 'count',
@@ -192,57 +194,56 @@ export class Query<M = RawRecord> {
           durationMs: Date.now() - started,
           ...(resultCount === undefined ? {} : { resultCount }),
           ...(error ? { error } : {}),
-        })
+        });
       } catch {
         // Diagnostics are passive and must never affect query behavior.
       }
-    }
+    };
 
     const refetch = (trigger: 'initial' | 'change') => {
-      const current = ++generation
-      const started = diagnostics ? Date.now() : 0
+      const current = ++generation;
+      const started = diagnostics ? Date.now() : 0;
       // Two-argument then, for the same reason as observe(): only fetch
       // rejections reach the failure handler, never subscriber throws.
       void this.fetchCount().then(
         (count) => {
           if (unsubscribed || current !== generation) {
-            report(started, trigger, 'discarded')
-            return
+            report(started, trigger, 'discarded');
+            return;
           }
-          report(started, trigger, 'success', count)
+          report(started, trigger, 'success', count);
           if (count === previous) {
-            return
+            return;
           }
-          previous = count
-          subscriber(count)
+          previous = count;
+          subscriber(count);
         },
         onError || diagnostics
           ? (cause: unknown) => {
               if (unsubscribed || current !== generation) {
-                report(started, trigger, 'discarded')
-                return
+                report(started, trigger, 'discarded');
+                return;
               }
               const error =
-                cause instanceof Error ? cause : new Error(String(cause))
-              report(started, trigger, 'error', undefined, error)
+                cause instanceof Error ? cause : new Error(String(cause));
+              report(started, trigger, 'error', undefined, error);
               if (onError) {
-                onError(error)
+                onError(error);
               } else {
-                throw error
+                throw error;
               }
             }
           : undefined,
-      )
-    }
+      );
+    };
 
     const unsubscribe = this.collection.database.onChange(this.allTables, () =>
       refetch('change'),
-    )
-    refetch('initial')
+    );
+    refetch('initial');
     return () => {
-      unsubscribed = true
-      unsubscribe()
-    }
+      unsubscribed = true;
+      unsubscribe();
+    };
   }
-
 }

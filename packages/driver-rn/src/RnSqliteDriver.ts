@@ -3,8 +3,8 @@ import type {
   Row,
   SqlArgs,
   SqliteDriver,
-} from '@remelondb/core'
-import * as SQLite from 'expo-sqlite'
+} from '@remelondb/core';
+import * as SQLite from 'expo-sqlite';
 
 /**
  * SqliteDriver over expo-sqlite: a thin adapter mapping the seam's seven
@@ -27,77 +27,77 @@ import * as SQLite from 'expo-sqlite'
  * @category Driver
  */
 export class RnSqliteDriver implements SqliteDriver {
-  private db: SQLite.SQLiteDatabase | null = null
-  private name: string | null = null
+  private db: SQLite.SQLiteDatabase | null = null;
+  private name: string | null = null;
 
   private get openDb(): SQLite.SQLiteDatabase {
     if (this.db === null) {
-      throw new Error('RnSqliteDriver: database is not open')
+      throw new Error('RnSqliteDriver: database is not open');
     }
-    return this.db
+    return this.db;
   }
 
   async open(name: string): Promise<{ userVersion: number }> {
     if (this.db !== null) {
-      throw new Error('RnSqliteDriver: database is already open')
+      throw new Error('RnSqliteDriver: database is already open');
     }
-    const db = await SQLite.openDatabaseAsync(name)
-    await db.execAsync('pragma journal_mode = WAL')
+    const db = await SQLite.openDatabaseAsync(name);
+    await db.execAsync('pragma journal_mode = WAL');
     const row = await db.getFirstAsync<{ user_version: number }>(
       'pragma user_version',
-    )
-    this.db = db
-    this.name = name
-    return { userVersion: row?.user_version ?? 0 }
+    );
+    this.db = db;
+    this.name = name;
+    return { userVersion: row?.user_version ?? 0 };
   }
 
   async close(): Promise<void> {
-    await this.openDb.closeAsync()
-    this.db = null
-    this.name = null
+    await this.openDb.closeAsync();
+    this.db = null;
+    this.name = null;
   }
 
   async query(sql: string, args: SqlArgs): Promise<Row[]> {
-    return this.openDb.getAllAsync<Row>(sql, args as SQLite.SQLiteBindValue[])
+    return this.openDb.getAllAsync<Row>(sql, args as SQLite.SQLiteBindValue[]);
   }
 
   async execute(sql: string, args: SqlArgs): Promise<void> {
-    await this.openDb.runAsync(sql, args as SQLite.SQLiteBindValue[])
+    await this.openDb.runAsync(sql, args as SQLite.SQLiteBindValue[]);
   }
 
   async executeBatch(statements: readonly BatchStatement[]): Promise<void> {
-    const db = this.openDb
+    const db = this.openDb;
     await db.withTransactionAsync(async () => {
       for (const [sql, argSets] of statements) {
-        const statement = await db.prepareAsync(sql)
+        const statement = await db.prepareAsync(sql);
         try {
           for (const args of argSets) {
-            await statement.executeAsync(args as SQLite.SQLiteBindValue[])
+            await statement.executeAsync(args as SQLite.SQLiteBindValue[]);
           }
         } finally {
-          await statement.finalizeAsync()
+          await statement.finalizeAsync();
         }
       }
-    })
+    });
   }
 
   async setUserVersion(version: number): Promise<void> {
     if (!Number.isInteger(version) || version < 0) {
-      throw new Error(`RnSqliteDriver: invalid user_version ${version}`)
+      throw new Error(`RnSqliteDriver: invalid user_version ${version}`);
     }
-    await this.openDb.execAsync(`pragma user_version = ${version}`)
+    await this.openDb.execAsync(`pragma user_version = ${version}`);
   }
 
   async destroy(): Promise<void> {
-    const db = this.db
-    const name = this.name
-    this.db = null
-    this.name = null
+    const db = this.db;
+    const name = this.name;
+    this.db = null;
+    this.name = null;
     if (db !== null) {
-      await db.closeAsync()
+      await db.closeAsync();
     }
     if (name !== null && name !== ':memory:') {
-      await SQLite.deleteDatabaseAsync(name)
+      await SQLite.deleteDatabaseAsync(name);
     }
   }
 }

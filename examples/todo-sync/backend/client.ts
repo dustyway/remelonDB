@@ -1,11 +1,16 @@
-import { synchronize, type Database, type SyncPullResult, type SyncPushResult } from '@remelondb/core'
-import { wire } from './schema'
+import {
+  synchronize,
+  type Database,
+  type SyncPullResult,
+  type SyncPushResult,
+} from '@remelondb/core';
+import { wire } from './schema';
 
 // The entire React bridge: observe() is the reactivity, this hook only
 // pipes emissions into state. Callers must memoize the query — a new
 // object every render would resubscribe every render.
 
-export type SyncStatus = 'syncing' | 'synced' | 'offline'
+export type SyncStatus = 'syncing' | 'synced' | 'offline';
 
 // Shared by the web and native clients; `base` is the only platform
 // difference — web syncs same-origin (''), native needs an absolute
@@ -15,48 +20,48 @@ export type SyncStatus = 'syncing' | 'synced' | 'offline'
 // successful sync pushes them. A real app would distinguish network
 // failures from protocol errors.
 export function createSync(base: string) {
-  let status: SyncStatus = 'syncing'
-  let note: string | null = null
-  let noteTimer: ReturnType<typeof setTimeout> | undefined
-  const listeners = new Set<() => void>()
+  let status: SyncStatus = 'syncing';
+  let note: string | null = null;
+  let noteTimer: ReturnType<typeof setTimeout> | undefined;
+  const listeners = new Set<() => void>();
   const notify = (): void => {
-    for (const listener of listeners) listener()
-  }
+    for (const listener of listeners) listener();
+  };
   const setStatus = (next: SyncStatus): void => {
-    if (status === next) return
-    status = next
-    notify()
-  }
+    if (status === next) return;
+    status = next;
+    notify();
+  };
   // conflicts and resyncs are the interesting moments of a sync demo —
   // hold the latest one on screen briefly
   const setNote = (next: string): void => {
-    note = next
-    clearTimeout(noteTimer)
+    note = next;
+    clearTimeout(noteTimer);
     noteTimer = setTimeout(() => {
-      note = null
-      notify()
-    }, 6000)
-    notify()
-  }
+      note = null;
+      notify();
+    }, 6000);
+    notify();
+  };
 
   const post = async (path: string, body: unknown): Promise<unknown> => {
     const response = await fetch(`${base}/sync/${path}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
-    })
-    if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`)
-    return response.json()
-  }
+    });
+    if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
+    return response.json();
+  };
 
   return {
     getSyncStatus: (): SyncStatus => status,
     getSyncNote: (): string | null => note,
     subscribeSyncStatus: (listener: () => void): (() => void) => {
-      listeners.add(listener)
+      listeners.add(listener);
       return () => {
-        listeners.delete(listener)
-      }
+        listeners.delete(listener);
+      };
     },
     runSync: async (db: Database): Promise<void> => {
       try {
@@ -65,23 +70,25 @@ export function createSync(base: string) {
           // sync lifecycle in the console (conflict retries, resyncs) —
           // the e2e steps assert on these lines
           log: (message) => {
-            console.log(message)
+            console.log(message);
             if (/conflict|resync/.test(message)) {
-              setNote(message.replace(/^sync: /, ''))
+              setNote(message.replace(/^sync: /, ''));
             }
           },
           // the casts are type-level claims only: every server response
           // is untrusted input, and the validators below are what
           // actually check it before core inspects or applies anything
-          pullChanges: async (args) => (await post('pull', args)) as SyncPullResult,
-          pushChanges: async (args) => (await post('push', args)) as SyncPushResult,
+          pullChanges: async (args) =>
+            (await post('pull', args)) as SyncPullResult,
+          pushChanges: async (args) =>
+            (await post('push', args)) as SyncPushResult,
           validatePullResult: (value) => wire.pullResult.parse(value),
           validatePushResult: (value) => wire.pushResult.parse(value),
-        })
-        setStatus('synced')
+        });
+        setStatus('synced');
       } catch {
-        setStatus('offline')
+        setStatus('offline');
       }
     },
-  }
+  };
 }

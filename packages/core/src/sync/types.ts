@@ -4,49 +4,49 @@
  * client-side. Records on the wire carry user columns + id only; _status
  * and _changed never cross in either direction.
  */
-import type { DirtyRaw } from '../rawRecord/index'
+import type { DirtyRaw } from '../rawRecord/index';
 
 /**
  * Opaque server-issued position in the change stream. Store it, echo
  * it back; never interpret it.
  * @category Sync
  */
-export type Cursor = string
+export type Cursor = string;
 
 export interface SyncTableChanges {
-  readonly created: readonly DirtyRaw[]
-  readonly updated: readonly DirtyRaw[]
-  readonly deleted: readonly string[]
+  readonly created: readonly DirtyRaw[];
+  readonly updated: readonly DirtyRaw[];
+  readonly deleted: readonly string[];
 }
 
 /**
  * Change sets keyed by table — the payload both sync directions carry.
  * @category Sync
  */
-export type SyncChanges = { readonly [table: string]: SyncTableChanges }
+export type SyncChanges = { readonly [table: string]: SyncTableChanges };
 
 /** Schema info sent with a pull after a local migration. */
 export interface MigrationSyncChanges {
-  readonly from: number
-  readonly tables: readonly string[]
-  readonly columns: readonly { table: string; columns: readonly string[] }[]
+  readonly from: number;
+  readonly tables: readonly string[];
+  readonly columns: readonly { table: string; columns: readonly string[] }[];
 }
 
 export interface SyncPullArgs {
-  readonly cursor: Cursor | null
-  readonly schemaVersion: number
-  readonly migration: MigrationSyncChanges | null
+  readonly cursor: Cursor | null;
+  readonly schemaVersion: number;
+  readonly migration: MigrationSyncChanges | null;
 }
 
 /** @category Sync */
 export type SyncPullResult =
   | { readonly changes: SyncChanges; readonly cursor: Cursor }
   /** The server can no longer serve this cursor — full resync required. */
-  | { readonly resyncRequired: true }
+  | { readonly resyncRequired: true };
 
 export interface SyncPushArgs {
-  readonly changes: SyncChanges
-  readonly cursor: Cursor
+  readonly changes: SyncChanges;
+  readonly cursor: Cursor;
 }
 
 /** @category Sync */
@@ -58,10 +58,10 @@ export type SyncPushResult =
        * (cursor: null = degraded mode; the next pull re-delivers the echo,
        * which apply absorbs).
        */
-      readonly cursor: Cursor | null
-      readonly changes: SyncChanges | null
+      readonly cursor: Cursor | null;
+      readonly changes: SyncChanges | null;
       /** Per-record rejections; rejected records stay dirty. */
-      readonly rejected?: { readonly [table: string]: readonly string[] }
+      readonly rejected?: { readonly [table: string]: readonly string[] };
     }
   /** A pushed record changed on the server after `cursor` — pull and retry. */
-  | { readonly conflict: true }
+  | { readonly conflict: true };

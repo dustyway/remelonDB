@@ -22,8 +22,8 @@ import {
   type SyncChanges,
   type SyncPushResult,
   type TableSchema,
-} from '../index'
-import { z } from 'zod'
+} from '../index';
+import { z } from 'zod';
 
 // ---- zodTable ----
 
@@ -33,32 +33,33 @@ type ColumnForInner<T> = T extends z.ZodString
     ? 'number'
     : T extends z.ZodBoolean
       ? 'boolean'
-      : never
+      : never;
 
-type ColumnFor<T> = T extends z.ZodNullable<infer Inner>
-  ? ColumnForInner<Inner> extends never
-    ? never
-    : ColumnDef<ColumnForInner<Inner>, true>
-  : ColumnForInner<T> extends never
-    ? never
-    : ColumnDef<ColumnForInner<T>, false>
+type ColumnFor<T> =
+  T extends z.ZodNullable<infer Inner>
+    ? ColumnForInner<Inner> extends never
+      ? never
+      : ColumnDef<ColumnForInner<Inner>, true>
+    : ColumnForInner<T> extends never
+      ? never
+      : ColumnDef<ColumnForInner<T>, false>;
 
 /** @category Adapter */
 export type ColumnsFor<Shape extends z.ZodRawShape> = {
-  [K in keyof Shape & string]: ColumnFor<Shape[K]>
-}
+  [K in keyof Shape & string]: ColumnFor<Shape[K]>;
+};
 
 const columnFor = (key: string, field: z.ZodType): ColumnDef => {
-  let inner = field
-  let nullable = false
+  let inner = field;
+  let nullable = false;
   if (inner instanceof z.ZodNullable) {
-    nullable = true
-    inner = inner.unwrap() as z.ZodType
+    nullable = true;
+    inner = inner.unwrap() as z.ZodType;
   }
   if (inner instanceof z.ZodOptional) {
     throw new Error(
       `zodTable: column '${key}' uses .optional() — the value vocabulary has null, not undefined; use .nullable()`,
-    )
+    );
   }
   const base =
     inner instanceof z.ZodString
@@ -67,19 +68,19 @@ const columnFor = (key: string, field: z.ZodType): ColumnDef => {
         ? column.number()
         : inner instanceof z.ZodBoolean
           ? column.boolean()
-          : null
+          : null;
   if (base === null) {
     throw new Error(
       `zodTable: column '${key}' is ${inner.constructor.name} — supported: z.string(), z.number(), z.boolean(), optionally .nullable()`,
-    )
+    );
   }
-  return nullable ? base.optional() : base
-}
+  return nullable ? base.optional() : base;
+};
 
 /** @category Adapter */
 export interface ZodTableOptions<Shape extends z.ZodRawShape> {
   /** Columns to index (Zod has no such concept). */
-  readonly indexed?: readonly (keyof Shape & string)[]
+  readonly indexed?: readonly (keyof Shape & string)[];
 }
 
 /**
@@ -101,18 +102,20 @@ export function zodTable<Shape extends z.ZodRawShape>(
   schema: z.ZodObject<Shape>,
   options: ZodTableOptions<Shape> = {},
 ): TableSchema<ColumnsFor<Shape>> {
-  const indexed = new Set<string>(options.indexed ?? [])
+  const indexed = new Set<string>(options.indexed ?? []);
   for (const indexName of indexed) {
     if (!(indexName in schema.shape)) {
-      throw new Error(`zodTable: indexed column '${indexName}' is not in the schema`)
+      throw new Error(
+        `zodTable: indexed column '${indexName}' is not in the schema`,
+      );
     }
   }
-  const spec: Record<string, ColumnDef> = {}
+  const spec: Record<string, ColumnDef> = {};
   for (const [key, field] of Object.entries(schema.shape)) {
-    const def = columnFor(key, field as z.ZodType)
-    spec[key] = indexed.has(key) ? def.indexed() : def
+    const def = columnFor(key, field as z.ZodType);
+    spec[key] = indexed.has(key) ? def.indexed() : def;
   }
-  return table(name, spec as ColumnsSpec) as TableSchema<ColumnsFor<Shape>>
+  return table(name, spec as ColumnsSpec) as TableSchema<ColumnsFor<Shape>>;
 }
 
 // ---- syncSchemas ----
@@ -120,7 +123,7 @@ export function zodTable<Shape extends z.ZodRawShape>(
 /** @category Adapter */
 export interface SyncSchemasOptions {
   /** Record id schema (default: non-empty string, per the wire spec). */
-  readonly id?: z.ZodType<string>
+  readonly id?: z.ZodType<string>;
 }
 
 /**
@@ -143,15 +146,15 @@ export interface SyncSchemasOptions {
 export function syncSchemas<
   Tables extends Record<string, z.ZodObject<z.ZodRawShape>>,
 >(tables: Tables, options: SyncSchemasOptions = {}) {
-  const id = options.id ?? z.string().min(1)
-  const cursor = z.string().min(1)
+  const id = options.id ?? z.string().min(1);
+  const cursor = z.string().min(1);
 
   const rows = Object.fromEntries(
     Object.entries(tables).map(([name, schema]) => [
       name,
       z.strictObject({ ...schema.shape, id }),
     ]),
-  )
+  );
   const changeSets = Object.fromEntries(
     Object.entries(rows).map(([name, row]) => [
       name,
@@ -161,14 +164,14 @@ export function syncSchemas<
         deleted: z.array(id),
       }),
     ]),
-  )
+  );
   // `.partial()` infers every table as possibly-undefined, but parse
   // output never contains explicit-undefined entries (absent tables are
   // absent keys), so `SyncChanges` — the type `synchronize` and the
   // server engine take — is the honest static type.
   const changes = z
     .strictObject(changeSets)
-    .partial() as unknown as z.ZodType<SyncChanges>
+    .partial() as unknown as z.ZodType<SyncChanges>;
 
   const migration = z.strictObject({
     from: z.number().int().positive(),
@@ -176,18 +179,18 @@ export function syncSchemas<
     columns: z.array(
       z.strictObject({ table: z.string(), columns: z.array(z.string()) }),
     ),
-  })
+  });
 
   const pullArgs = z.strictObject({
     cursor: cursor.nullable(),
     schemaVersion: z.number().int().positive(),
     migration: migration.nullable(),
-  })
+  });
   const pullResult = z.union([
     z.strictObject({ changes, cursor }),
     z.strictObject({ resyncRequired: z.literal(true) }),
-  ])
-  const pushArgs = z.strictObject({ changes, cursor })
+  ]);
+  const pushArgs = z.strictObject({ changes, cursor });
   // Same story as `changes` for `rejected`: `.optional()` infers
   // `| undefined`, which JSON input can never produce, so the core
   // result type is the honest one (and the one `synchronize` takes).
@@ -202,7 +205,7 @@ export function syncSchemas<
         message: 'cursor and changes are a package: both or neither',
       }),
     z.strictObject({ conflict: z.literal(true) }),
-  ]) as unknown as z.ZodType<SyncPushResult>
+  ]) as unknown as z.ZodType<SyncPushResult>;
 
-  return { rows, changes, pullArgs, pullResult, pushArgs, pushResult }
+  return { rows, changes, pullArgs, pullResult, pushArgs, pushResult };
 }

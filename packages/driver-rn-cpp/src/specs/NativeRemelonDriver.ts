@@ -10,20 +10,20 @@
  * boolean | null, nested in arrays) exceeds what codegen's type system
  * can express; the C++ side validates shapes.
  */
-import { TurboModuleRegistry, type TurboModule } from 'react-native'
-import type { UnsafeMixed } from 'react-native/Libraries/Types/CodegenTypes'
+import { TurboModuleRegistry, type TurboModule } from 'react-native';
+import type { UnsafeMixed } from 'react-native/Libraries/Types/CodegenTypes';
 
 export interface Spec extends TurboModule {
   /** Opens (creating if needed) and returns PRAGMA user_version. */
-  openDatabase(name: string): number
-  close(name: string): void
+  openDatabase(name: string): number;
+  close(name: string): void;
   /** SELECT → array of column-name-keyed row objects. */
-  query(name: string, sql: string, args: UnsafeMixed): UnsafeMixed
-  execute(name: string, sql: string, args: UnsafeMixed): void
+  query(name: string, sql: string, args: UnsafeMixed): UnsafeMixed;
+  execute(name: string, sql: string, args: UnsafeMixed): void;
   /** [[sql, [args, ...]], ...] — one atomic transaction. */
-  executeBatch(name: string, statements: UnsafeMixed): void
-  setUserVersion(name: string, version: number): void
-  destroy(name: string): void
+  executeBatch(name: string, statements: UnsafeMixed): void;
+  setUserVersion(name: string, version: number): void;
+  destroy(name: string): void;
 }
 
-export default TurboModuleRegistry.getEnforcing<Spec>('NativeRemelonDriver')
+export default TurboModuleRegistry.getEnforcing<Spec>('NativeRemelonDriver');
