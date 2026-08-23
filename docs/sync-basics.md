@@ -184,6 +184,11 @@ if (result.rejected > 0) {
 return { status: 'synced' }
 ```
 
+With `createSyncController` the same branch lives in the subscriber:
+the run's result lands on `state.lastResult`, and the controller
+deliberately keeps its own status at `idle` when rows were rejected —
+what a rejection means is this mapping's decision, not the machine's.
+
 One assumption to name: the pattern reads "clean result" as "fully
 synchronized", which holds only when `pushChanges` is configured — a
 pull-only run returns cleanly while local dirty records sit unpushed.
