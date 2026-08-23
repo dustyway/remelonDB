@@ -7,6 +7,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   appSchema,
+  createRunSync,
+  createSyncController,
   Database,
   hasUnsyncedChanges,
   synchronize,
@@ -723,5 +725,85 @@ describe('sync engine', () => {
       expect(result.pulled).toBe(1);
       expect(result.pushed).toBe(0);
     });
+  });
+});
+
+describe('sync controller end to end', () => {
+  let driver: NodeSqliteDriver;
+  let db: Database;
+  let server: FakeServer;
+
+  beforeEach(async () => {
+    driver = new NodeSqliteDriver();
+    db = await Database.open({ driver, schema, name: ':memory:' });
+    server = new FakeServer();
+  });
+
+  afterEach(async () => {
+    await driver.destroy().catch(() => {});
+  });
+
+  it('a controller drives real syncs and reports rejections as data', async () => {
+    await db.write(async () => {
+      await db.get('tasks').create({ id: 'ok', name: 'fine', position: 1 });
+      await db.get('tasks').create({ id: 'bad', name: 'nope', position: 2 });
+    });
+    server.rejectIds.add('bad');
+
+    const controller = createSyncController({
+      runSync: createRunSync({
+        database: db,
+        pullChanges: server.pull,
+        pushChanges: server.push,
+      }),
+      intervalMs: null,
+    });
+    const states: string[] = [];
+    controller.subscribe((s) => states.push(s.status));
+    controller.start();
+    await vi.waitFor(() => expect(controller.state.status).toBe('idle'));
+
+    expect(states).toEqual(['idle', 'syncing', 'idle']);
+    expect(controller.state.lastResult).toMatchObject({
+      resynced: false,
+      rejected: 1,
+      rejectedRecords: { tasks: ['bad'] },
+    });
+    expect(server.docs.has('ok')).toBe(true);
+    expect(server.docs.has('bad')).toBe(false);
+    expect((await db.get('tasks').find('bad'))._status).toBe('created');
+
+    controller.dispose();
+  });
+
+  it('dispose aborts an in-flight run before the database closes', async () => {
+    await db.write(() =>
+      db.get('tasks').create({ id: 't1', name: 'x', position: 1 }),
+    );
+    let sawAbort = false;
+    let pullStarted: () => void = () => {};
+    const started = new Promise<void>((resolve) => {
+      pullStarted = resolve;
+    });
+    const controller = createSyncController({
+      runSync: createRunSync({
+        database: db,
+        pullChanges: (args, signal) =>
+          new Promise((_resolve, reject) => {
+            pullStarted();
+            signal?.addEventListener('abort', () => {
+              sawAbort = true;
+              reject(new Error('aborted'));
+            });
+          }),
+        pushChanges: server.push,
+      }),
+      intervalMs: null,
+    });
+    controller.start();
+    await started;
+    controller.dispose();
+    await vi.waitFor(() => expect(sawAbort).toBe(true));
+    await db.driver.close();
   });
 });

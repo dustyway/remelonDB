@@ -108,6 +108,14 @@ export {
   LAST_SCHEMA_VERSION_KEY,
 } from './sync/synchronize';
 export type { SynchronizeOptions, SynchronizeResult } from './sync/synchronize';
+export { createSyncController, createRunSync } from './sync/controller';
+export type {
+  RunSyncResult,
+  SyncController,
+  SyncControllerOptions,
+  SyncControllerState,
+  SyncControllerStatus,
+} from './sync/controller';
 export { fetchLocalChanges, hasUnsyncedChanges } from './sync/fetchLocal';
 export type { LocalChanges } from './sync/fetchLocal';
 export { applyRemoteChanges } from './sync/applyRemote';
