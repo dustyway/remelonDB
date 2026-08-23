@@ -60,6 +60,21 @@ null-flow is what makes the non-blocking shape work.
 Both take an optional explicit manager and otherwise read the provider;
 calling them with neither throws immediately with instructions.
 
+The sync sibling is `useSyncState(controller)`: the state of a
+[`createSyncController`](sync.md#the-sync-controller) as a
+subscription, re-rendering exactly on transitions.
+
+```tsx
+const { status, lastResult } = useSyncState(controller)
+// status: 'idle' | 'syncing' | 'offline' | 'error' | 'resync-required'
+```
+
+It takes the controller explicitly (there is no controller provider;
+apps typically own one per authenticated database next to the
+manager). `lastResult` carries the rejection fields; folding them, and
+the five statuses, into whatever your UI shows is the component's
+decision.
+
 ## Query hooks
 
 ```tsx
@@ -280,5 +295,8 @@ frontend (`frontend/src/App.tsx`) and the React Native client
 (`mobile/App.tsx`) render live todos through `useQuery` and write
 through `useMutation` with no local bridge code. The web frontend's
 search box is a live `keepPreviousData` demonstration. The query's
-structure changes with every keystroke while the list stays rendered,
-and the example e2e suite exercises it against the real sync server.
+structure changes with every keystroke while the list stays rendered.
+Both apps render their sync badge through `useSyncState` on the
+controller their `attach` helper owns, folding the five controller
+states into the demo's three, and the example e2e suite exercises all
+of it against the real sync server.

@@ -104,3 +104,35 @@ export function createSyncTransport(options: SyncTransportOptions) {
     },
   };
 }
+
+export interface HttpPostOptions {
+  /** `''` for same-origin, an absolute origin for native. Requests go
+   * to `${baseUrl}/sync/pull` and `${baseUrl}/sync/push`. */
+  readonly baseUrl: string;
+  /** Called at the start of every request, so credentials that change
+   * (a native session cookie) are always current. Merged over the
+   * content-type header. */
+  readonly headers?: () => Record<string, string>;
+  /** `'include'` for the browser cookie-jar case. */
+  readonly credentials?: RequestCredentials;
+}
+
+/** The canonical `post`: JSON body, per-request headers, signal
+ * forwarded, classified by `readSyncResponse`. Anything it cannot
+ * express (a different URL shape, retries, a non-HTTP channel) is a
+ * hand-written `SyncPost` instead of an option here. */
+export function createHttpPost(options: HttpPostOptions): SyncPost {
+  return (path, body, signal) =>
+    readSyncResponse(path, () =>
+      fetch(`${options.baseUrl}/sync/${path}`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(options.headers?.() ?? {}),
+        },
+        body: JSON.stringify(body),
+        ...(options.credentials ? { credentials: options.credentials } : {}),
+        ...(signal ? { signal } : {}),
+      }),
+    );
+}

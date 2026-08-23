@@ -8,19 +8,48 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Q, type Database } from '@remelondb/core';
+import { Q, type Database, type SyncController } from '@remelondb/core';
 import { TodoModel } from 'example-todo-sync/schema';
-import { useDatabaseState, useMutation, useQuery } from '@remelondb/core/react';
+import {
+  useDatabaseState,
+  useMutation,
+  useQuery,
+  useSyncState,
+} from '@remelondb/core/react';
 import { TodoItem } from './components/TodoItem';
 import { manager } from './src/db';
 import {
   getSyncNote,
-  getSyncStatus,
   attach,
   notifyLocalWrite,
-  subscribeSyncStatus,
+  subscribeSyncNote,
+  toDemoStatus,
+  type SyncStatus,
 } from './src/sync';
 import { theme } from './theme';
+
+function SyncBadge(props: {
+  controller: SyncController | null;
+  count: number;
+}) {
+  if (!props.controller)
+    return <SyncBadgeBody status="syncing" count={props.count} />;
+  return <ActiveSyncBadge controller={props.controller} count={props.count} />;
+}
+
+function ActiveSyncBadge(props: { controller: SyncController; count: number }) {
+  const state = useSyncState(props.controller);
+  return <SyncBadgeBody status={toDemoStatus(state)} count={props.count} />;
+}
+
+function SyncBadgeBody(props: { status: SyncStatus; count: number }) {
+  return (
+    <Text style={styles.status}>
+      <Text style={{ color: dotColors[props.status] }}>{'● '}</Text>
+      {props.count} todo{props.count === 1 ? '' : 's'} · {props.status}
+    </Text>
+  );
+}
 
 type WriteAction =
   | { type: 'add'; text: string }
@@ -60,11 +89,13 @@ function Todos({ db }: { db: Database }) {
     db.get(TodoModel).query(Q.sortBy('created_at', Q.desc)),
   );
   const [text, setText] = useState('');
-  const syncStatus = useSyncExternalStore(subscribeSyncStatus, getSyncStatus);
-  const syncNote = useSyncExternalStore(subscribeSyncStatus, getSyncNote);
+  const syncNote = useSyncExternalStore(subscribeSyncNote, getSyncNote);
+  const [controller, setController] = useState<SyncController | null>(null);
 
   useEffect(() => {
-    return attach(db);
+    const sync = attach(db);
+    setController(sync.controller);
+    return sync.detach;
   }, [db]);
 
   // One mutation owns every write, so the hook's ownership rule — the
@@ -109,10 +140,7 @@ function Todos({ db }: { db: Database }) {
   return (
     <>
       <Text style={styles.title}>todo-sync</Text>
-      <Text style={styles.status}>
-        <Text style={{ color: dotColors[syncStatus] }}>{'● '}</Text>
-        {todos.length} todo{todos.length === 1 ? '' : 's'} · {syncStatus}
-      </Text>
+      <SyncBadge controller={controller} count={todos.length} />
       {syncNote && <Text style={styles.note}>{syncNote}</Text>}
       {write.error != null && (
         <Text style={styles.error}>write failed: {String(write.error)}</Text>

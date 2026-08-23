@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { syncSchemas } from '../zod/index';
 import {
+  createHttpPost,
   createSyncTransport,
   readSyncResponse,
   SyncTransportError,
@@ -137,5 +138,57 @@ describe('sync transport', () => {
     const controller = new AbortController();
     await pushChanges(pushArgs, controller.signal);
     expect(post).toHaveBeenCalledWith('push', pushArgs, controller.signal);
+  });
+});
+
+describe('createHttpPost', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const stubFetch = (impl: () => Promise<Response>) => {
+    const spy = vi.fn(impl);
+    vi.stubGlobal('fetch', spy);
+    return spy;
+  };
+
+  it('posts JSON to baseUrl/sync/{path} and forwards the signal', async () => {
+    const spy = stubFetch(async () => jsonResponse(200, { ok: true }));
+    const post = createHttpPost({ baseUrl: 'https://api.test' });
+    const controller = new AbortController();
+    await post('pull', { cursor: null }, controller.signal);
+    const [url, init] = spy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://api.test/sync/pull');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ cursor: null });
+    expect(init.signal).toBe(controller.signal);
+  });
+
+  it('calls headers() per request and merges over content-type', async () => {
+    const spy = stubFetch(async () => jsonResponse(200, {}));
+    let cookie = 'session=a';
+    const post = createHttpPost({
+      baseUrl: '',
+      headers: () => ({ cookie }),
+    });
+    await post('push', {});
+    cookie = 'session=b';
+    await post('push', {});
+    const headersOf = (n: number) =>
+      (spy.mock.calls[n] as unknown as [string, RequestInit])[1].headers;
+    expect(headersOf(0)).toMatchObject({
+      'content-type': 'application/json',
+      cookie: 'session=a',
+    });
+    expect(headersOf(1)).toMatchObject({ cookie: 'session=b' });
+  });
+
+  it('passes credentials through and classifies failures', async () => {
+    const spy = stubFetch(async () => jsonResponse(503, {}));
+    const post = createHttpPost({ baseUrl: '', credentials: 'include' });
+    const error = await post('pull', {}).catch((e: unknown) => e);
+    expect((spy.mock.calls[0] as unknown as [string, RequestInit])[1].credentials).toBe(
+      'include',
+    );
+    expect(error).toBeInstanceOf(SyncTransportError);
+    expect((error as SyncTransportError).status).toBe(503);
   });
 });

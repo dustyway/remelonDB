@@ -208,6 +208,23 @@ const post = (path: 'pull' | 'push', body: unknown, signal?: AbortSignal) => {
 }
 ```
 
+For the canonical URL shape the `post` above does not need writing
+either. `createHttpPost` covers it: JSON body, signal forwarded,
+`credentials` passed through, and a `headers` thunk called at the start
+of every request so credentials that change (a native session cookie)
+are always current:
+
+```ts
+const post = createHttpPost({ baseUrl: '', credentials: 'include' })          // web
+const post = createHttpPost({
+  baseUrl: apiURL,
+  headers: () => (authClient.getCookie() ? { cookie: authClient.getCookie() } : {}),
+})                                                                            // native
+```
+
+Anything it cannot express (another URL shape, retries, a non-HTTP
+channel) is a hand-written `post`; the options stay those three.
+
 An empty credential sends no header; the server's 401 is the signal.
 Both validators must be given, in the same shape `synchronize`'s own
 `validatePullResult` accepts, and `syncSchemas` from
