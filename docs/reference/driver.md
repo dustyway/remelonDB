@@ -9,13 +9,13 @@ conformance suites.
 
 ```ts
 interface SqliteDriver {
-  open(name: string): Promise<{ userVersion: number }>
-  close(): Promise<void>
-  query(sql: string, args: SqlArgs): Promise<Row[]>
-  execute(sql: string, args: SqlArgs): Promise<void>
-  executeBatch(statements: readonly BatchStatement[]): Promise<void>
-  setUserVersion(version: number): Promise<void>
-  destroy(): Promise<void>
+  open(name: string): Promise<{ userVersion: number }>;
+  close(): Promise<void>;
+  query(sql: string, args: SqlArgs): Promise<Row[]>;
+  execute(sql: string, args: SqlArgs): Promise<void>;
+  executeBatch(statements: readonly BatchStatement[]): Promise<void>;
+  setUserVersion(version: number): Promise<void>;
+  destroy(): Promise<void>;
 }
 ```
 
