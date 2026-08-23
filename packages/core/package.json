@@ -6,6 +6,7 @@
     ".": "./src/index.ts",
     "./conformance": "./src/conformance/index.ts",
     "./zod": "./src/zod/index.ts",
+    "./transport": "./src/transport/index.ts",
     "./react": "./src/react/index.ts"
   },
   "peerDependencies": {
@@ -70,6 +71,11 @@
         "types": "./dist/zod/index.d.mts",
         "import": "./dist/zod/index.mjs",
         "default": "./dist/zod/index.mjs"
+      },
+      "./transport": {
+        "types": "./dist/transport/index.d.mts",
+        "import": "./dist/transport/index.mjs",
+        "default": "./dist/transport/index.mjs"
       },
       "./react": {
         "types": "./dist/react/index.d.mts",
