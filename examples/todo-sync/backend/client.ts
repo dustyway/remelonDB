@@ -1,24 +1,25 @@
 import {
-  synchronize,
+  createRunSync,
+  createSyncController,
   type Database,
-  type SyncPullResult,
-  type SyncPushResult,
+  type SyncController,
 } from '@remelondb/core';
+import {
+  createSyncTransport,
+  readSyncResponse,
+  type SyncPath,
+} from '@remelondb/core/transport';
 import { wire } from './schema';
-
-// The entire React bridge: observe() is the reactivity, this hook only
-// pipes emissions into state. Callers must memoize the query — a new
-// object every render would resubscribe every render.
 
 export type SyncStatus = 'syncing' | 'synced' | 'offline';
 
 // Shared by the web and native clients; `base` is the only platform
 // difference — web syncs same-origin (''), native needs an absolute
-// host. Server responses are validated with the same wire schemas the
-// server validates requests with — neither side trusts the network.
-// Any failure reads as "offline"; writes stay local and the next
-// successful sync pushes them. A real app would distinguish network
-// failures from protocol errors.
+// host. The transport validates server responses with the same wire
+// schemas the server validates requests with — neither side trusts the
+// network. The demo folds the controller's states down to three: any
+// failure reads as "offline"; writes stay local and the next
+// successful sync pushes them. A real app would keep 'error' separate.
 export function createSync(base: string) {
   let status: SyncStatus = 'syncing';
   let note: string | null = null;
@@ -44,15 +45,23 @@ export function createSync(base: string) {
     notify();
   };
 
-  const post = async (path: string, body: unknown): Promise<unknown> => {
-    const response = await fetch(`${base}/sync/${path}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
-    return response.json();
-  };
+  const post = (path: SyncPath, body: unknown, signal?: AbortSignal) =>
+    readSyncResponse(path, () =>
+      fetch(`${base}/sync/${path}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+        signal,
+      }),
+    );
+
+  const { pullChanges, pushChanges } = createSyncTransport({
+    post,
+    validatePullResult: (raw) => wire.pullResult.parse(raw),
+    validatePushResult: (raw) => wire.pushResult.parse(raw),
+  });
+
+  let controller: SyncController | null = null;
 
   return {
     getSyncStatus: (): SyncStatus => status,
@@ -63,10 +72,17 @@ export function createSync(base: string) {
         listeners.delete(listener);
       };
     },
-    runSync: async (db: Database): Promise<void> => {
-      try {
-        await synchronize({
+    /** Own a database's sync until the returned cleanup runs. */
+    attach: (
+      db: Database,
+      triggers?: (fire: () => void) => () => void,
+    ): (() => void) => {
+      controller?.dispose();
+      const owned = createSyncController({
+        runSync: createRunSync({
           database: db,
+          pullChanges,
+          pushChanges,
           // sync lifecycle in the console (conflict retries, resyncs) —
           // the e2e steps assert on these lines
           log: (message) => {
@@ -75,20 +91,26 @@ export function createSync(base: string) {
               setNote(message.replace(/^sync: /, ''));
             }
           },
-          // the casts are type-level claims only: every server response
-          // is untrusted input, and the validators below are what
-          // actually check it before core inspects or applies anything
-          pullChanges: async (args) =>
-            (await post('pull', args)) as SyncPullResult,
-          pushChanges: async (args) =>
-            (await post('push', args)) as SyncPushResult,
-          validatePullResult: (value) => wire.pullResult.parse(value),
-          validatePushResult: (value) => wire.pushResult.parse(value),
-        });
-        setStatus('synced');
-      } catch {
-        setStatus('offline');
-      }
+        }),
+        intervalMs: 2000,
+        debounceMs: 250,
+        ...(triggers ? { triggers } : {}),
+      });
+      controller = owned;
+      const unsubscribe = owned.subscribe((state) => {
+        if (state.status === 'syncing') setStatus('syncing');
+        else if (state.status === 'offline' || state.status === 'error')
+          setStatus('offline');
+        else setStatus('synced');
+      });
+      owned.start();
+      return () => {
+        unsubscribe();
+        owned.dispose();
+        if (controller === owned) controller = null;
+      };
     },
+    /** A local write happened; sync soon (debounced by the controller). */
+    notifyLocalWrite: (): void => controller?.notifyLocalWrite(),
   };
 }

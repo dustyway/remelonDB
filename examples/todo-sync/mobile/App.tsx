@@ -16,7 +16,8 @@ import { manager } from './src/db';
 import {
   getSyncNote,
   getSyncStatus,
-  runSync,
+  attach,
+  notifyLocalWrite,
   subscribeSyncStatus,
 } from './src/sync';
 import { theme } from './theme';
@@ -63,9 +64,7 @@ function Todos({ db }: { db: Database }) {
   const syncNote = useSyncExternalStore(subscribeSyncStatus, getSyncNote);
 
   useEffect(() => {
-    void runSync(db);
-    const timer = setInterval(() => void runSync(db), 2000);
-    return () => clearInterval(timer);
+    return attach(db);
   }, [db]);
 
   // One mutation owns every write, so the hook's ownership rule — the
@@ -91,7 +90,7 @@ function Todos({ db }: { db: Database }) {
           break;
       }
     });
-    void runSync(db);
+    notifyLocalWrite();
   });
 
   // mutateAsync where the caller needs the outcome: the draft is only

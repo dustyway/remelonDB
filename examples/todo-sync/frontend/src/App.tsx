@@ -5,7 +5,8 @@ import { TodoModel } from 'example-todo-sync/schema';
 import {
   getSyncNote,
   getSyncStatus,
-  runSync,
+  attach,
+  notifyLocalWrite,
   subscribeSyncStatus,
 } from './sync';
 
@@ -37,11 +38,18 @@ export function App({ db }: { db: Database }) {
   const syncStatus = useSyncExternalStore(subscribeSyncStatus, getSyncStatus);
   const syncNote = useSyncExternalStore(subscribeSyncStatus, getSyncNote);
 
-  useEffect(() => {
-    void runSync(db);
-    const timer = setInterval(() => void runSync(db), 2000);
-    return () => clearInterval(timer);
-  }, [db]);
+  // The controller owns when syncs happen (initial, 2s interval, after
+  // writes, on regaining network); this effect only ties its lifetime
+  // to the database's.
+  useEffect(
+    () =>
+      attach(db, (fire) => {
+        const onOnline = () => fire();
+        window.addEventListener('online', onOnline);
+        return () => window.removeEventListener('online', onOnline);
+      }),
+    [db],
+  );
 
   // One mutation owns every write, so the hook's ownership rule — the
   // latest invocation owns `error` — is exactly the banner's rule: a
@@ -66,7 +74,7 @@ export function App({ db }: { db: Database }) {
           break;
       }
     });
-    void runSync(db);
+    notifyLocalWrite();
   });
 
   // mutateAsync where the caller needs the outcome: the draft is only
