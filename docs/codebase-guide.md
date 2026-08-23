@@ -7,8 +7,8 @@
 title: "remelonDB: A Guide to the Codebase"
 subtitle: "How the layers fit together, and why each one exists"
 lang: "en-US"
-date: "2026-08-20"
-version: "0.2.0 · 2026-08-20"
+date: "2026-08-23"
+version: "0.2.1 · 2026-08-23"
 ---
 
 
@@ -16,7 +16,7 @@ version: "0.2.0 · 2026-08-20"
 
 You can read this guide without keeping the repository open beside it. When the code depends on an idea such as a database transaction, advisory lock, SharedWorker, or CRDT-style merge, a **Background** aside explains it first. Skip those asides when the concept is already familiar.
 
-This edition describes the codebase at version **0.2.0** or newer. Its content otherwise tracks `main`, and the stamped date records the last review. CI checks API summaries, repository paths, and structural assertions. Review covers claims that cannot be checked mechanically. Roadmap work in open issues is out of scope.
+This edition describes the codebase at version **0.2.1** or newer. Its content otherwise tracks `main`, and the stamped date records the last review. CI checks API summaries, repository paths, and structural assertions. Review covers claims that cannot be checked mechanically. Roadmap work in open issues is out of scope.
 
 ## What you are holding
 
@@ -1360,6 +1360,48 @@ if ((await database.driver.requestSyncTurn?.()) === false) {
 
 On an exclusive-storage driver this hook is absent and the answer is always "yes, you own sync." On the web's shared mode it is the lease from Chapter 9, so several tabs do not sync at once. And concurrent `synchronize()` calls *within* one context coalesce through a `WeakMap`: a second caller joins the run already in flight rather than starting a competing one. Between the lease across contexts and the coalescing within one, there is at most one sync cycle running against a database at a time — which is exactly the assumption the cursor's atomic advance relies on.
 
+## Above the engine: transport and controller
+
+`synchronize` is one run, and it takes any two functions. Two pieces sit
+above it, both optional, both in core since 0.2.1 because every consumer
+was writing them by hand.
+
+**The transport** (`@remelondb/core/transport`) turns HTTP into those two
+functions. `createSyncTransport({ post, validatePullResult,
+validatePushResult })` returns `pullChanges` and `pushChanges`; the app
+supplies only `post`, which owns the URL and the authentication.
+`createHttpPost({ baseUrl, headers?, credentials? })` covers the ordinary
+case, with `headers` called at the start of every request so a credential
+that changes between requests — a native session cookie — is always
+current. The split it enforces is the one this chapter has been building
+toward: `conflict`, `resyncRequired`, and per-record rejections are
+instructions the engine acts on, so they arrive as HTTP 200 and pass
+through as values, while a non-2xx, a dropped connection, a body that is
+not JSON, or a body that fails the wire schema becomes a
+`SyncTransportError` and the run fails with local dirty state untouched.
+Nothing else in the stack has to know the difference between a 500 and a
+merge.
+
+**The controller** (`createSyncController`, a root export) decides *when*
+runs happen, the way `createDatabaseManager` decides when opens happen.
+It runs once at `start()`, on an interval (`intervalMs`, `null` disables
+the clock), on any platform wake-up subscribed through its `triggers`
+option, and shortly after `notifyLocalWrite()`, debounced. Runs are
+single flight: triggers arriving during a run coalesce into at most one
+follow-up. Thrown errors classify through `isAuthError` and
+`isOfflineError`, defaulting to the transport's 401 and no-status cases,
+which is why a lost network reads as `offline` rather than a fault, and a
+dead session stops automatic retries until `syncNow()`. `dispose()`
+aborts the in-flight run through the signal `runSync` receives, then goes
+silent — dispose before closing the database, or a request can outlive the
+database it was writing into.
+
+One thing the controller does not do is decide what a rejection means. A
+run that completes with `rejected > 0` leaves the status at `idle` and
+puts the result on `state.lastResult`; whether that becomes a badge, a
+banner, or nothing is the application's call. `useSyncState(controller)`
+(Chapter 13) hands that state to React.
+
 ## Checkpoint
 
 *Trace it yourself.* Reconstruct the apply decision tree from memory — three remote kinds, three local states — and for each cell say *why*. Then take the "buy oat milk / mark done" example through `resolveConflict` and confirm both edits survive. Now change both devices to edit `text`: what happens, and who wins?
@@ -1730,6 +1772,19 @@ The read hooks make "render this query" safe to write inline; `useMutation` does
 - **`mutateAsync(...)`** has normal promise semantics — resolves with the result, rejects with the error — for the flows that may continue only after the write commits (clear a form draft, close a dialog).
 
 The state semantics are precise about *overlap*. `isPending` counts every in-flight invocation, so it drains correctly when calls overlap. `data` and `error` belong to the **latest** invocation only, enforced by a generation counter, so a slow older call finishing after a newer one cannot overwrite the newer result. And `reset()` returns to idle immediately by starting a new *era*: completions from before the reset neither write state nor decrement the counter, which is what keeps a reset-then-new-call sequence from corrupting `isPending`. Each guard exists because removing it makes a specific test fail — the suite was built by mutation-testing the guards, not by asserting the happy path.
+
+## `useSyncState`: the sync side
+
+Chapter 10's controller publishes its state to subscribers, which is the
+same shape `useDatabaseState` consumes from the manager, so the hook is
+the same three lines of `useSyncExternalStore` over a different object:
+`useSyncState(controller)` returns `{ status, lastSyncAt, error,
+lastResult }` and re-renders exactly on transitions. It takes the
+controller explicitly — there is no controller provider, because an app
+that owns one controller per authenticated database already has it in
+hand next to the manager. What a component does with five statuses and a
+rejection count is not the hook's business; the todo-sync example folds
+them into a three-state badge in eight lines.
 
 ## Checkpoint
 
@@ -2140,7 +2195,12 @@ The public surface in the current source tree, grouped by subpath. This appendix
 - **Collection / Query:** `.query(...clauses)`, `.fetch()`, `.fetchCount()`, `.observe(cb, onError?)`, `.observeCount(cb, onError?)` — without `onError`, observation failures stay unhandled rejections.
 - **Q:** `Q.where`, `Q.and`, `Q.or`, `Q.on`, `Q.joinTables`, `Q.nestedJoin`, `Q.sortBy` (`Q.asc`/`Q.desc`), `Q.take`, `Q.skip`; operators `Q.eq`, `Q.notEq`, `Q.gt`, `Q.gte`, `Q.lt`, `Q.lte`, `Q.oneOf`, `Q.notIn`, `Q.between`, `Q.like`, `Q.notLike`, `Q.includes`, `Q.column`, `Q.escapeLike`; escape hatches `Q.unsafeSqlExpr`, `Q.unsafeSqlQuery`.
 - **Sync:** `synchronize({ database, pullChanges, pushChanges?, validatePullResult?, validatePushResult?, conflictResolver?, sendCreatedAsUpdated?, migrationsEnabledAtVersion?, conflictRetries?, signal?, log? })` → `SynchronizeResult` (`{ lease, resynced, pulled, pushed, rejected, rejectedRecords, retryCount }`); the transport functions receive `(args, signal?)`.
+- **Sync controller:** `createSyncController({ runSync, intervalMs?, debounceMs?, triggers?, isAuthError?, isOfflineError? })` → `{ state, subscribe, start, notifyLocalWrite, syncNow, dispose }`, state `{ status, lastSyncAt, error, lastResult }`; `createRunSync(synchronizeOptions)` → `(signal?) => RunSyncResult` (`{ resynced, rejected, rejectedRecords }`).
 - **Migrations:** `schemaMigrations({ migrations })`, step builders (`createTable`, `addColumns`, `unsafeExecuteSql`).
+
+## `@remelondb/core/transport`
+
+`createSyncTransport({ post, validatePullResult, validatePushResult })` → `{ pullChanges, pushChanges }`; `createHttpPost({ baseUrl, headers?, credentials? })` → `SyncPost`; `readSyncResponse(path, send)`; `SyncTransportError` (`message`, `status?`).
 
 ## `@remelondb/core/zod`
 
@@ -2148,7 +2208,7 @@ The public surface in the current source tree, grouped by subpath. This appendix
 
 ## `@remelondb/core/react`
 
-`DatabaseProvider`, `useDatabase(manager?)`, `useDatabaseState(manager?)`, `useQuery(query, { select?, keepPreviousData? })` (results carry `isPreviousData`), `useQueryCountResult(query)`, `useQueryCount(query)`, `useMutation(fn)` → `{ mutate, mutateAsync, data, error, isPending, reset }`.
+`DatabaseProvider`, `useDatabase(manager?)`, `useDatabaseState(manager?)`, `useQuery(query, { select?, keepPreviousData? })` (results carry `isPreviousData`), `useQueryCountResult(query)`, `useQueryCount(query)`, `useMutation(fn)` → `{ mutate, mutateAsync, data, error, isPending, reset }`, `useSyncState(controller)`.
 
 ## `@remelondb/core/conformance`
 
