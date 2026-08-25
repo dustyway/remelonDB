@@ -26,11 +26,18 @@ for (const path of globSync('packages/*/package.json').sort()) {
       process.exit(1);
     }
     const dist = `./dist/${m[1]}`;
-    publishExports[subpath] = {
-      types: `${dist}.d.mts`,
-      import: `${dist}.mjs`,
-      default: `${dist}.mjs`,
-    };
+    // dualFormat packages (tsdown format esm+cjs) publish a require pair so
+    // CommonJS consumers get declarations that resolve peers in require mode.
+    publishExports[subpath] = pkg.dualFormat
+      ? {
+          import: { types: `${dist}.d.mts`, default: `${dist}.mjs` },
+          require: { types: `${dist}.d.cts`, default: `${dist}.cjs` },
+        }
+      : {
+          types: `${dist}.d.mts`,
+          import: `${dist}.mjs`,
+          default: `${dist}.mjs`,
+        };
   }
   const before = JSON.stringify(pkg.publishConfig.exports);
   const after = JSON.stringify(publishExports);

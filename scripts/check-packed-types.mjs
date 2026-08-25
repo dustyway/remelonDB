@@ -111,8 +111,14 @@ try {
     ['tsc', '--noEmit', '-p', join(dir, 'tsconfig.drizzle.json')],
     { cwd: dir, stdio: 'inherit' },
   );
+  // and once more in require mode (see tsconfig.drizzle-cjs.json)
+  execFileSync(
+    'npx',
+    ['tsc', '--noEmit', '-p', join(dir, 'tsconfig.drizzle-cjs.json')],
+    { cwd: dir, stdio: 'inherit' },
+  );
   console.log(
-    'PACKED TYPES CHECK: PASS { core (+react/zod/conformance), server (+conformance), driver-node, driver-web, store-drizzle }',
+    'PACKED TYPES CHECK: PASS { core (+react/zod/conformance), server (+conformance), driver-node, driver-web, store-drizzle (esm+cjs) }',
   );
 } finally {
   rmSync(dir, { recursive: true, force: true });
