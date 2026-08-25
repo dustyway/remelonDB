@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.drizzle.json",
+  "compilerOptions": {
+    // Same fixture, require mode: the harness package.json has no
+    // "type": "module", so nodenext compiles this as CommonJS and
+    // resolves the packages' require condition. Guards the dual-format
+    // publish — under the old ESM-only exports the d.mts resolved
+    // drizzle in import mode while this consumer resolves it in require
+    // mode, and drizzle's nominal Column made that a hard error.
+    "module": "nodenext",
+    "moduleResolution": "nodenext"
+  },
+  "include": ["store-drizzle.ts"]
+}
