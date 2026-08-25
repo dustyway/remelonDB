@@ -7,8 +7,8 @@
 title: "remelonDB: A Guide to the Codebase"
 subtitle: "How the layers fit together, and why each one exists"
 lang: "en-US"
-date: "2026-08-23"
-version: "0.2.1 · 2026-08-23"
+date: "2026-08-25"
+version: "0.2.2 · 2026-08-25"
 ---
 
 
@@ -16,7 +16,7 @@ version: "0.2.1 · 2026-08-23"
 
 You can read this guide without keeping the repository open beside it. When the code depends on an idea such as a database transaction, advisory lock, SharedWorker, or CRDT-style merge, a **Background** aside explains it first. Skip those asides when the concept is already familiar.
 
-This edition describes the codebase at version **0.2.1** or newer. Its content otherwise tracks `main`, and the stamped date records the last review. CI checks API summaries, repository paths, and structural assertions. Review covers claims that cannot be checked mechanically. Roadmap work in open issues is out of scope.
+This edition describes the codebase at version **0.2.2** or newer. Its content otherwise tracks `main`, and the stamped date records the last review. CI checks API summaries, repository paths, and structural assertions. Review covers claims that cannot be checked mechanically. Roadmap work in open issues is out of scope.
 
 ## What you are holding
 
@@ -1668,7 +1668,7 @@ The subpath is packaged exactly like `@remelondb/core/zod`: a separate export, w
 - **`"sideEffects": false`** lets a bundler tree-shake the module away entirely when unused.
 - **Every core type it references is `import type`** — `Database`, `DatabaseManager`, `Query` — so those imports vanish at runtime, leaving React as the module's only runtime dependency.
 
-This is the same discipline as the Zod adapter: a framework integration that a non-React consumer pays nothing for, enforced by the packaging rather than by good intentions. (The one packaging bug this class of design can produce — a subpath that does not actually ship in `dist` — is now guarded by a CI check, `scripts/sync-exports.mjs --check`, which Chapter 14 mentions; it exists because exactly that bug shipped once.)
+This is the same discipline as the Zod adapter: a framework integration that a non-React consumer pays nothing for, enforced by the packaging rather than by good intentions. (The one packaging bug this class of design can produce — a subpath that does not actually ship in `dist` — is now guarded by a CI check, `scripts/sync-exports.mjs --check`, which Chapter 14 mentions; it exists because exactly that bug shipped once. The script also knows a per-package `dualFormat` flag: store-drizzle publishes a CommonJS pair beside the ESM one, because its types re-export drizzle-orm's nominal classes and drizzle ships separate declarations per resolution mode.)
 
 ## The manager, made ergonomic
 
