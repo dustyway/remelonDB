@@ -16,14 +16,14 @@
  * - compute liveness: the host tab dying kills the compute worker but
  *   never the broker. Each new tab connection probes the compute
  *   channel with a ping; no answer within the deadline resets the
- *   epoch — pending requests are requeued and holders are kept, since
- *   they are the state a fresh compute must restore — and a
+ *   epoch. Pending requests are requeued and holders are kept, since
+ *   they are the state a fresh compute must restore, and a
  *   replacement host is recruited one candidate at a time, the tab
  *   that just messaged us first, then the most recently connected.
- *   A candidate that does not answer within its own deadline is
- *   passed over. A page that has navigated away swallows the request
- *   silently, and waiting on it wedged the broker for good
- *   (remelonDB#38). Requests fail only once every candidate is quiet.
+ *   A candidate silent past its own deadline is passed over, since
+ *   postMessage to a dead port neither throws nor arrives and
+ *   silence is the only liveness signal there is. Requests fail only
+ *   once every candidate is quiet.
  *
  * Typed structurally instead of via lib "WebWorker" so the workspace
  * can typecheck without conflicting global libs (same as worker.ts).
@@ -161,10 +161,10 @@ const backlog: Array<{
 
 /**
  * Ports in the order they connected, newest last. A port cannot be
- * tested for liveness — posting to a page that has navigated away
- * neither throws nor arrives (remelonDB#38) — so recency is the best
- * evidence available, and the port that just sent us a message is
- * better evidence still.
+ * tested for liveness, since posting to a page that has navigated
+ * away neither throws nor arrives (remelonDB#38), so recency is the
+ * best evidence available, and the port that just sent us a message
+ * is better evidence still.
  */
 const connectedPorts: PortLike[] = [];
 const SPAWN_CANDIDATES = 8;

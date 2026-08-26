@@ -210,10 +210,9 @@ tabs.
   hands over a worker after another tab won is told to discard it.
   Verify empirically before relying on it.
 - Whether the broker should proactively re-host when the host tab
-  reports `pagehide`, rather than waiting for the ping to notice.
-  Recruitment itself is settled. Candidates are asked one at a time
-  with a deadline each, so a silent tab costs one deadline rather than
-  the whole session (remelonDB#38).
+  reports `pagehide`, rather than waiting for the ping to notice. The
+  recruitment policy itself is settled, one candidate at a time with a
+  deadline each.
 - Debugging ergonomics: SharedWorkers are inspected via
   `chrome://inspect/#workers`, not the page devtools — worth a note in
   the driver README when this ships.

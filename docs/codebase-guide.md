@@ -7,8 +7,8 @@
 title: "remelonDB: A Guide to the Codebase"
 subtitle: "How the layers fit together, and why each one exists"
 lang: "en-US"
-date: "2026-08-25"
-version: "0.2.2 · 2026-08-25"
+date: "2026-08-26"
+version: "0.2.3 · 2026-08-26"
 ---
 
 
@@ -16,7 +16,7 @@ version: "0.2.2 · 2026-08-25"
 
 You can read this guide without keeping the repository open beside it. When the code depends on an idea such as a database transaction, advisory lock, SharedWorker, or CRDT-style merge, a **Background** aside explains it first. Skip those asides when the concept is already familiar.
 
-This edition describes the codebase at version **0.2.2** or newer. Its content otherwise tracks `main`, and the stamped date records the last review. CI checks API summaries, repository paths, and structural assertions. Review covers claims that cannot be checked mechanically. Roadmap work in open issues is out of scope.
+This edition describes the codebase at version **0.2.3** or newer. Its content otherwise tracks `main`, and the stamped date records the last review. CI checks API summaries, repository paths, and structural assertions. Review covers claims that cannot be checked mechanically. Roadmap work in open issues is out of scope.
 
 ## What you are holding
 
@@ -1133,7 +1133,7 @@ There is one wrinkle. The SharedWorker cannot run SQLite itself: OPFS sync-acces
 ```
 
 
-If the host tab dies, its compute Worker dies with it, but the broker — and all its coordination state — survives. The broker notices the loss passively: it pings the compute channel, and if no answer comes within a deadline (a second), it requeues every in-flight request, recruits another tab to respawn the Worker, and reopens the databases it was holding. Recruitment asks one tab at a time and passes over any that stays silent for longer than its deadline, because a page that has navigated away swallows the request silently. `postMessage` to a dead port neither throws nor arrives, and a broker that waited on one stayed wedged until the browser discarded it (remelonDB#38). Queued requests fail only when every candidate has gone quiet. The broker's *identity* never moves. That last property is the single fragment of the old leader design worth keeping: the coordinator is stable even as the compute host is replaced.
+If the host tab dies, its compute Worker dies with it, but the broker — and all its coordination state — survives. The broker notices the loss passively: it pings the compute channel, and if no answer comes within a deadline (a second), it requeues every in-flight request, recruits another tab to respawn the Worker, and reopens the databases it was holding. Recruitment asks one tab at a time, most recently connected first, and passes over any that stays silent past its deadline. Silence is the only signal it has: `postMessage` to a dead port neither throws nor arrives, so a tab that has navigated away looks exactly like a slow one. Queued requests fail only when every candidate has gone quiet. The broker's *identity* never moves. That last property is the single fragment of the old leader design worth keeping: the coordinator is stable even as the compute host is replaced.
 
 ## What the broker actually does
 
