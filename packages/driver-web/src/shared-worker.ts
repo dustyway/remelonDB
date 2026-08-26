@@ -121,11 +121,10 @@ const spawnComputeHere = (): boolean => {
         computePort = null;
         spawnRequested = false;
         worker.terminate();
-        const asker = backlog[0]?.port;
-        if (asker) {
-          spawnRequested = true;
-          asker.postMessage({ control: 'spawnWorker' });
-        }
+        // every spawn goes through one recruiter, so this path gets the
+        // same candidate ordering and retry-on-silence as the others
+        spawnAsked = [];
+        requestSpawn();
       }
     });
     hostedWorker = worker;
@@ -145,6 +144,93 @@ const backlog: Array<{
   request: WorkerRequest;
   transform?: (result: unknown) => unknown;
 }> = [];
+
+/**
+ * Ports in the order they connected, newest last. A port cannot be
+ * tested for liveness — posting to a page that has navigated away
+ * neither throws nor arrives (remelonDB#38) — so recency is the best
+ * evidence available, and the port that just sent us a message is
+ * better evidence still.
+ */
+const connectedPorts: PortLike[] = [];
+const SPAWN_CANDIDATES = 8;
+/** How long a tab gets to answer a spawnWorker control before the next
+ * candidate is asked. Spawning is a `new Worker` call; a live page does
+ * it in milliseconds. */
+const SPAWN_DEADLINE_MS = 1200;
+let spawnTimer: ReturnType<typeof setTimeout> | null = null;
+let spawnAsked: PortLike[] = [];
+
+const rememberPort = (port: PortLike): void => {
+  const index = connectedPorts.indexOf(port);
+  if (index !== -1) {
+    connectedPorts.splice(index, 1);
+  }
+  connectedPorts.push(port);
+  if (connectedPorts.length > SPAWN_CANDIDATES) {
+    connectedPorts.shift();
+  }
+};
+
+const clearSpawnTimer = (): void => {
+  if (spawnTimer !== null) {
+    clearTimeout(spawnTimer);
+    spawnTimer = null;
+  }
+};
+
+const failBacklog = (reason: string): void => {
+  for (const item of backlog.splice(0)) {
+    item.port.postMessage({
+      id: item.request.id,
+      ok: false,
+      error: `WebSqliteDriver: ${reason}`,
+    } satisfies WorkerResponse);
+  }
+};
+
+/**
+ * Recruit a tab to host the compute worker. The broker cannot spawn one
+ * itself on Chromium or WebKit, and it cannot tell whether the tab it
+ * asks still exists, so it asks one candidate at a time and moves on
+ * when nobody adopts within the deadline. `preferred` is the port whose
+ * request triggered this: it just sent a message, so it is alive.
+ */
+const requestSpawn = (preferred?: PortLike): void => {
+  clearSpawnTimer();
+  if (computePort) {
+    return;
+  }
+  if (spawnComputeHere()) {
+    return;
+  }
+  const candidates = [
+    ...(preferred ? [preferred] : []),
+    ...[...connectedPorts].reverse(),
+  ];
+  const asker = candidates.find((port) => !spawnAsked.includes(port));
+  if (!asker) {
+    spawnRequested = false;
+    spawnAsked = [];
+    failBacklog(
+      'no tab is available to host the database worker — every candidate ' +
+        'went away without answering; reload the page',
+    );
+    return;
+  }
+  spawnRequested = true;
+  spawnAsked.push(asker);
+  asker.postMessage({ control: 'spawnWorker' });
+  // A dead page swallows that control silently. Nothing else would ever
+  // notice, so this timer is what keeps the broker from waiting on a
+  // worker nobody is building.
+  spawnTimer = setTimeout(() => {
+    spawnTimer = null;
+    if (!computePort) {
+      requestSpawn();
+    }
+  }, SPAWN_DEADLINE_MS);
+};
 
 /**
  * The compute channel is gone. Instead of failing everything pending
@@ -199,33 +285,21 @@ const resetEpoch = (reason: string): void => {
           : { port: route.port, request: route.request },
       );
     }
-    spawnRequested = true;
-    if (!spawnComputeHere()) {
-      const asker = pending[0]!.port;
-      let asked = false;
-      try {
-        asker.postMessage({ control: 'spawnWorker' });
-        asked = true;
-      } catch {
-        asked = false;
-      }
-      if (!asked) {
-        spawnRequested = false;
-        for (const item of backlog.splice(0)) {
-          item.port.postMessage({
-            id: item.request.id,
-            ok: false,
-            error: `WebSqliteDriver: ${reason}`,
-          } satisfies WorkerResponse);
-        }
-      }
-    }
+    // Candidates are tried newest-connected first and retried on
+    // silence: after a page load the oldest pending route belongs to
+    // the page that just died, and asking it wedges the broker
+    // (remelonDB#38). `reason` survives in the failure that
+    // requestSpawn raises once every candidate has gone quiet.
+    spawnAsked = [];
+    requestSpawn();
   }
 };
 
 const adoptComputePort = (port: PortLike): void => {
   computePort = port;
   spawnRequested = false;
+  clearSpawnTimer();
+  spawnAsked = [];
   port.addEventListener('message', (event) => {
     const response = event.data as WorkerResponse;
     const route = routes.get(response.id);
@@ -323,10 +397,8 @@ const forward = (
     // spawn only when there is no compute at all — during the re-open
     // gate a live compute exists and must not get a twin
     if (!computePort && !spawnRequested) {
-      spawnRequested = true;
-      if (!spawnComputeHere()) {
-        port.postMessage({ control: 'spawnWorker' });
-      }
+      spawnAsked = [];
+      requestSpawn(port);
     }
     return;
   }
@@ -515,12 +587,28 @@ scope.addEventListener('connect', (event) => {
     if (data?.control === 'adoptWorkerPort') {
       const transferred = messageEvent.ports?.[0];
       if (transferred) {
+        // A tab asked earlier can answer after another tab already
+        // won the race (a suspended page waking up, say). Taking the
+        // late worker would strand the live one and leave two computes
+        // holding the SAH pool, so the loser is told to bin its worker.
+        if (computePort) {
+          port.postMessage({ control: 'discardWorker' });
+          return;
+        }
         adoptComputePort(transferred);
       }
       return;
     }
+    rememberPort(port);
     handle(port, messageEvent.data as WorkerRequest);
   });
   port.start?.();
+  rememberPort(port);
   probeCompute();
+  // A page that connects while an earlier spawn request is outstanding
+  // is the best host available: it is provably alive, and the tab that
+  // was asked may have gone away without answering (remelonDB#38).
+  if (!computePort && backlog.length > 0) {
+    requestSpawn(port);
+  }
 });

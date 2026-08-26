@@ -211,6 +211,13 @@ export class WebSqliteDriver implements SqliteDriver {
               }
               return;
             }
+            if (data?.control === 'discardWorker') {
+              // another tab won the spawn race: this worker would only
+              // hold OPFS pool handles the winner needs
+              this.hostedComputeWorker?.terminate();
+              this.hostedComputeWorker = null;
+              return;
+            }
             if (data?.control === 'spawnWorker') {
               // The broker cannot spawn workers (no Worker constructor in
               // SharedWorkerGlobalScope on Chromium/WebKit) — this tab
@@ -411,8 +418,10 @@ export class WebSqliteDriver implements SqliteDriver {
                     timeoutReject(
                       new Error(
                         'WebSqliteDriver: the shared worker did not answer ' +
-                          `the open request within ${deadlineMs}ms. Its ` +
-                          'script may have failed to load — with Vite, add ' +
+                          `the open request within ${deadlineMs}ms. Either ` +
+                          'the database worker was lost and no tab could ' +
+                          'host a replacement, or the broker script failed ' +
+                          'to load — with Vite, add ' +
                           "'@remelondb/driver-web' to optimizeDeps.exclude; " +
                           'see the driver README, Bundlers section.',
                       ),
