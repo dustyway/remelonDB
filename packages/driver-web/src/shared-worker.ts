@@ -82,6 +82,7 @@ const scheduleWatchdog = (): void => {
 };
 let spawnRequested = false;
 let hostedWorker: { terminate(): void } | null = null;
+let brokerHostingFailed = false;
 
 /**
  * Firefox exposes the Worker constructor in SharedWorkerGlobalScope
@@ -102,7 +103,7 @@ declare const Worker:
   | undefined;
 
 const spawnComputeHere = (): boolean => {
-  if (typeof Worker !== 'function') {
+  if (typeof Worker !== 'function' || brokerHostingFailed) {
     return false;
   }
   try {
@@ -117,6 +118,7 @@ const spawnComputeHere = (): boolean => {
       // the hosted worker failed to load or crashed on startup: fall
       // back to tab-hosted compute instead of hanging every request
       if (hostedWorker === worker) {
+        brokerHostingFailed = true;
         hostedWorker = null;
         computePort = null;
         spawnRequested = false;
@@ -131,6 +133,7 @@ const spawnComputeHere = (): boolean => {
     adoptComputePort(worker);
     return true;
   } catch {
+    brokerHostingFailed = true;
     hostedWorker = null;
     return false;
   }
@@ -239,7 +242,7 @@ const requestSpawn = (preferred?: PortLike): void => {
  * self-hosted where possible, else via the first pending tab. Only when
  * no respawn path exists does the failure surface.
  */
-const resetEpoch = (reason: string): void => {
+const resetEpoch = (): void => {
   hostedWorker?.terminate();
   hostedWorker = null;
   computePort = null;
@@ -288,8 +291,7 @@ const resetEpoch = (reason: string): void => {
     // Candidates are tried newest-connected first and retried on
     // silence: after a page load the oldest pending route belongs to
     // the page that just died, and asking it wedges the broker
-    // (remelonDB#38). `reason` survives in the failure that
-    // requestSpawn raises once every candidate has gone quiet.
+    // (remelonDB#38).
     spawnAsked = [];
     requestSpawn();
   }
@@ -570,9 +572,7 @@ const probeCompute = (): void => {
   setTimeout(() => {
     routes.delete(routeId);
     if (!answered && computePort === target) {
-      resetEpoch(
-        'the database worker went away (its host tab closed?) — retry',
-      );
+      resetEpoch();
     }
   }, PING_DEADLINE_MS);
 };
