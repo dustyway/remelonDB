@@ -10,6 +10,7 @@
  * loop back to pull, bounded by conflictRetries.
  */
 import type { Database } from '../database/Database';
+import { runDirect } from '../database/directWork';
 import { stepsForMigration } from '../schema/migrations';
 import { applyRemoteChanges, type ConflictResolver } from './applyRemote';
 import { fetchLocalChanges } from './fetchLocal';
@@ -199,7 +200,11 @@ async function runSynchronize(
 
   // Multi-tab: only the sync-lease holder runs; everyone else's tick is
   // a cheap no-op. Drivers without shared storage have no hook.
-  if ((await database.driver.requestSyncTurn?.()) === false) {
+  const requestSyncTurn = database.driver.requestSyncTurn;
+  const turn = requestSyncTurn
+    ? await runDirect(database, () => requestSyncTurn.call(database.driver))
+    : undefined;
+  if (turn === false) {
     log('sync turn denied — another context holds the sync lease');
     return {
       lease: 'unavailable',

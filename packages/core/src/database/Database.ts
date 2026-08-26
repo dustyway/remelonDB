@@ -32,6 +32,7 @@ import {
   type CollectionChangeSet,
   type Unsubscribe,
 } from './Collection';
+import { setDirectRunner } from './directWork';
 import { encodeBatch, type BatchOperation } from './encodeBatch';
 import { LocalStorage } from './LocalStorage';
 import { WorkQueue } from './WorkQueue';
@@ -104,6 +105,17 @@ export class Database {
   private readonly queue = new WorkQueue();
   private readonly collections = new Map<string, Collection>();
   private subscribers: DatabaseSubscriber[] = [];
+  /** Phase one: set the moment close() is called, before anything awaits. */
+  private closeRequested = false;
+  /** Phase two: set when the teardown barrier reaches the front. */
+  private teardownStarted = false;
+  private closePromise: Promise<void> | null = null;
+  /** read/write calls admitted and not yet finished, slot release included. */
+  private acceptedWork = 0;
+  private acceptedWorkDrained: (() => void) | null = null;
+  /** Core driver work that does not go through the queue. */
+  private directWork = 0;
+  private directWorkDrained: (() => void) | null = null;
 
   private constructor(
     readonly driver: SqliteDriver,
@@ -114,6 +126,12 @@ export class Database {
   ) {
     this.associations = associations;
     this.localStorage = new LocalStorage(driver);
+    // Both this database and its local storage account their direct
+    // driver work here, without either class growing a public method.
+    const gate: <T>(work: () => Promise<T>) => Promise<T> = (work) =>
+      this.gateDirect(work);
+    setDirectRunner(this, gate);
+    setDirectRunner(this.localStorage, gate);
     for (const table of Object.values(schema.tables)) {
       this.collections.set(table.name, new Collection(this, table));
     }
@@ -269,16 +287,109 @@ export class Database {
     exclusive: boolean,
     work: () => Promise<T>,
   ): Promise<T> {
-    const acquire = this.driver.acquireWorkSlot;
-    if (!acquire) {
-      return this.queue.enqueue(work, exclusive);
+    if (this.closeRequested) {
+      throw new Error('Database is closing');
     }
-    const release = await acquire.call(this.driver, exclusive);
+    // Counted from here rather than from queue entry: a block waiting on
+    // acquireWorkSlot is not in the queue yet, so a teardown that only
+    // watched the queue would close the driver out from under it. The
+    // count drops after release(), so the slot is given back first.
+    this.acceptedWork += 1;
     try {
-      return await this.queue.enqueue(work, exclusive);
+      const acquire = this.driver.acquireWorkSlot;
+      if (!acquire) {
+        return await this.queue.enqueue(work, exclusive);
+      }
+      const release = await acquire.call(this.driver, exclusive);
+      try {
+        return await this.queue.enqueue(work, exclusive);
+      } finally {
+        await release();
+      }
     } finally {
-      await release();
+      this.acceptedWork -= 1;
+      if (this.acceptedWork === 0) {
+        this.acceptedWorkDrained?.();
+      }
     }
+  }
+
+  /**
+   * Run core-owned driver work that does not go through the queue —
+   * query fetches, local storage, the sync helpers. Admitted until the
+   * teardown barrier starts, which is later than close() is requested:
+   * an accepted read or write block may issue one of these, and core
+   * cannot tell that call from an unrelated caller's without portable
+   * async context.
+   *
+   * The work here must never enqueue. Teardown holds the queue while it
+   * waits for this count to reach zero, so a direct operation waiting to
+   * enter the same queue would deadlock. If a direct path ever needs
+   * queue ordering, redesign the two layers rather than reaching into
+   * the queue from here.
+   *
+   */
+  private async gateDirect<T>(work: () => Promise<T>): Promise<T> {
+    if (this.teardownStarted) {
+      throw new Error('Database is closing');
+    }
+    this.directWork += 1;
+    try {
+      return await work();
+    } finally {
+      this.directWork -= 1;
+      if (this.directWork === 0) {
+        this.directWorkDrained?.();
+      }
+    }
+  }
+
+  /**
+   * Close the database: work it already accepted finishes, then the
+   * driver goes away. Idempotent — concurrent calls share one teardown,
+   * and a failed one stays the answer, since the driver may still be
+   * open and a clean resolve would be a lie.
+   *
+   * Two phases. New `read`, `write`, and `applyExternalChanges` calls
+   * are refused at once; work already accepted runs to completion, and
+   * the direct operations it may start along the way are allowed. Once
+   * everything accepted has finished, a barrier enters the queue behind
+   * whatever is still in it, and from that point new direct work is
+   * refused too.
+   *
+   * Not covered: application code holding `database.driver` and calling
+   * it itself. Core cannot see that work.
+   *
+   * Not reentrant. Code inside an admitted read, write, query,
+   * local-storage, or sync operation must not await this — close waits
+   * for that operation, so it would be waiting for itself.
+   */
+  close(): Promise<void> {
+    if (this.closePromise) {
+      return this.closePromise;
+    }
+    this.closeRequested = true; // synchronous: nothing new is admitted
+    this.closePromise = (async () => {
+      if (this.acceptedWork > 0) {
+        await new Promise<void>((resolve) => {
+          this.acceptedWorkDrained = resolve;
+        });
+        this.acceptedWorkDrained = null;
+      }
+      // Exclusive, so it runs behind anything already queued — an
+      // external-change apply accepted before the close, for instance.
+      await this.queue.enqueue(async () => {
+        this.teardownStarted = true;
+        if (this.directWork > 0) {
+          await new Promise<void>((resolve) => {
+            this.directWorkDrained = resolve;
+          });
+          this.directWorkDrained = null;
+        }
+        await this.driver.close();
+      }, true);
+    })();
+    return this.closePromise;
   }
 
   /** Commit operations atomically. Must be called inside database.write. */
@@ -350,6 +461,12 @@ export class Database {
    * to an update, and a destroy for an unknown id is a no-op.
    */
   async applyExternalChanges(changes: DatabaseChangeSet): Promise<void> {
+    // Enqueues directly rather than through withWorkSlot, so it needs
+    // its own refusal. An apply accepted before the close stays ahead of
+    // the teardown barrier.
+    if (this.closeRequested) {
+      throw new Error('Database is closing');
+    }
     await this.queue.enqueue(async () => {
       const changesByTable = new Map<string, CollectionChange[]>();
       for (const [tableName, tableChanges] of Object.entries(changes)) {

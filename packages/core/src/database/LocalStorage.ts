@@ -5,30 +5,38 @@
  * method (docs/layers.md, decision 2).
  */
 import type { SqliteDriver } from '../driver/SqliteDriver';
+import { runDirect } from './directWork';
 
 /** @category Database & queries */
 export class LocalStorage {
   constructor(private readonly driver: SqliteDriver) {}
 
   async get(key: string): Promise<string | null> {
-    const rows = await this.driver.query(
-      'select "value" from "local_storage" where "key" is ?',
-      [key],
-    );
-    const value = rows[0]?.['value'];
-    return typeof value === 'string' ? value : null;
+    return runDirect(this, async () => {
+      const rows = await this.driver.query(
+        'select "value" from "local_storage" where "key" is ?',
+        [key],
+      );
+      const value = rows[0]?.['value'];
+      return typeof value === 'string' ? value : null;
+    });
   }
 
   async set(key: string, value: string): Promise<void> {
-    await this.driver.execute(
-      'insert or replace into "local_storage" ("key", "value") values (?, ?)',
-      [key, value],
-    );
+    await runDirect(this, async () => {
+      await this.driver.execute(
+        'insert or replace into "local_storage" ("key", "value") values (?, ?)',
+        [key, value],
+      );
+    });
   }
 
   async remove(key: string): Promise<void> {
-    await this.driver.execute('delete from "local_storage" where "key" is ?', [
-      key,
-    ]);
+    await runDirect(this, async () => {
+      await this.driver.execute(
+        'delete from "local_storage" where "key" is ?',
+        [key],
+      );
+    });
   }
 }

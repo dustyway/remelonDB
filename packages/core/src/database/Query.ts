@@ -11,6 +11,7 @@
 import { encodeQuery } from '../query/encodeQuery';
 import type { QueryDescription } from '../query/ast';
 import type { RawRecord } from '../rawRecord/index';
+import { runDirect } from './directWork';
 import type { Collection, Unsubscribe } from './Collection';
 
 /**
@@ -42,7 +43,13 @@ export class Query<M = RawRecord> {
       description: this.description,
       associations: database.associations,
     });
-    const rows = await database.driver.query(sql, args);
+    // The driver call, not the whole method: this is the observation hot
+    // path, and wrapping the record mapping too puts extra microtask
+    // hops in every re-fetch. Closing waits for the query itself, which
+    // is the part that must not outlive the handle.
+    const rows = await runDirect(database, () =>
+      database.driver.query(sql, args),
+    );
     return rows.map((row) => this.collection.cache.recordFromRow(row, schema));
   }
 
@@ -62,7 +69,10 @@ export class Query<M = RawRecord> {
       },
       { mode: 'count' },
     );
-    const count = (await database.driver.query(sql, args))[0]?.['count'];
+    const rows = await runDirect(database, () =>
+      database.driver.query(sql, args),
+    );
+    const count = rows[0]?.['count'];
     return typeof count === 'number' ? count : 0;
   }
 

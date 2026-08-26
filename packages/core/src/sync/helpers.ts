@@ -6,6 +6,7 @@ import type { Row } from '../driver/SqliteDriver';
 import type { TableSchema } from '../schema/index';
 import type { DirtyRaw, RawRecord } from '../rawRecord/index';
 import type { Database } from '../database/Database';
+import { runDirect } from '../database/directWork';
 import type { SyncChanges } from './types';
 
 export const changedColumns = (raw: RawRecord): string[] =>
@@ -48,7 +49,7 @@ export async function queryRows(
     { table, description: buildQueryDescription(clauses) },
     { filterDeleted: false },
   );
-  return database.driver.query(sql, args);
+  return runDirect(database, () => database.driver.query(sql, args));
 }
 
 /** Ids of this table's tombstones (locally deleted, awaiting push). */

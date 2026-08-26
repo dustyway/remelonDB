@@ -22,6 +22,38 @@ the schema for a fresh database, migrates an older database, and refuses
 to open a newer one after an app downgrade. A missing migration path
 throws; `open()` never destroys data implicitly.
 
+## Closing
+
+`db.close()` refuses new work, lets the work it already accepted finish,
+then closes the driver. Reads and writes issued after the call reject
+with `Database is closing`, and so do external-change applies; blocks
+already accepted run to completion, including anything they were still
+waiting on in the driver's cross-context work slot.
+
+Core-owned *driver* work that does not go through the queue — the query
+behind a fetch, `db.localStorage`, the sync helpers — is drained too, in
+a second phase. It is the driver call that is waited for, not the whole
+high-level operation: a fetch's row-to-record mapping runs after, and
+gating that as well would put extra microtask hops in every observed
+query's re-fetch.
+It stays admitted a little longer than reads and writes do, until the
+teardown barrier reaches the front of the queue, because an accepted
+read or write block may legitimately issue one of these calls and core
+cannot tell that call from an unrelated caller's. After the barrier,
+those reject as well.
+
+Two things are outside the guarantee. Application code that holds
+`database.driver` and calls it directly is invisible to core, and a
+close can stay pending as long as a driver operation does — an open work
+slot that is never granted keeps it waiting, which is truthful rather
+than an early resolve that was not. Driver deadlines own that failure.
+
+`close()` is idempotent: concurrent calls share one teardown, and a
+failed one stays the answer, since the driver may still be open. It is
+not reentrant — code inside an admitted read, write, query,
+local-storage, or sync operation must not await it, because close is
+waiting for that very operation.
+
 ## The manager, and what closing guarantees
 
 `createDatabaseManager({ open })` wraps `Database.open` in a small
@@ -56,6 +88,9 @@ await previous.close()   // nothing it opened is still open
 const next = createDatabaseManager({ open })
 await next.init()
 ```
+
+`DatabaseManager.close()` closes through `db.close()`, so everything
+above applies to a manager teardown as well.
 
 A manager does not coordinate with other managers. Where two of them can
 address the same database, the code that owns them sequences the
@@ -197,6 +232,7 @@ Lower-level buses, mostly for infrastructure:
 ## Local storage
 
 `db.localStorage` provides string key-value storage in the core-owned
-`local_storage` table. Sync keeps its cursor here; apps may use it for
+`local_storage` table. Its calls are core-owned work, so a close waits
+for one in flight and refuses new ones once teardown has begun. Sync keeps its cursor here; apps may use it for
 small metadata. `get(key) → string | null`, `set(key, value)`,
 `remove(key)`.

@@ -24,10 +24,11 @@ const fakeOpen = () => {
 
 const someDb = () => ({}) as Database;
 
-/** A database whose driver close is observable. */
+/** A database whose close is observable. The manager closes through
+ * Database.close, which drains the work the database accepted. */
 const dbWithDriver = () => {
   const close = vi.fn(async () => {});
-  return { db: { driver: { close } } as unknown as Database, close };
+  return { db: { close } as unknown as Database, close };
 };
 
 describe('createDatabaseManager', () => {
@@ -213,7 +214,7 @@ describe('close() during a pending open', () => {
     });
     const close = vi.fn(() => closed);
     return {
-      db: { driver: { close } } as unknown as Database,
+      db: { close } as unknown as Database,
       close,
       finishClose: settle,
     };

@@ -122,7 +122,7 @@ export function createDatabaseManager(
             // know the file is free — a caller that opens the same
             // database next would otherwise race this teardown.
             try {
-              await opened.driver.close();
+              await opened.close();
             } catch (error) {
               lateCloseError =
                 error instanceof Error ? error : new Error(String(error));
@@ -189,7 +189,7 @@ export function createDatabaseManager(
       database = null;
       const closing = (async () => {
         if (current) {
-          await current.driver.close();
+          await current.close();
         }
         if (pendingInit) {
           // Both outcomes: a failed open is the init() caller's error,
