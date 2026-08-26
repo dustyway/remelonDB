@@ -8,7 +8,7 @@ title: "remelonDB: A Guide to the Codebase"
 subtitle: "How the layers fit together, and why each one exists"
 lang: "en-US"
 date: "2026-08-26"
-version: "0.2.3 · 2026-08-26"
+version: "0.2.4 · 2026-08-26"
 ---
 
 
@@ -16,7 +16,7 @@ version: "0.2.3 · 2026-08-26"
 
 You can read this guide without keeping the repository open beside it. When the code depends on an idea such as a database transaction, advisory lock, SharedWorker, or CRDT-style merge, a **Background** aside explains it first. Skip those asides when the concept is already familiar.
 
-This edition describes the codebase at version **0.2.3** or newer. Its content otherwise tracks `main`, and the stamped date records the last review. CI checks API summaries, repository paths, and structural assertions. Review covers claims that cannot be checked mechanically. Roadmap work in open issues is out of scope.
+This edition describes the codebase at version **0.2.4** or newer. Its content otherwise tracks `main`, and the stamped date records the last review. CI checks API summaries, repository paths, and structural assertions. Review covers claims that cannot be checked mechanically. Roadmap work in open issues is out of scope.
 
 ## What you are holding
 
@@ -730,6 +730,10 @@ Every `db.write` and `db.read` routes through one strictly FIFO `WorkQueue` (`Wo
 
 That bolt-on is the one subtlety here. When the driver offers a cross-context `acquireWorkSlot`, `withWorkSlot` acquires the slot *before* the block enters the local queue. The ordering is not incidental: while this context waits for its cross-tab grant, the local queue stays free to apply broadcasts from other tabs, so a read that eventually runs never trusts a cache another tab has already moved past. Getting this backwards produces a lost update — and a convergence test in `driver-web` exists precisely because an earlier version *did* get it backwards. Chapter 9 pays this off.
 
+That same ordering decides how the database closes. `db.close()` refuses new `read`, `write`, and external-change calls immediately, then waits for what it already accepted before tearing the driver down. Waiting on the queue alone would not be enough: a block parked in `acquireWorkSlot` has not reached the queue yet, so `withWorkSlot` counts it from before acquisition until after release, and the close waits on that count instead. Only then does a teardown callback enter the queue, behind whatever is still in it.
+
+The core-owned work that never enters the queue — the query behind a fetch, `db.localStorage`, the sync helpers — is drained in a second phase, after that teardown callback reaches the front. The two phases exist because a block the close promised to finish may itself issue one of those calls; refusing them the moment close was requested would abandon it, and JavaScript has no portable async context to tell that call apart from an unrelated one. Application code holding `database.driver` and calling it directly is outside all of this, since core cannot see that work.
+
 ## Compiling and committing a batch
 
 `Database.batch(operations)` is the *sole* commit path — every create, update, and delete funnels here. It asserts a writer is running, no-ops on an empty batch, then compiles, executes, updates caches, notifies, and publishes, in that order. A collection convenience method may call it immediately; callers that need several prepared operations to share one transaction pass them together explicitly.
@@ -1162,6 +1166,7 @@ An exclusive slot (a `db.write`) is granted only when nothing is held; shared sl
 Here is the subtle part, the one a formal model and a browser test both exist to protect. In `Database.withWorkSlot` (Chapter 5), core acquires the cross-tab slot **before** entering its local work queue:
 
 ```ts
+// abridged: the real method also counts the block for close (Chapter 5)
 const release = await acquire.call(this.driver, exclusive)
 try { return await this.queue.enqueue(work, exclusive) }
 finally { await release() }
