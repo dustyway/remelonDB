@@ -75,6 +75,82 @@ manager). `lastResult` carries the rejection fields; folding them, and
 the five statuses, into whatever your UI shows is the component's
 decision.
 
+## The session hook
+
+`useSessionDatabase` owns the whole per-user lifecycle: one manager for
+the signed-in user, a sync controller running whenever that database is
+ready, teardown in the right order when the session ends, and the next
+session's open queued behind the previous close.
+
+```tsx
+const { manager, syncController, closeError } = useSessionDatabase({
+  userId,                                   // null while signed out
+  createManager: (id) => createUserDatabaseManager(id),
+  sync: { pullChanges, pushChanges },
+  controller: { triggers: browserSyncTriggers },
+})
+```
+
+It renders nothing. Wrap the tree yourself once the manager exists:
+
+```tsx
+if (!manager) return <SignedOut />
+return (
+  <DatabaseProvider manager={manager}>
+    <App controller={syncController} />
+  </DatabaseProvider>
+)
+```
+
+**Where you call it is part of the contract.** The queue that makes the
+next open wait for the previous close lives in the hook, so it lives as
+long as the component calling it. Call it from something that stays
+mounted across session *and* route changes, and let route layouts read
+the manager from context. Calling it inside a layout your router
+unmounts brings back the race it prevents: the queue is empty again on
+remount, so the next open has nothing to wait for, and routers destroy
+and recreate a layout faster than a close finishes. Nothing in the types
+stops you putting it in the wrong place.
+
+Sync attaches whenever the database is ready and detaches when it is
+not, rather than following one `init()` call. Two things follow. A
+database recovered by something else — an error banner's Retry calling
+`init()` on the manager — still gets sync. And a reopen after an error
+hands back a different `Database`, so the controller is rebuilt against
+it rather than left pointing at the old one.
+
+`createManager`, `sync`, and `controller` are read when a session
+starts, so passing fresh object literals every render does not restart
+the database you already opened. Changing them affects the next session.
+
+Pass `userId: null` while the session check is still running, not just
+when signed out. A user id that might change on the next tick would
+open a file the hook then has to close.
+
+The result is tagged with the user it belongs to, so the render
+React does after a session change but before the effect cleans up hands
+back nulls rather than the previous account's database.
+
+In StrictMode the effect runs, cleans up, and runs again. Because a
+manager is created only once the previous close has finished, the
+discarded run usually creates nothing at all: its cleanup lands first
+and cancels it. If it did get as far as a manager, the run that
+replaces it waits for that one's close, the same as any session
+change.
+
+A session's manager is not created until the previous session's close
+has finished. Not merely unopened: not handed to you at all, since a
+manager you hold is one you could `init()` yourself, around the wait.
+Cleanup closes straight away rather than queueing, because `close()` is
+what invalidates an open still in flight — queue it and a logout during
+a slow open lets that database arrive with nobody closing it.
+
+A close that fails stops the next session rather than starting one.
+That database may still be open, and a second one over the same file is
+the thing this hook exists to prevent, so `closeError` carries the
+failure and `manager` stays null. It is sticky, like the manager's own
+failed close: recovery is a reload, not another attempt.
+
 ## Query hooks
 
 ```tsx

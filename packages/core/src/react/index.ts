@@ -21,12 +21,15 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from 'react';
+import { createRunSync, createSyncController } from '../index';
 import type {
   Database,
   DatabaseManager,
   DatabaseManagerState,
   SyncController,
+  SyncControllerOptions,
   SyncControllerState,
+  SynchronizeOptions,
 } from '../index';
 import type { Query } from '../database/Query';
 
@@ -126,6 +129,183 @@ export function useDatabase(manager?: DatabaseManager): Database | null {
     () => (m.state.status === 'ready' ? m.database : null),
     () => null,
   );
+}
+
+// ---------------------------------------------------------------------------
+// Session hook
+
+export interface SessionDatabaseOptions {
+  /** Null while signed out, and while the session check is still running:
+   * a user id that might change on the next tick must not open a file. */
+  readonly userId: string | null;
+  /** Build the manager for a user. Read when a session starts. */
+  readonly createManager: (userId: string) => DatabaseManager;
+  /** What `synchronize` needs, minus the database and the signal. */
+  readonly sync: Omit<SynchronizeOptions, 'database' | 'signal'>;
+  /** Passed through to `createSyncController`. */
+  readonly controller?: Omit<SyncControllerOptions, 'runSync'>;
+}
+
+export interface SessionDatabase {
+  readonly manager: DatabaseManager | null;
+  readonly syncController: SyncController | null;
+  /**
+   * A teardown that failed. The database it owned may still be open, so
+   * no replacement is started: opening a second one over the same file
+   * is what this hook exists to prevent. Sticky, like the manager's own
+   * failed close.
+   */
+  readonly closeError: Error | null;
+}
+
+/**
+ * Own one database and one sync controller for the signed-in user.
+ *
+ *     const { manager, syncController } = useSessionDatabase({
+ *       userId, createManager, sync: { pullChanges, pushChanges },
+ *       controller: { triggers },
+ *     })
+ *
+ * Headless: it renders nothing, so the caller wraps the tree in
+ * `<DatabaseProvider manager={manager}>` once the manager exists.
+ *
+ * **Where you call this is part of the contract.** The queue that makes
+ * the next open wait for the previous close lives in this hook, so it
+ * lives exactly as long as the component that calls it. Call it from a
+ * component that stays mounted across session *and* route changes, and
+ * let route layouts read the manager from context. Calling it inside a
+ * layout that navigation unmounts brings back the race it prevents: the
+ * queue is empty again on remount, and the next open has nothing to
+ * wait for. Routers destroy and recreate a layout faster than any close
+ * finishes.
+ *
+ * A session's manager is not created until the previous session's close
+ * has finished, so a caller never holds a manager it could open ahead of
+ * that teardown. Cleanup closes immediately rather than queueing, so a
+ * logout during a slow open still invalidates it.
+ *
+ * Sync attaches whenever the database is ready and detaches when it is
+ * not, rather than following one `init()` call. A database recovered by
+ * something else — an error banner's retry, say — still gets sync, and
+ * a reopen after an error hands back a different `Database`, so the
+ * controller is rebuilt against it.
+ *
+ * `createManager`, `sync`, and `controller` are read when a session
+ * starts. Changing them affects the next session, not the running one.
+ */
+export function useSessionDatabase(
+  options: SessionDatabaseOptions,
+): SessionDatabase {
+  const { userId } = options;
+  // Read at session start, not at render: a caller passing fresh object
+  // literals must not restart the database it already opened.
+  const latest = useRef(options);
+  latest.current = options;
+  // Closes only. One session's teardown finishes before the next one
+  // opens, and a rejected tail stays rejected — the database may still
+  // be open, so no replacement is started.
+  const closeTail = useRef<Promise<void>>(Promise.resolve());
+  const [owned, setOwned] = useState<{
+    userId: string;
+    manager: DatabaseManager;
+    syncController: SyncController | null;
+  } | null>(null);
+  const [closeError, setCloseError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (!userId) {
+      return;
+    }
+    const { createManager, sync, controller } = latest.current;
+    let live = true;
+    let manager: DatabaseManager | null = null;
+    let attached: SyncController | null = null;
+    let unsubscribe: (() => void) | null = null;
+
+    void closeTail.current.then(
+      () => {
+        if (!live) {
+          return;
+        }
+        const opened = createManager(userId);
+        manager = opened;
+        setCloseError(null);
+        setOwned({ userId, manager: opened, syncController: null });
+
+        unsubscribe = opened.subscribe((state) => {
+          if (!live) {
+            return;
+          }
+          if (state.status !== 'ready') {
+            // The database this controller runs against is gone. A
+            // reopen produces a different one, so it cannot be reused.
+            if (attached) {
+              attached.dispose();
+              attached = null;
+              setOwned({ userId, manager: opened, syncController: null });
+            }
+            return;
+          }
+          if (attached) {
+            return;
+          }
+          const started = createSyncController({
+            ...controller,
+            runSync: createRunSync({ ...sync, database: opened.database }),
+          });
+          attached = started;
+          setOwned({ userId, manager: opened, syncController: started });
+          started.start();
+        });
+
+        // The manager's state carries the error; nothing to do here.
+        void opened.init().then(
+          () => {},
+          () => {},
+        );
+      },
+      () => {
+        // The previous teardown failed, so this session gets no
+        // database. Cleanup reported the error when it happened; a
+        // logout has no next session to report it otherwise.
+      },
+    );
+
+    return () => {
+      live = false;
+      unsubscribe?.();
+      // Before the close, so an in-flight sync is aborted through its
+      // signal rather than writing into a database that is going away.
+      attached?.dispose();
+      const closing = manager;
+      if (closing) {
+        // Immediately, not behind anything: close() is what invalidates
+        // an open still in flight, and queueing it would let that open
+        // land unopposed.
+        const closed = closing.close();
+        closeTail.current = closed; // stays rejected if it fails
+        void closed.catch((error: unknown) => {
+          // Reported here rather than where the next session waits: a
+          // logout has no next session, and the failure still matters.
+          setCloseError(
+            error instanceof Error ? error : new Error(String(error)),
+          );
+        });
+      }
+      setOwned((current) => (current?.manager === closing ? null : current));
+    };
+  }, [userId]);
+
+  // Tagged with its owner: on a session change React renders once with
+  // the old state before the effect cleans it up, and that render must
+  // not hand out the previous account's database.
+  return owned?.userId === userId
+    ? {
+        manager: owned.manager,
+        syncController: owned.syncController,
+        closeError,
+      }
+    : { manager: null, syncController: null, closeError };
 }
 
 // ---------------------------------------------------------------------------
