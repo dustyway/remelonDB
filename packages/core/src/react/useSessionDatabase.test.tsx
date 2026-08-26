@@ -13,11 +13,18 @@ import type { ReactNode } from 'react';
 import { createDatabaseManager } from '../index';
 import type { Database, SyncController } from '../index';
 
+type CapturedControllerOptions = {
+  runSync: unknown;
+  intervalMs?: number | null;
+  triggers?: unknown;
+};
+
 // The hook builds its controller through these; capture what it makes.
 const controllers: Array<{
   start: ReturnType<typeof vi.fn>;
   dispose: ReturnType<typeof vi.fn>;
   runSyncOptions: unknown;
+  controllerOptions: CapturedControllerOptions;
 }> = [];
 
 vi.mock('../index', async (importOriginal) => {
@@ -25,11 +32,12 @@ vi.mock('../index', async (importOriginal) => {
   return {
     ...actual,
     createRunSync: (options: unknown) => options,
-    createSyncController: (options: { runSync: unknown }) => {
+    createSyncController: (options: CapturedControllerOptions) => {
       const controller = {
         start: vi.fn(),
         dispose: vi.fn(),
         runSyncOptions: options.runSync,
+        controllerOptions: options,
       };
       controllers.push(controller);
       return controller as unknown as SyncController;
@@ -38,6 +46,8 @@ vi.mock('../index', async (importOriginal) => {
 });
 
 const { useSessionDatabase } = await import('./index');
+
+const sessionTriggers = () => () => {};
 
 const tick = () =>
   act(async () => {
@@ -123,7 +133,7 @@ const renderSession = (
         userId,
         createManager,
         sync: { pullChanges: 'p', pushChanges: 'q' } as never,
-        controller: { intervalMs: null },
+        controller: { intervalMs: null, triggers: sessionTriggers },
       }),
     {
       initialProps: { userId: initialUserId },
@@ -166,7 +176,15 @@ describe('useSessionDatabase', () => {
     expect(controllers).toHaveLength(1);
     expect(controllers[0]!.start).toHaveBeenCalledTimes(1);
     expect(view.result.current.syncController).toBe(controllers[0]);
-    expect(controllers[0]!.runSyncOptions).toMatchObject({ database });
+    expect(controllers[0]!.runSyncOptions).toMatchObject({
+      database,
+      pullChanges: 'p',
+      pushChanges: 'q',
+    });
+    expect(controllers[0]!.controllerOptions).toMatchObject({
+      intervalMs: null,
+      triggers: sessionTriggers,
+    });
   });
 
   it('attaches sync when something else recovers the database', async () => {
@@ -221,6 +239,30 @@ describe('useSessionDatabase', () => {
     await a.ready();
     expect(a.db.close).toHaveBeenCalledTimes(1);
     expect(view.result.current.manager).toBeNull();
+  });
+
+  it('waits for pending-open cleanup before reopening the same user', async () => {
+    const first = makeManager('first');
+    const reopened = makeManager('reopened');
+    const { view, createManager } = renderSession([first, reopened], 'user-a');
+    await tick();
+    expect(first.openCount()).toBe(1);
+
+    view.rerender({ userId: null });
+    await tick();
+    view.rerender({ userId: 'user-a' });
+    await tick();
+
+    expect(createManager).toHaveBeenCalledTimes(1);
+    expect(reopened.openCount()).toBe(0);
+    expect(view.result.current.manager).toBeNull();
+
+    await first.ready();
+
+    expect(first.db.close).toHaveBeenCalledTimes(1);
+    expect(createManager).toHaveBeenCalledTimes(2);
+    expect(reopened.openCount()).toBe(1);
+    expect(view.result.current.manager).toBe(reopened.manager);
   });
 
   it('does not create the next manager until the previous close finishes', async () => {
