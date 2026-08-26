@@ -623,7 +623,14 @@ scope.addEventListener('connect', (event) => {
   }
   port.addEventListener('message', (messageEvent) => {
     const data = messageEvent.data as WorkerRequest | ClientControlMessage;
+    // A control is never a request: anything carrying the field leaves
+    // here, and the handoff branch is entered by name rather than by
+    // the field's presence, so a control added later is ignored instead
+    // of being read as an adoption or forwarded to the worker.
     if ('control' in data) {
+      if (data.control !== 'adoptWorkerPort') {
+        return;
+      }
       const transferred = messageEvent.ports?.[0];
       if (transferred) {
         // A tab asked earlier can answer after another tab already
