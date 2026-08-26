@@ -1959,7 +1959,7 @@ export function createUserDatabaseManager(userId: string) {
 }
 
 export async function closeUserDatabase() {
-  await manager?.close() // remelondb >= 0.1.7: tears down the driver, discards a late init
+  await manager?.close() // tears down the driver, and waits for a late init's cleanup too
 }
 ```
 
