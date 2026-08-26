@@ -1791,6 +1791,63 @@ hand next to the manager. What a component does with five statuses and a
 rejection count is not the hook's business; the todo-sync example folds
 them into a three-state badge in eight lines.
 
+## `useSessionDatabase`: one database per signed-in user
+
+The hooks above each wrap one object. This one owns a lifecycle, and it
+exists because two applications wrote that lifecycle by hand and each
+got a different part of it wrong.
+
+The shape is always the same: create a manager for the signed-in user,
+start a sync controller once its database is ready, dispose the
+controller and close the database when the session ends, and do not let
+the next session open before the previous close has finished. Only the
+inputs differ between platforms — which driver, which triggers, where
+the user id comes from, what gets rendered.
+
+```tsx
+const { manager, syncController, closeError } = useSessionDatabase({
+  userId,                                     // null while signed out
+  createManager: (id) => createUserDatabaseManager(id),
+  sync: { pullChanges, pushChanges },
+  controller: { triggers: browserSyncTriggers },
+})
+```
+
+Three decisions in it are worth the space, because each one is a bug
+someone shipped first.
+
+Sync attaches from the manager's *state*, not from the `init()` call
+that started it. Attach it to that one promise and a database recovered
+by anything else — an error banner's Retry calling `init()` on the
+manager — comes back with no sync, silently. Reading state also handles
+the reverse: a reopen after an error hands back a *different*
+`Database`, and a controller built against the old one would be syncing
+a handle nobody holds.
+
+The next session's manager is not created until the previous close has
+finished. Not merely unopened: not created at all, because a manager
+handed to a caller is one the caller can `init()` themselves, around the
+wait. Cleanup, on the other hand, closes *immediately* rather than
+queueing behind anything, since `close()` is exactly what invalidates an
+open still in flight (Chapter 5). Queue the close and a logout during a
+slow open never closes at all.
+
+A close that fails stops the next session instead of starting one. The
+database may still be open, and a second one over the same file is what
+this hook exists to prevent, so `closeError` carries the failure and
+`manager` stays null. It is sticky, matching the manager's own failed
+close, which means recovery is a reload rather than another attempt —
+and an application has to render something for that state, outside
+`DatabaseProvider`, because there is no database to provide.
+
+One thing the types cannot express: where you call it. The queue that
+makes the next open wait lives in the hook, so it lives as long as the
+component calling it. Call it from something mounted across session
+*and* route changes, and let route layouts read the manager from
+context. Put it inside a layout the router unmounts and the queue is
+empty again on every remount, which is the race it was written to
+prevent.
+
 ## Checkpoint
 
 *Trace it yourself.* Render two components that each build `db.get(TodoModel).query(Q.sortBy('created_at', Q.desc))` inline. Follow both through `queryKey` and `sharedStore` and confirm they resolve to one store and call `observe` once. Now change one component's sort to ascending — what happens to the store count?
@@ -2213,7 +2270,7 @@ The public surface in the current source tree, grouped by subpath. This appendix
 
 ## `@remelondb/core/react`
 
-`DatabaseProvider`, `useDatabase(manager?)`, `useDatabaseState(manager?)`, `useQuery(query, { select?, keepPreviousData? })` (results carry `isPreviousData`), `useQueryCountResult(query)`, `useQueryCount(query)`, `useMutation(fn)` → `{ mutate, mutateAsync, data, error, isPending, reset }`, `useSyncState(controller)`.
+`DatabaseProvider`, `useDatabase(manager?)`, `useDatabaseState(manager?)`, `useQuery(query, { select?, keepPreviousData? })` (results carry `isPreviousData`), `useQueryCountResult(query)`, `useQueryCount(query)`, `useMutation(fn)` → `{ mutate, mutateAsync, data, error, isPending, reset }`, `useSyncState(controller)`, `useSessionDatabase({ userId, createManager, sync, controller? })` → `{ manager, syncController, closeError }`.
 
 ## `@remelondb/core/conformance`
 

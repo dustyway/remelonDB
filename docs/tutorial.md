@@ -574,6 +574,12 @@ one account can open another's local data. The pattern: derive the
 database name from the authenticated user id (encode it — never
 interpolate raw ids into filenames), create the manager only once a
 user is known, and call `manager.close()` on logout or account change.
+
+In React, `useSessionDatabase` from `@remelondb/core/react` does all of
+this — see [the session hook](reference/react.md#the-session-hook). Read
+the rest of this section anyway if you own a manager yourself: the rules
+are what the hook implements, and they are the same rules whatever calls
+them.
 `close()` tears the database down and returns the manager to `idle`,
 and an open still in flight when it is called gets discarded on
 arrival — closed immediately, its `init()` rejecting — so a slow open
