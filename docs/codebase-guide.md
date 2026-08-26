@@ -1133,7 +1133,7 @@ There is one wrinkle. The SharedWorker cannot run SQLite itself: OPFS sync-acces
 ```
 
 
-If the host tab dies, its compute Worker dies with it, but the broker — and all its coordination state — survives. The broker notices the loss passively: it pings the compute channel, and if no answer comes within a deadline (a second), it fails every in-flight request loudly, asks another tab to respawn the Worker, and reopens the databases it was holding. The broker's *identity* never moves. That last property is the single fragment of the old leader design worth keeping: the coordinator is stable even as the compute host is replaced.
+If the host tab dies, its compute Worker dies with it, but the broker — and all its coordination state — survives. The broker notices the loss passively: it pings the compute channel, and if no answer comes within a deadline (a second), it requeues every in-flight request, recruits another tab to respawn the Worker, and reopens the databases it was holding. Recruitment asks one tab at a time and passes over any that stays silent for longer than its deadline, because a page that has navigated away swallows the request silently. `postMessage` to a dead port neither throws nor arrives, and a broker that waited on one stayed wedged until the browser discarded it (remelonDB#38). Queued requests fail only when every candidate has gone quiet. The broker's *identity* never moves. That last property is the single fragment of the old leader design worth keeping: the coordinator is stable even as the compute host is replaced.
 
 ## What the broker actually does
 

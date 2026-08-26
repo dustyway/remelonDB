@@ -16,8 +16,14 @@
  * - compute liveness: the host tab dying kills the compute worker but
  *   never the broker. Each new tab connection probes the compute
  *   channel with a ping; no answer within the deadline resets the
- *   epoch (pending requests fail loudly, holders clear) and the next
- *   request triggers a respawn via whichever tab sent it.
+ *   epoch — pending requests are requeued and holders are kept, since
+ *   they are the state a fresh compute must restore — and a
+ *   replacement host is recruited one candidate at a time, the tab
+ *   that just messaged us first, then the most recently connected.
+ *   A candidate that does not answer within its own deadline is
+ *   passed over. A page that has navigated away swallows the request
+ *   silently, and waiting on it wedged the broker for good
+ *   (remelonDB#38). Requests fail only once every candidate is quiet.
  *
  * Typed structurally instead of via lib "WebWorker" so the workspace
  * can typecheck without conflicting global libs (same as worker.ts).

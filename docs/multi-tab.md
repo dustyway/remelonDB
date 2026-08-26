@@ -204,11 +204,16 @@ tabs.
   broker can test (`ifAvailable`) when a slot outlives a deadline.
 - Backpressure on forwarded statements from a very chatty tab.
 - Whether a frozen (not dead) host tab freezes its dedicated worker
-  with it. If it does, passive detection covers it the same as death:
-  respawn elsewhere, fail in-flight loudly. Verify empirically before
-  relying on it.
-- The respawn timeout value, and whether the broker should proactively
-  re-host when the host tab reports `pagehide`.
+  with it. If it does, passive detection covers it the same as death,
+  since recruitment cannot distinguish the two anyway. A frozen tab is
+  a silent candidate and gets passed over, and one that thaws and
+  hands over a worker after another tab won is told to discard it.
+  Verify empirically before relying on it.
+- Whether the broker should proactively re-host when the host tab
+  reports `pagehide`, rather than waiting for the ping to notice.
+  Recruitment itself is settled. Candidates are asked one at a time
+  with a deadline each, so a silent tab costs one deadline rather than
+  the whole session (remelonDB#38).
 - Debugging ergonomics: SharedWorkers are inspected via
   `chrome://inspect/#workers`, not the page devtools — worth a note in
   the driver README when this ships.
