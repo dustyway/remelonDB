@@ -22,7 +22,12 @@
  * Typed structurally instead of via lib "WebWorker" so the workspace
  * can typecheck without conflicting global libs (same as worker.ts).
  */
-import type { WorkerRequest, WorkerResponse } from './protocol';
+import type {
+  BrokerControlMessage,
+  ClientControlMessage,
+  WorkerRequest,
+  WorkerResponse,
+} from './protocol';
 
 const PING_DEADLINE_MS = 1000;
 
@@ -42,6 +47,8 @@ interface Route {
   readonly request: WorkerRequest;
   /** Reshape the worker's result before answering (synthesized requests). */
   readonly transform?: (result: unknown) => unknown;
+  /** Undo broker state recorded before the worker accepted the request. */
+  readonly onFailure?: () => void;
 }
 
 const scope = globalThis as unknown as {
@@ -80,7 +87,6 @@ const scheduleWatchdog = (): void => {
     scheduleWatchdog();
   }, 2500);
 };
-let spawnRequested = false;
 let hostedWorker: { terminate(): void } | null = null;
 let brokerHostingFailed = false;
 
@@ -121,12 +127,10 @@ const spawnComputeHere = (): boolean => {
         brokerHostingFailed = true;
         hostedWorker = null;
         computePort = null;
-        spawnRequested = false;
         worker.terminate();
         // every spawn goes through one recruiter, so this path gets the
         // same candidate ordering and retry-on-silence as the others
-        spawnAsked = [];
-        requestSpawn();
+        restartRecruitment();
       }
     });
     hostedWorker = worker;
@@ -146,6 +150,7 @@ const backlog: Array<{
   port: PortLike;
   request: WorkerRequest;
   transform?: (result: unknown) => unknown;
+  onFailure?: () => void;
 }> = [];
 
 /**
@@ -161,8 +166,13 @@ const SPAWN_CANDIDATES = 8;
  * candidate is asked. Spawning is a `new Worker` call; a live page does
  * it in milliseconds. */
 const SPAWN_DEADLINE_MS = 1200;
-let spawnTimer: ReturnType<typeof setTimeout> | null = null;
-let spawnAsked: PortLike[] = [];
+
+interface Recruitment {
+  readonly asked: Set<PortLike>;
+  timer: ReturnType<typeof setTimeout> | null;
+}
+
+let recruitment: Recruitment | null = null;
 
 const rememberPort = (port: PortLike): void => {
   const index = connectedPorts.indexOf(port);
@@ -175,15 +185,16 @@ const rememberPort = (port: PortLike): void => {
   }
 };
 
-const clearSpawnTimer = (): void => {
-  if (spawnTimer !== null) {
-    clearTimeout(spawnTimer);
-    spawnTimer = null;
+const stopRecruitment = (): void => {
+  if (recruitment?.timer) {
+    clearTimeout(recruitment.timer);
   }
+  recruitment = null;
 };
 
 const failBacklog = (reason: string): void => {
   for (const item of backlog.splice(0)) {
+    item.onFailure?.();
     item.port.postMessage({
       id: item.request.id,
       ok: false,
@@ -200,8 +211,18 @@ const failBacklog = (reason: string): void => {
  * request triggered this: it just sent a message, so it is alive.
  */
 const requestSpawn = (preferred?: PortLike): void => {
-  clearSpawnTimer();
+  let active = recruitment;
+  if (active) {
+    if (active.timer) {
+      clearTimeout(active.timer);
+      active.timer = null;
+    }
+  } else {
+    active = { asked: new Set(), timer: null };
+    recruitment = active;
+  }
   if (computePort) {
+    stopRecruitment();
     return;
   }
   if (spawnComputeHere()) {
@@ -211,28 +232,33 @@ const requestSpawn = (preferred?: PortLike): void => {
     ...(preferred ? [preferred] : []),
     ...[...connectedPorts].reverse(),
   ];
-  const asker = candidates.find((port) => !spawnAsked.includes(port));
+  const asker = candidates.find((port) => !active.asked.has(port));
   if (!asker) {
-    spawnRequested = false;
-    spawnAsked = [];
+    stopRecruitment();
     failBacklog(
       'no tab is available to host the database worker — every candidate ' +
         'went away without answering; reload the page',
     );
     return;
   }
-  spawnRequested = true;
-  spawnAsked.push(asker);
-  asker.postMessage({ control: 'spawnWorker' });
+  active.asked.add(asker);
+  asker.postMessage({
+    control: 'spawnWorker',
+  } satisfies BrokerControlMessage);
   // A dead page swallows that control silently. Nothing else would ever
   // notice, so this timer is what keeps the broker from waiting on a
   // worker nobody is building.
-  spawnTimer = setTimeout(() => {
-    spawnTimer = null;
-    if (!computePort) {
+  active.timer = setTimeout(() => {
+    if (recruitment === active && !computePort) {
+      active.timer = null;
       requestSpawn();
     }
   }, SPAWN_DEADLINE_MS);
+};
+
+const restartRecruitment = (preferred?: PortLike): void => {
+  stopRecruitment();
+  requestSpawn(preferred);
 };
 
 /**
@@ -247,7 +273,7 @@ const resetEpoch = (): void => {
   hostedWorker = null;
   computePort = null;
   computeReady = false;
-  spawnRequested = false;
+  stopRecruitment();
   // ping probes are self-addressed bookkeeping, not user work: they
   // must never be replayed, and above all never chosen as the spawn
   // asker — their fake port swallows the spawnWorker control and the
@@ -278,30 +304,28 @@ const resetEpoch = (): void => {
   );
   if (pending.length > 0) {
     for (const route of pending) {
+      const entry = route.transform
+        ? {
+            port: route.port,
+            request: route.request,
+            transform: route.transform,
+          }
+        : { port: route.port, request: route.request };
       backlog.push(
-        route.transform
-          ? {
-              port: route.port,
-              request: route.request,
-              transform: route.transform,
-            }
-          : { port: route.port, request: route.request },
+        route.onFailure ? { ...entry, onFailure: route.onFailure } : entry,
       );
     }
     // Candidates are tried newest-connected first and retried on
     // silence: after a page load the oldest pending route belongs to
     // the page that just died, and asking it wedges the broker
     // (remelonDB#38).
-    spawnAsked = [];
-    requestSpawn();
+    restartRecruitment();
   }
 };
 
 const adoptComputePort = (port: PortLike): void => {
   computePort = port;
-  spawnRequested = false;
-  clearSpawnTimer();
-  spawnAsked = [];
+  stopRecruitment();
   port.addEventListener('message', (event) => {
     const response = event.data as WorkerResponse;
     const route = routes.get(response.id);
@@ -310,6 +334,9 @@ const adoptComputePort = (port: PortLike): void => {
     }
     lastResponseAt = Date.now();
     routes.delete(response.id);
+    if (!response.ok) {
+      route.onFailure?.();
+    }
     if (response.ok && route.transform) {
       route.port.postMessage({
         id: route.originalId,
@@ -331,7 +358,7 @@ const adoptComputePort = (port: PortLike): void => {
       hostedWorker.terminate();
       hostedWorker = null;
       computePort = null;
-      spawnRequested = false;
+      stopRecruitment();
     }
   });
   port.start?.();
@@ -380,10 +407,12 @@ const send = (
   port: PortLike,
   request: WorkerRequest,
   transform?: (result: unknown) => unknown,
+  onFailure?: () => void,
 ): void => {
   const routeId = nextRouteId++;
   const base = { port, originalId: request.id, request };
-  routes.set(routeId, transform ? { ...base, transform } : base);
+  const route = transform ? { ...base, transform } : base;
+  routes.set(routeId, onFailure ? { ...route, onFailure } : route);
   computePort!.postMessage({ ...request, id: routeId });
   scheduleWatchdog();
 };
@@ -392,19 +421,20 @@ const forward = (
   port: PortLike,
   request: WorkerRequest,
   transform?: (result: unknown) => unknown,
+  onFailure?: () => void,
 ): void => {
   if (!computePort || !computeReady) {
     const entry = { port, request };
-    backlog.push(transform ? { ...entry, transform } : entry);
+    const queued = transform ? { ...entry, transform } : entry;
+    backlog.push(onFailure ? { ...queued, onFailure } : queued);
     // spawn only when there is no compute at all — during the re-open
     // gate a live compute exists and must not get a twin
-    if (!computePort && !spawnRequested) {
-      spawnAsked = [];
+    if (!computePort && recruitment === null) {
       requestSpawn(port);
     }
     return;
   }
-  send(port, request, transform);
+  send(port, request, transform, onFailure);
 };
 
 const answer = (port: PortLike, id: number, result: unknown): void => {
@@ -486,7 +516,7 @@ const handle = (port: PortLike, request: WorkerRequest): void => {
             control: 'externalChanges',
             name: request.name,
             changes: request.changes,
-          });
+          } satisfies BrokerControlMessage);
         }
       }
       answer(port, request.id, null);
@@ -494,6 +524,14 @@ const handle = (port: PortLike, request: WorkerRequest): void => {
     }
     case 'open': {
       const existing = holders.get(request.name);
+      const alreadyHeld = existing?.has(port) ?? false;
+      const undoHolder = () => {
+        const holding = holders.get(request.name);
+        holding?.delete(port);
+        if (holding?.size === 0) {
+          holders.delete(request.name);
+        }
+      };
       if (existing && existing.size > 0) {
         existing.add(port);
         // joiner — even when the compute is not up yet: the first
@@ -517,13 +555,14 @@ const handle = (port: PortLike, request: WorkerRequest): void => {
                 ?.user_version ?? 0,
             ),
           }),
+          alreadyHeld ? undefined : undoHolder,
         );
         return;
       }
       const set = holders.get(request.name) ?? new Set<PortLike>();
       set.add(port);
       holders.set(request.name, set);
-      forward(port, request);
+      forward(port, request, undefined, undoHolder);
       return;
     }
     case 'close': {
@@ -583,8 +622,8 @@ scope.addEventListener('connect', (event) => {
     return;
   }
   port.addEventListener('message', (messageEvent) => {
-    const data = messageEvent.data as { control?: string } | null;
-    if (data?.control === 'adoptWorkerPort') {
+    const data = messageEvent.data as WorkerRequest | ClientControlMessage;
+    if ('control' in data) {
       const transferred = messageEvent.ports?.[0];
       if (transferred) {
         // A tab asked earlier can answer after another tab already
@@ -592,7 +631,9 @@ scope.addEventListener('connect', (event) => {
         // late worker would strand the live one and leave two computes
         // holding the SAH pool, so the loser is told to bin its worker.
         if (computePort) {
-          port.postMessage({ control: 'discardWorker' });
+          port.postMessage({
+            control: 'discardWorker',
+          } satisfies BrokerControlMessage);
           return;
         }
         adoptComputePort(transferred);
@@ -600,7 +641,7 @@ scope.addEventListener('connect', (event) => {
       return;
     }
     rememberPort(port);
-    handle(port, messageEvent.data as WorkerRequest);
+    handle(port, data);
   });
   port.start?.();
   rememberPort(port);

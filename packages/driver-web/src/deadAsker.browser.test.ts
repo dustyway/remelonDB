@@ -10,10 +10,47 @@
  */
 import { describe, expect, it } from 'vitest';
 import { WebSqliteDriver } from './WebSqliteDriver';
+import type { BrokerControlMessage, WorkerResponse } from './protocol';
 
 const itTabHosted = navigator.userAgent.includes('Firefox') ? it.skip : it;
 
 describe('shared mode: the spawn asker is a dead page', () => {
+  itTabHosted(
+    'a failed cold open does not poison the next open',
+    async () => {
+      const name = `failed-open-${Date.now()}.db`;
+      const silent = new SharedWorker(
+        new URL('./shared-worker.ts', import.meta.url),
+        { type: 'module' },
+      );
+      const failed = new Promise<string>((resolve) => {
+        silent.port.addEventListener('message', (event) => {
+          const data = event.data as {
+            id?: number;
+            ok?: boolean;
+            error?: string;
+          };
+          if (data.id === 1 && data.ok === false) {
+            resolve(data.error ?? '');
+          }
+        });
+      });
+      silent.port.start();
+      silent.port.postMessage({ id: 1, op: 'open', name, storage: 'opfs' });
+
+      expect(await failed).toMatch(/no tab is available/);
+
+      const next = new WebSqliteDriver({ shared: true });
+      await next.open(name);
+      expect(await next.query('select 1 as one', [])).toEqual([{ one: 1 }]);
+
+      await next.destroy();
+      silent.port.close();
+      next.hostedComputeWorker?.terminate();
+    },
+    30_000,
+  );
+
   itTabHosted(
     'a later page still opens the database',
     async () => {
@@ -74,7 +111,8 @@ describe('shared mode: the spawn asker is a dead page', () => {
       );
       silent.port.start();
 
-      alive.hostedComputeWorker?.terminate();
+      const originalWorker = alive.hostedComputeWorker;
+      originalWorker?.terminate();
       silent.port.postMessage({
         id: 1,
         op: 'open',
@@ -82,8 +120,12 @@ describe('shared mode: the spawn asker is a dead page', () => {
         storage: 'opfs',
       });
 
-      // Watchdog + ping deadline + one silent spawn attempt is under 5s.
-      await new Promise((resolve) => setTimeout(resolve, 5500));
+      await expect
+        .poll(() => alive.hostedComputeWorker, {
+          timeout: 10_000,
+          interval: 100,
+        })
+        .not.toBe(originalWorker);
       expect(await alive.query('select 1 as one', [])).toEqual([{ one: 1 }]);
 
       const silentCleanup = new WebSqliteDriver({ shared: true });
@@ -113,9 +155,11 @@ describe('shared mode: the spawn asker is a dead page', () => {
         sawDiscard = resolve;
       });
       slow.port.addEventListener('message', (event) => {
-        const data = event.data as { control?: string } | null;
-        if (data?.control === 'spawnWorker') sawSpawn();
-        if (data?.control === 'discardWorker') sawDiscard();
+        const data = event.data as BrokerControlMessage | WorkerResponse;
+        if ('control' in data) {
+          if (data.control === 'spawnWorker') sawSpawn();
+          if (data.control === 'discardWorker') sawDiscard();
+        }
       });
       slow.port.start();
       slow.port.postMessage({ id: 1, op: 'open', name, storage: 'opfs' });

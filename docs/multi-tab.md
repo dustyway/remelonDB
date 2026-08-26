@@ -166,9 +166,10 @@ their own):
   halves of change propagation.
 
 The protocol gained broker-only ops (`acquireSlot`, `releaseSlot`,
-`publishChanges`, plus the `ping` probe and two control messages) — the
-full op table lives in the driver-web README, since the base protocol
-serves every mode, not just multi-tab.
+`publishChanges`), the `ping` probe, three broker-to-tab control messages, and
+the tab-to-broker `adoptWorkerPort` handoff. The full op table lives in the
+driver-web README, since the base protocol serves every mode, not just
+multi-tab.
 
 ## What does not change
 

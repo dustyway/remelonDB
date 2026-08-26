@@ -176,10 +176,12 @@ truth). Who answers depends on the op:
 | `publishChanges` | broker | relay a commit's change set to the other tabs |
 | `syncTurn` | broker | sync-lease request: grant/renew for the holder, deny others |
 
-In shared mode the broker additionally pushes two unsolicited control
-messages to tabs: `{control: 'spawnWorker'}` (asking a tab to host the
-compute worker) and `{control: 'externalChanges', name, changes}`
-(another tab's commit). In dedicated mode only the worker-answered ops
+In shared mode the broker additionally pushes three unsolicited control
+messages to tabs: `{control: 'spawnWorker'}` asks a tab to host the compute
+worker, `{control: 'discardWorker'}` terminates a late worker after another tab
+won the spawn race, and `{control: 'externalChanges', name, changes}` carries
+another tab's commit. A hosting tab transfers the worker channel back with
+`{control: 'adoptWorkerPort'}`. In dedicated mode only the worker-answered ops
 occur, over a direct Worker transport.
 
 ## Layout

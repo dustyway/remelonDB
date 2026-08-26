@@ -78,3 +78,18 @@ export type WorkerRequest = { readonly id: number } & (
 export type WorkerResponse =
   | { readonly id: number; readonly ok: true; readonly result: unknown }
   | { readonly id: number; readonly ok: false; readonly error: string };
+
+/** Unsolicited broker messages sent to a connected page. */
+export type BrokerControlMessage =
+  | { readonly control: 'spawnWorker' }
+  | { readonly control: 'discardWorker' }
+  | {
+      readonly control: 'externalChanges';
+      readonly name: string;
+      readonly changes: ExternalChangeSet;
+    };
+
+/** Compute-worker handoff sent from a page to the broker. */
+export type ClientControlMessage = {
+  readonly control: 'adoptWorkerPort';
+};

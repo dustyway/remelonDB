@@ -6,6 +6,8 @@ import type {
   SqliteDriver,
 } from '@remelondb/core';
 import type {
+  BrokerControlMessage,
+  ClientControlMessage,
   Endpoint,
   StorageKind,
   WorkerRequest,
@@ -198,44 +200,44 @@ export class WebSqliteDriver implements SqliteDriver {
         postMessage: (message) => shared.port.postMessage(message),
         addMessageListener: (listener) =>
           shared.port.addEventListener('message', (event) => {
-            const data = (event as MessageEvent).data as {
-              control?: string;
-            } | null;
-            if (data?.control === 'externalChanges') {
-              const payload = data as unknown as {
-                name: string;
-                changes: ExternalChangeSet;
-              };
-              if (payload.name === this.name) {
-                this.externalChangesHandler?.(payload.changes);
+            const data = (event as MessageEvent).data as
+              WorkerResponse | BrokerControlMessage;
+            if ('control' in data) {
+              switch (data.control) {
+                case 'externalChanges':
+                  if (data.name === this.name) {
+                    this.externalChangesHandler?.(data.changes);
+                  }
+                  return;
+                case 'discardWorker':
+                  // another tab won the spawn race: this worker would only
+                  // hold OPFS pool handles the winner needs
+                  this.hostedComputeWorker?.terminate();
+                  this.hostedComputeWorker = null;
+                  return;
+                case 'spawnWorker': {
+                  // The broker cannot spawn workers (no Worker constructor in
+                  // SharedWorkerGlobalScope on Chromium/WebKit) — this tab
+                  // hosts the compute worker and bridges a channel to the
+                  // broker. The worker lives and dies with this tab.
+                  const compute = new Worker(
+                    new URL('./worker.ts', import.meta.url),
+                    { type: 'module' },
+                  );
+                  this.hostedComputeWorker = compute;
+                  const channel = new MessageChannel();
+                  compute.postMessage({ __remelondbAdoptPort: true }, [
+                    channel.port2,
+                  ]);
+                  shared.port.postMessage(
+                    {
+                      control: 'adoptWorkerPort',
+                    } satisfies ClientControlMessage,
+                    [channel.port1],
+                  );
+                  return;
+                }
               }
-              return;
-            }
-            if (data?.control === 'discardWorker') {
-              // another tab won the spawn race: this worker would only
-              // hold OPFS pool handles the winner needs
-              this.hostedComputeWorker?.terminate();
-              this.hostedComputeWorker = null;
-              return;
-            }
-            if (data?.control === 'spawnWorker') {
-              // The broker cannot spawn workers (no Worker constructor in
-              // SharedWorkerGlobalScope on Chromium/WebKit) — this tab
-              // hosts the compute worker and bridges a channel to the
-              // broker. The worker lives and dies with this tab.
-              const compute = new Worker(
-                new URL('./worker.ts', import.meta.url),
-                { type: 'module' },
-              );
-              this.hostedComputeWorker = compute;
-              const channel = new MessageChannel();
-              compute.postMessage({ __remelondbAdoptPort: true }, [
-                channel.port2,
-              ]);
-              shared.port.postMessage({ control: 'adoptWorkerPort' }, [
-                channel.port1,
-              ]);
-              return;
             }
             listener(data);
           }),
