@@ -185,9 +185,9 @@ describe('createHttpPost', () => {
     const spy = stubFetch(async () => jsonResponse(503, {}));
     const post = createHttpPost({ baseUrl: '', credentials: 'include' });
     const error = await post('pull', {}).catch((e: unknown) => e);
-    expect((spy.mock.calls[0] as unknown as [string, RequestInit])[1].credentials).toBe(
-      'include',
-    );
+    expect(
+      (spy.mock.calls[0] as unknown as [string, RequestInit])[1].credentials,
+    ).toBe('include');
     expect(error).toBeInstanceOf(SyncTransportError);
     expect((error as SyncTransportError).status).toBe(503);
   });

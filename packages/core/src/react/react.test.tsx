@@ -6,7 +6,13 @@
  * keys, shared observations, loading states, teardown.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { createElement, StrictMode } from 'react';
 import {
   DatabaseProvider,

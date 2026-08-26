@@ -72,7 +72,8 @@ const defaultIsOfflineError = (error: unknown): boolean =>
 export function createSyncController(
   options: SyncControllerOptions,
 ): SyncController {
-  const intervalMs = options.intervalMs === undefined ? 60_000 : options.intervalMs;
+  const intervalMs =
+    options.intervalMs === undefined ? 60_000 : options.intervalMs;
   const debounceMs = options.debounceMs ?? 2_000;
   const isAuthError = options.isAuthError ?? defaultIsAuthError;
   const isOfflineError = options.isOfflineError ?? defaultIsOfflineError;
