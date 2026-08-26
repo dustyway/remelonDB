@@ -577,7 +577,9 @@ user is known, and call `manager.close()` on logout or account change.
 `close()` tears the database down and returns the manager to `idle`,
 and an open still in flight when it is called gets discarded on
 arrival — closed immediately, its `init()` rejecting — so a slow open
-can never resurrect a database after logout:
+can never resurrect a database after logout. `close()` waits for that
+cleanup, so awaiting it means the file is released and the next
+account can open its own:
 
 ```js fragment
 // One owner (only onLogin/onLogout touch this) and one transition at

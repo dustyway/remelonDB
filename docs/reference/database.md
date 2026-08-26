@@ -22,6 +22,45 @@ the schema for a fresh database, migrates an older database, and refuses
 to open a newer one after an app downgrade. A missing migration path
 throws; `open()` never destroys data implicitly.
 
+## The manager, and what closing guarantees
+
+`createDatabaseManager({ open })` wraps `Database.open` in a small
+lifecycle: concurrent `init()` calls share one attempt, a failed open
+stays retryable, and `close()` tears the database down and returns the
+manager to `idle` so a later `init()` (another account, a re-login)
+starts fresh.
+
+`close()` resolves only once nothing the manager opened is still open.
+That includes a database produced by an `init()` that was already
+running when it was called: the late arrival is closed on arrival, and
+`close()` waits for that teardown rather than returning ahead of it. A
+failure closing that late database rejects `close()` instead of
+reporting a clean teardown, and every later `close()` reports that
+same failure rather than claiming a cleanup that did not happen.
+Concurrent calls share one teardown.
+
+`init()` rejects while a close is running: opening then would ask the
+manager to sequence itself against its own teardown. It also rejects
+for good once a close has failed, because a manager whose teardown
+failed has no honest answer for the next `close()`. Await the close
+before replacing the manager: opening a second one over the same
+database while the first is still closing is the race this avoids.
+After a close that succeeded the manager is back at `idle`, and
+`init()` opens fresh, which is the re-login path above.
+
+Awaiting it is therefore enough to know the file is released, which is
+what an owner replacing one database with another needs:
+
+```ts
+await previous.close()   // nothing it opened is still open
+const next = createDatabaseManager({ open })
+await next.init()
+```
+
+A manager does not coordinate with other managers. Where two of them can
+address the same database, the code that owns them sequences the
+replacement, as above.
+
 ## Reads, writes, and the queue
 
 All work is serialized through one strictly-FIFO queue:
