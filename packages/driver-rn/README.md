@@ -9,18 +9,34 @@ need no custom native build: `expo start`, scan, done. Development
 builds and bare React Native apps work the same way (expo-sqlite
 installs as a regular Expo module).
 
-## Ids need a crypto polyfill
+## Ids need a random source
 
 React Native has no WebCrypto: `globalThis.crypto` is undefined on
-Hermes, and neither Expo nor React Native installs a polyfill. Record id
-generation requires it and throws without it, so import a polyfill before
-opening the database:
+Hermes. Record id generation requires `crypto.getRandomValues`, and
+`Database.open` refuses to open without a working one. Two ways to
+provide it, matching the two ways an Expo app runs:
+
+**Expo Go, no native build.** `expo-crypto` ships inside Expo Go. Define
+the global from it before opening the database:
+
+```ts
+import * as Crypto from 'expo-crypto';
+
+if (typeof globalThis.crypto?.getRandomValues !== 'function') {
+  globalThis.crypto = { getRandomValues: Crypto.getRandomValues } as Crypto;
+}
+```
+
+**Development build or bare React Native.** `react-native-get-random-values`
+is a native module: add it, rebuild the app, then import it first:
 
 ```ts
 import 'react-native-get-random-values';
 ```
 
-See [runtimes.md](https://github.com/dustyway/remelonDB/blob/main/docs/reference/runtimes.md).
+Adding that import without rebuilding fails at `Database.open` with
+`'RNGetRandomValues' could not be found`. See
+[runtimes.md](https://github.com/dustyway/remelonDB/blob/main/docs/reference/runtimes.md).
 
 ## Usage
 

@@ -36,12 +36,29 @@ abort checks should do the same.
 **`crypto.getRandomValues` is absent on React Native.** Hermes provides no
 WebCrypto, and neither Expo SDK 57 nor React Native 0.86 installs a
 polyfill: `globalThis.crypto` is `undefined` there. `randomId()` requires
-it and throws a message naming the polyfill when it is missing, so a React
-Native app has to import one before opening a database:
+it, so a React Native app provides one before opening a database. Two
+ways, matching the two ways an Expo app runs.
+
+In Expo Go, `expo-crypto` is already present and can define the global:
 
 ```ts
-import 'react-native-get-random-values';
+import * as Crypto from 'expo-crypto';
+
+if (typeof globalThis.crypto?.getRandomValues !== 'function') {
+  globalThis.crypto = { getRandomValues: Crypto.getRandomValues } as Crypto;
+}
 ```
+
+In a development build or a bare app, `react-native-get-random-values`
+does the same as a native module, which makes installing it a build
+change: rebuild Android or run `pod install`, then import it first. Adding
+the import without rebuilding fails with
+`TurboModuleRegistry.getEnforcing(...): 'RNGetRandomValues' could not be
+found`, the JS half arriving without the native half.
+
+`Database.open` probes the source with one byte before it touches the
+driver, so both failures surface at startup with nothing opened, each with
+a message naming its fix, rather than at the first record an app creates.
 
 There is no `Math.random()` fallback. Ids identify records across devices,
 and a library substituting a weaker source without saying so is worse than
