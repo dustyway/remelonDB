@@ -34,6 +34,10 @@ npx -y "@react-native-community/cli@${CLI_VERSION}" init "$APP_NAME" \
 cd "$APP_NAME"
 npm install
 npm install "$TARBALLS"/*core*.tgz "$TARBALLS"/*driver-rn-cpp*.tgz
+# Hermes has no WebCrypto and randomId requires it, so the harness needs
+# the same polyfill a real app does (docs/reference/runtimes.md). Pinned
+# like everything else here: a lane failure must mean the code changed.
+npm install react-native-get-random-values@1.11.0
 cp "$E2E_DIR/App.tsx" App.tsx
 cp "$E2E_DIR/vitest-shim.ts" vitest-shim.ts
 cp "$E2E_DIR/metro.config.js" metro.config.js

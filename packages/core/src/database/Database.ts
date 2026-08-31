@@ -16,6 +16,7 @@ import type {
   SqlArgs,
   SqliteDriver,
 } from '../driver/SqliteDriver';
+import { fillRandomValues } from '../utils/randomId';
 import type {
   AppSchema,
   ColumnName,
@@ -140,6 +141,11 @@ export class Database {
   /** Open the database, running setup or migrations as needed. */
   static async open(options: DatabaseOptions): Promise<Database> {
     const { driver, schema, migrations, name } = options;
+    // One probe byte before the driver opens anything: a runtime without
+    // a working random source cannot create records, and learning that at
+    // the first save, with a database already open, is the failure this
+    // prevents.
+    fillRandomValues(new Uint8Array(1));
     const { userVersion } = await driver.open(name);
 
     if (userVersion === 0) {
