@@ -92,8 +92,10 @@ These transitions are maintained by `Collection.prepareUpdate`
 ## Ids
 
 `randomId()` generates 16 lowercase alphanumeric characters via
-`crypto.getRandomValues` (Math.random fallback for exotic environments) —
-format-compatible with upstream WatermelonDB ids. Caller-provided ids are
+`crypto.getRandomValues`, format-compatible with upstream WatermelonDB
+ids. It throws when no random source is available, which is the state a
+React Native app is in until it imports a polyfill; see
+[runtimes.md](runtimes.md). Caller-provided ids are
 accepted as-is by `sanitizedRaw` (any non-empty string); id *format* is not
 validated because ids only ever travel as bound parameters, never as SQL
 text.
