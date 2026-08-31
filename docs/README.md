@@ -64,6 +64,7 @@ they track the code and are updated with it.
 | [reference/backend.md](reference/backend.md) | Building a sync backend: the engine/store obligation split, the Postgres table contract, store and endpoint configuration, retention, and certifying a store against the conformance suite. |
 | [reference/schema.md](reference/schema.md) | Defining tables (Zod-first via `zodTable`, hand-written builders as the alternative), inferred record types, standard columns, reserved names, DDL output, migrations and the no-silent-reset contract. |
 | [reference/records.md](reference/records.md) | `RawRecord`, the `sanitizedRaw` trust boundary and its coercion rules, sync fields (`_status`/`_changed`), ids. |
+| [reference/runtimes.md](reference/runtimes.md) | The runtimes the library targets, the host globals it assumes, the known gaps on Hermes and React Native, and what an application has to supply. |
 | [reference/driver.md](reference/driver.md) | The `SqliteDriver` contract: method obligations, value conventions, batch atomicity, why the seam is async, how to implement and conformance-test a new driver. |
 
 ## Conventions used across the codebase
