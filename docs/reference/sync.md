@@ -275,9 +275,14 @@ verb works without `start()`.
 State is data for the UI, published to `subscribe` listeners:
 
 ```ts
-{ status, lastSyncAt, error, lastResult }
+{ status, lastSyncAt, error, cause, lastResult }
 // status: 'idle' | 'syncing' | 'offline' | 'error' | 'resync-required'
+// error: the message; cause: the value the run threw, null after success
 ```
+
+`error` is a string for display. `cause` is the thrown value itself, kept
+for logging: `JSON.stringify(state)` drops an Error's stack, so log
+`state.cause` directly when the message is not enough.
 
 Thrown run errors are classified by two predicates. `isAuthError`
 (default: `SyncTransportError` with status 401) marks the session gone:

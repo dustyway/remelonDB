@@ -84,27 +84,32 @@ describe('sync controller', () => {
 
   it('an offline error reads as offline, recovery as idle', async () => {
     let fail = true;
+    const error = new SyncTransportError('sync pull: network failure');
     const { controller } = make(async () => {
-      if (fail) throw new SyncTransportError('sync pull: network failure');
+      if (fail) throw error;
       return ok;
     });
     controller.start();
     await flush();
     expect(controller.state.status).toBe('offline');
+    expect(controller.state.cause).toBe(error);
     fail = false;
     controller.syncNow();
     await flush();
     expect(controller.state.status).toBe('idle');
+    expect(controller.state.cause).toBeNull();
   });
 
   it('a server error reads as error and keeps the message', async () => {
+    const error = new SyncTransportError('sync push: HTTP 500', 500);
     const { controller } = make(async () => {
-      throw new SyncTransportError('sync push: HTTP 500', 500);
+      throw error;
     });
     controller.start();
     await flush();
     expect(controller.state.status).toBe('error');
     expect(controller.state.error).toContain('HTTP 500');
+    expect(controller.state.cause).toBe(error);
   });
 
   it('an auth error blocks automatic retries until a manual retry', async () => {

@@ -26,6 +26,12 @@ export interface SyncControllerState {
   readonly status: SyncControllerStatus;
   readonly lastSyncAt: number | null;
   readonly error: string | null;
+  /**
+   * The value the failed run threw, for logging and diagnostics; null
+   * when the last run did not fail. The message is a rendering of this
+   * and loses everything else, including an Error's stack.
+   */
+  readonly cause: unknown;
   /** The last completed run, null before the first one. Rejections live
    * here; mapping them to a visible status is the app's decision. */
   readonly lastResult: RunSyncResult | null;
@@ -82,6 +88,7 @@ export function createSyncController(
     status: 'idle',
     lastSyncAt: null,
     error: null,
+    cause: null,
     lastResult: null,
   };
   const listeners = new Set<(state: SyncControllerState) => void>();
@@ -118,6 +125,7 @@ export function createSyncController(
             status: result.resynced ? 'resync-required' : 'idle',
             lastSyncAt: Date.now(),
             error: null,
+            cause: null,
             lastResult: result,
           });
         },
@@ -129,14 +137,14 @@ export function createSyncController(
             // the session is gone: stop the machinery, the auth layer
             // owns what happens next; a manual retry re-arms
             authBlocked = true;
-            setState({ status: 'error', error: message });
+            setState({ status: 'error', error: message, cause: error });
             return;
           }
           if (isOfflineError(error)) {
-            setState({ status: 'offline', error: message });
+            setState({ status: 'offline', error: message, cause: error });
             return;
           }
-          setState({ status: 'error', error: String(error) });
+          setState({ status: 'error', error: String(error), cause: error });
         },
       )
       .finally(() => {
