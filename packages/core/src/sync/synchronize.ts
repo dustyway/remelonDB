@@ -11,6 +11,7 @@
  */
 import type { Database } from '../database/Database';
 import { runDirect } from '../database/directWork';
+import { throwIfAborted } from '../utils/abort';
 import { stepsForMigration } from '../schema/migrations';
 import { applyRemoteChanges, type ConflictResolver } from './applyRemote';
 import { fetchLocalChanges } from './fetchLocal';
@@ -196,7 +197,7 @@ async function runSynchronize(
 ): Promise<SynchronizeResult> {
   const { database, log = () => {} } = options;
   const retries = options.conflictRetries ?? 5;
-  options.signal?.throwIfAborted();
+  throwIfAborted(options.signal);
 
   // Multi-tab: only the sync-lease holder runs; everyone else's tick is
   // a cheap no-op. Drivers without shared storage have no hook.
@@ -222,7 +223,7 @@ async function runSynchronize(
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     // ---- pull phase ----
-    options.signal?.throwIfAborted();
+    throwIfAborted(options.signal);
     const pullCursor = await getCursor(database);
     const { migration, shouldSaveVersion } = await migrationInfo(
       database,
@@ -260,7 +261,7 @@ async function runSynchronize(
     pulledTotal += countRows(pulled.changes);
 
     // abort before the apply write, never inside it
-    options.signal?.throwIfAborted();
+    throwIfAborted(options.signal);
     await database.write(async () => {
       if ((await getCursor(database)) !== pullCursor) {
         throw new Error(
@@ -302,7 +303,7 @@ async function runSynchronize(
     if (localChanges.isEmpty) {
       return doneWithoutPush();
     }
-    options.signal?.throwIfAborted();
+    throwIfAborted(options.signal);
     const unvalidatedPushResult: unknown = await options.pushChanges(
       {
         changes: localChanges.changes,

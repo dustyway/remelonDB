@@ -591,6 +591,29 @@ describe('sync engine', () => {
       expect(push).not.toHaveBeenCalled();
     });
 
+    // Hermes (React Native) provides an AbortSignal without
+    // throwIfAborted. A signal shaped like that has to work the same as
+    // a real one: the engine reads `aborted`, it never calls a method
+    // the runtime may not have.
+    it('runs with a signal that has no throwIfAborted method', async () => {
+      server.seed('s1', { name: 'server', position: 1 });
+      const signal = { aborted: false } as unknown as AbortSignal;
+
+      const result = await sync({ signal });
+
+      expect(result.pulled).toBe(1);
+      expect(await db.get('tasks').find('s1')).toBeTruthy();
+    });
+
+    it('stops on an aborted signal that has no throwIfAborted method', async () => {
+      const pull = vi.fn(server.pull);
+      const reason = new Error('owner logged out');
+      const signal = { aborted: true, reason } as unknown as AbortSignal;
+
+      await expect(sync({ pullChanges: pull, signal })).rejects.toBe(reason);
+      expect(pull).not.toHaveBeenCalled();
+    });
+
     it('the transport receives the signal for request cancellation', async () => {
       const controller = new AbortController();
       const seen: (AbortSignal | undefined)[] = [];
