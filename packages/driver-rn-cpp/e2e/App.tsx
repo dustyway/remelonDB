@@ -15,9 +15,18 @@ import {
   appSchema,
   column as c,
   table,
+  createRunSync,
+  createSyncController,
   Database,
   ModelFor,
   Q,
+  synchronize,
+  type DirtyRaw,
+  type SyncChanges,
+  type SyncPullArgs,
+  type SyncPullResult,
+  type SyncPushArgs,
+  type SyncPushResult,
 } from '@remelondb/core';
 import { RnSqliteDriver } from '@remelondb/driver-rn-cpp';
 import { registerDriverConformance } from '@remelondb/core/conformance';
@@ -174,6 +183,210 @@ async function runCoreTest(push: (r: Result) => void): Promise<void> {
   }
 }
 
+/**
+ * The smallest backend the protocol accepts: a rev counter and a map.
+ * Enough to prove the orchestrator runs on this runtime; the wire
+ * contract itself is covered by the Node suites.
+ */
+class MemoryBackend {
+  rev = 0;
+  docs = new Map<string, { fields: DirtyRaw; rev: number }>();
+  pullCalls = 0;
+  pushCalls = 0;
+
+  seed(id: string, fields: DirtyRaw): void {
+    this.docs.set(id, { fields: { ...fields, id }, rev: ++this.rev });
+  }
+
+  private changesSince(cursor: number): SyncChanges {
+    const created: DirtyRaw[] = [];
+    const updated: DirtyRaw[] = [];
+    for (const doc of this.docs.values()) {
+      if (doc.rev <= cursor) continue;
+      (cursor === 0 ? created : updated).push(doc.fields);
+    }
+    return { tasks: { created, updated, deleted: [] } };
+  }
+
+  pull = async (args: SyncPullArgs): Promise<SyncPullResult> => {
+    this.pullCalls++;
+    const cursor = args.cursor === null ? 0 : Number(args.cursor);
+    return { changes: this.changesSince(cursor), cursor: String(this.rev) };
+  };
+
+  push = async (args: SyncPushArgs): Promise<SyncPushResult> => {
+    this.pushCalls++;
+    const table = args.changes['tasks'];
+    for (const record of [
+      ...(table?.created ?? []),
+      ...(table?.updated ?? []),
+    ]) {
+      this.docs.set(record['id'] as string, {
+        fields: { ...record },
+        rev: ++this.rev,
+      });
+    }
+    return {
+      cursor: String(this.rev),
+      changes: { tasks: { created: [], updated: [], deleted: [] } },
+    };
+  };
+}
+
+/**
+ * The sync orchestrator on device. The driver suites below cover SQLite
+ * itself; this covers everything above it, which is where a runtime gap
+ * hid once already: `AbortSignal.prototype.throwIfAborted` does not
+ * exist on Hermes, and the first statement of every run called it, so
+ * mobile sync failed before its first request while Node and browsers
+ * stayed green.
+ */
+async function runSyncTest(push: (r: Result) => void): Promise<void> {
+  const step = async (name: string, fn: () => Promise<void>) => {
+    try {
+      await fn();
+      push({ name, ok: true });
+    } catch (e) {
+      push({ name, ok: false, detail: String(e) });
+      throw e;
+    }
+  };
+
+  const schema = appSchema({ version: 1, tables: [tasks] });
+  const cleaner = new RnSqliteDriver();
+  await cleaner.open('smoke-sync.db');
+  await cleaner.destroy();
+
+  const db = await Database.open({
+    driver: new RnSqliteDriver(),
+    schema,
+    modelClasses: [SmokeTask],
+    name: 'smoke-sync.db',
+  });
+  const backend = new MemoryBackend();
+
+  await step('sync round trip: local pushed, remote pulled', async () => {
+    backend.seed('remote-1', {
+      name: 'from server',
+      position: 2,
+      is_done: false,
+    });
+    await db.write(() =>
+      db.get(SmokeTask).create({ name: 'from device', position: 1 }),
+    );
+
+    const result = await synchronize({
+      database: db,
+      pullChanges: backend.pull,
+      pushChanges: backend.push,
+    });
+
+    assert(result.pulled === 1, `pulled: ${result.pulled}`);
+    assert(result.pushed === 1, `pushed: ${result.pushed}`);
+    assert(
+      (await db.get(SmokeTask).find('remote-1')) !== null,
+      'the pulled record is missing locally',
+    );
+  });
+
+  await step('an aborted signal stops the run before any traffic', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const before = backend.pullCalls;
+    let rejected = false;
+
+    try {
+      await synchronize({
+        database: db,
+        pullChanges: backend.pull,
+        pushChanges: backend.push,
+        signal: controller.signal,
+      });
+    } catch {
+      rejected = true;
+    }
+
+    assert(rejected, 'an aborted run resolved instead of rejecting');
+    assert(backend.pullCalls === before, 'the aborted run still pulled');
+  });
+
+  await step('the controller reaches idle rather than error', async () => {
+    // The path a real app uses: controller -> runSync -> synchronize,
+    // with the signal the controller supplies for logout.
+    const controller = createSyncController({
+      runSync: createRunSync({
+        database: db,
+        pullChanges: backend.pull,
+        pushChanges: backend.push,
+      }),
+      intervalMs: null,
+    });
+    controller.syncNow();
+
+    const deadline = Date.now() + 10_000;
+    while (controller.state.status === 'syncing' && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    const { status, error } = controller.state;
+    controller.dispose();
+
+    assert(status === 'idle', `controller status: ${status} (${error})`);
+  });
+
+  await step('dispose aborts the run it left in flight', async () => {
+    // Logout while a sync is running: the controller aborts through the
+    // signal it handed to runSync, and the engine has to stop at its next
+    // abort check rather than carry on into the push. Sequenced on
+    // promises, not sleeps: the pull reports when it has started, and the
+    // assertion waits for the run itself to settle. A disposed controller
+    // publishes nothing further, so its state is not the signal to wait on.
+    let pullStarted = (): void => {};
+    const started = new Promise<void>((resolve) => {
+      pullStarted = resolve;
+    });
+    let releasePull = (): void => {};
+    const held = new Promise<void>((resolve) => {
+      releasePull = resolve;
+    });
+    const pushesBefore = backend.pushCalls;
+
+    await db.write(() =>
+      db.get(SmokeTask).create({ name: 'pending at logout', position: 3 }),
+    );
+
+    const runSync = createRunSync({
+      database: db,
+      pullChanges: async (args) => {
+        pullStarted();
+        await held;
+        return backend.pull(args);
+      },
+      pushChanges: backend.push,
+    });
+    let run: ReturnType<typeof runSync> | undefined;
+    const controller = createSyncController({
+      runSync: (signal) => {
+        run = runSync(signal);
+        return run;
+      },
+      intervalMs: null,
+    });
+
+    controller.syncNow();
+    await started;
+    controller.dispose();
+    releasePull();
+    await run?.catch(() => undefined);
+
+    assert(
+      backend.pushCalls === pushesBefore,
+      'the disposed run pushed after its owner was gone',
+    );
+  });
+
+  await db.close();
+}
+
 async function runConformance(push: (r: Result) => void): Promise<void> {
   let counter = 0;
   registerDriverConformance({
@@ -217,6 +430,7 @@ export default function App(): React.JSX.Element {
       try {
         await runSeamTests(push);
         await runCoreTest(push);
+        await runSyncTest(push);
         await runConformance(push);
         console.log('WMSMOKE: ALL PASS');
         setVerdict('PASS');
