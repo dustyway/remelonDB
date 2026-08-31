@@ -28,8 +28,14 @@ jobs:
         id: filter
         with:
           filters: |
+            # core rides along because the Hermes lane is what covers it
+            # on this runtime: the sync orchestrator, the controller, and
+            # anything else above the driver runs only in Node and
+            # browsers otherwise (#42).
             cpp:
               - 'packages/driver-rn-cpp/**'
+              - 'packages/core/**'
+              - 'pnpm-lock.yaml'
               - '.github/workflows/ci.yml'
             web:
               - 'packages/driver-web/**'
