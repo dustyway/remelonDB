@@ -1783,7 +1783,7 @@ The state semantics are precise about *overlap*. `isPending` counts every in-fli
 Chapter 10's controller publishes its state to subscribers, which is the
 same shape `useDatabaseState` consumes from the manager, so the hook is
 the same three lines of `useSyncExternalStore` over a different object:
-`useSyncState(controller)` returns `{ status, lastSyncAt, error,
+`useSyncState(controller)` returns `{ status, lastSyncAt, error, cause,
 lastResult }` and re-renders exactly on transitions. It takes the
 controller explicitly — there is no controller provider, because an app
 that owns one controller per authenticated database already has it in
@@ -2257,7 +2257,7 @@ The public surface in the current source tree, grouped by subpath. This appendix
 - **Collection / Query:** `.query(...clauses)`, `.fetch()`, `.fetchCount()`, `.observe(cb, onError?)`, `.observeCount(cb, onError?)` — without `onError`, observation failures stay unhandled rejections.
 - **Q:** `Q.where`, `Q.and`, `Q.or`, `Q.on`, `Q.joinTables`, `Q.nestedJoin`, `Q.sortBy` (`Q.asc`/`Q.desc`), `Q.take`, `Q.skip`; operators `Q.eq`, `Q.notEq`, `Q.gt`, `Q.gte`, `Q.lt`, `Q.lte`, `Q.oneOf`, `Q.notIn`, `Q.between`, `Q.like`, `Q.notLike`, `Q.includes`, `Q.column`, `Q.escapeLike`; escape hatches `Q.unsafeSqlExpr`, `Q.unsafeSqlQuery`.
 - **Sync:** `synchronize({ database, pullChanges, pushChanges?, validatePullResult?, validatePushResult?, conflictResolver?, sendCreatedAsUpdated?, migrationsEnabledAtVersion?, conflictRetries?, signal?, log? })` → `SynchronizeResult` (`{ lease, resynced, pulled, pushed, rejected, rejectedRecords, retryCount }`); the transport functions receive `(args, signal?)`.
-- **Sync controller:** `createSyncController({ runSync, intervalMs?, debounceMs?, triggers?, isAuthError?, isOfflineError? })` → `{ state, subscribe, start, notifyLocalWrite, syncNow, dispose }`, state `{ status, lastSyncAt, error, lastResult }`; `createRunSync(synchronizeOptions)` → `(signal?) => RunSyncResult` (`{ resynced, rejected, rejectedRecords }`).
+- **Sync controller:** `createSyncController({ runSync, intervalMs?, debounceMs?, triggers?, isAuthError?, isOfflineError? })` → `{ state, subscribe, start, notifyLocalWrite, syncNow, dispose }`, state `{ status, lastSyncAt, error, cause, lastResult }`; `createRunSync(synchronizeOptions)` → `(signal?) => RunSyncResult` (`{ resynced, rejected, rejectedRecords }`).
 - **Migrations:** `schemaMigrations({ migrations })`, step builders (`createTable`, `addColumns`, `unsafeExecuteSql`).
 
 ## `@remelondb/core/transport`
