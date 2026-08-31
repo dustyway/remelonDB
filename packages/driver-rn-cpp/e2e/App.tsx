@@ -3,6 +3,9 @@
  * Each check logs `WMSMOKE: ...` so results are readable via
  * `adb logcat -s ReactNativeJS` without watching the screen.
  */
+// Before anything opens a database: Hermes has no WebCrypto, and record
+// ids require it (docs/reference/runtimes.md).
+import 'react-native-get-random-values';
 import React, { useEffect, useState } from 'react';
 import {
   SafeAreaView,
@@ -14,6 +17,7 @@ import {
 import {
   appSchema,
   column as c,
+  randomId,
   table,
   createRunSync,
   createSyncController,
@@ -241,6 +245,29 @@ class MemoryBackend {
  * mobile sync failed before its first request while Node and browsers
  * stayed green.
  */
+/**
+ * Ids need a random source this runtime does not provide on its own. The
+ * harness imports the polyfill at entry like any app; without it
+ * `randomId` throws rather than quietly handing out Math.random ids.
+ */
+function runIdTest(push: (r: Result) => void): void {
+  try {
+    const ids = new Set(Array.from({ length: 200 }, () => randomId()));
+    assert(ids.size === 200, `duplicate ids: ${200 - ids.size}`);
+    for (const id of ids) {
+      assert(/^[a-z0-9]{16}$/.test(id), `bad id shape: ${id}`);
+    }
+    push({ name: 'randomId has a random source on this runtime', ok: true });
+  } catch (e) {
+    push({
+      name: 'randomId has a random source on this runtime',
+      ok: false,
+      detail: String(e),
+    });
+    throw e;
+  }
+}
+
 async function runSyncTest(push: (r: Result) => void): Promise<void> {
   const step = async (name: string, fn: () => Promise<void>) => {
     try {
@@ -429,6 +456,7 @@ export default function App(): React.JSX.Element {
     (async () => {
       try {
         await runSeamTests(push);
+        runIdTest(push);
         await runCoreTest(push);
         await runSyncTest(push);
         await runConformance(push);

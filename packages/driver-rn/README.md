@@ -9,6 +9,19 @@ need no custom native build: `expo start`, scan, done. Development
 builds and bare React Native apps work the same way (expo-sqlite
 installs as a regular Expo module).
 
+## Ids need a crypto polyfill
+
+React Native has no WebCrypto: `globalThis.crypto` is undefined on
+Hermes, and neither Expo nor React Native installs a polyfill. Record id
+generation requires it and throws without it, so import a polyfill before
+opening the database:
+
+```ts
+import 'react-native-get-random-values';
+```
+
+See [runtimes.md](https://github.com/dustyway/remelonDB/blob/main/docs/reference/runtimes.md).
+
 ## Usage
 
 ```ts
