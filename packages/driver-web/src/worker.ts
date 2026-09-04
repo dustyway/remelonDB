@@ -29,12 +29,21 @@ const scope = globalThis as unknown as {
 };
 
 const endpoint: Endpoint = {
-  postMessage: (message) => scope.postMessage(message),
-  addMessageListener: (listener) =>
-    scope.addEventListener('message', (event) => listener(event.data)),
+  postMessage: (message) => {
+    scope.postMessage(message);
+  },
+  addMessageListener: (listener) => {
+    scope.addEventListener('message', (event) => {
+      listener(event.data);
+    });
+  },
 };
 
-// the init options (print/printErr) are untyped in sqlite-wasm's d.ts
+// the init options (print/printErr) are untyped in sqlite-wasm's d.ts,
+// so this assertion adds what the runtime accepts. eslint's
+// no-unnecessary-type-assertion misjudges it and its fixer breaks the
+// call below; the disable is deliberate.
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-unsafe-type-assertion
 const init = sqlite3InitModule as (options?: {
   print?: (message: string) => void;
   printErr?: (message: string) => void;
@@ -53,11 +62,14 @@ scope.addEventListener('message', (event) => {
   const port = event.ports?.[0];
   if (data?.__remelondbAdoptPort === true && port) {
     serve({
-      postMessage: (message) => port.postMessage(message),
-      addMessageListener: (listener) =>
-        port.addEventListener('message', (portEvent) =>
-          listener(portEvent.data),
-        ),
+      postMessage: (message) => {
+        port.postMessage(message);
+      },
+      addMessageListener: (listener) => {
+        port.addEventListener('message', (portEvent) => {
+          listener(portEvent.data);
+        });
+      },
     });
     port.start?.();
   }

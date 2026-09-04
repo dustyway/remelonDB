@@ -36,10 +36,9 @@ const DESIGNED_ERRORS = [
 const withDeadline = async <T>(what: string, work: Promise<T>): Promise<T> => {
   let timer: ReturnType<typeof setTimeout>;
   const guard = new Promise<never>((_, reject) => {
-    timer = setTimeout(
-      () => reject(new Error(`HANG: ${what} exceeded ${OP_DEADLINE_MS}ms`)),
-      OP_DEADLINE_MS,
-    );
+    timer = setTimeout(() => {
+      reject(new Error(`HANG: ${what} exceeded ${OP_DEADLINE_MS}ms`));
+    }, OP_DEADLINE_MS);
   });
   try {
     return await Promise.race([work, guard]);

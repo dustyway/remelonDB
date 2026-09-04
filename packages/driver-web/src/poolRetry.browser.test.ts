@@ -14,13 +14,22 @@ const createWorker = () =>
   new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
 
 const asEndpoint = (worker: Worker): Endpoint => ({
-  postMessage: (message) => worker.postMessage(message),
-  addMessageListener: (listener) =>
-    worker.addEventListener('message', (event) => listener(event.data)),
+  postMessage: (message) => {
+    worker.postMessage(message);
+  },
+  addMessageListener: (listener) => {
+    worker.addEventListener('message', (event) => {
+      listener(event.data);
+    });
+  },
 });
 
 const workers: Worker[] = [];
-afterAll(() => workers.forEach((worker) => worker.terminate()));
+afterAll(() => {
+  workers.forEach((worker) => {
+    worker.terminate();
+  });
+});
 
 describe('pool acquisition after a holder dies (remelonDB#3)', () => {
   it('reopens immediately after the holding worker is terminated, no sleep', async () => {

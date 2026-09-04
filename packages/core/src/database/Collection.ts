@@ -89,10 +89,7 @@ export class Collection<M = RawRecord, C extends string = string> {
   }
 
   query(...clauses: Clause<C>[]): Query<M> {
-    return new Query(
-      this as Collection<M>,
-      Q.buildQueryDescription(clauses as readonly Clause[]),
-    );
+    return new Query(this, Q.buildQueryDescription(clauses));
   }
 
   /** @internal The cached raw for an id, loaded from storage if needed. */

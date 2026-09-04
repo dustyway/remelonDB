@@ -415,7 +415,7 @@ function sharedStore<T>(
         const stop = created.subscribe(listener);
         return () => {
           stop();
-          if (created.idle()) registry!.delete(key);
+          if (created.idle()) registry.delete(key);
         };
       },
       snapshot: created.snapshot,
@@ -503,19 +503,20 @@ export function useQuery<M, T>(
     if (!query || !database || !key) return noStore;
     return sharedStore<QueryResult<M>>(database, `q:${key}`, () => {
       let latest: M[] = [];
-      return createStore<QueryResult<M>>(LOADING as QueryResult<M>, (set) =>
+      return createStore<QueryResult<M>>(LOADING, (set) =>
         query.observe(
           (data) => {
             latest = data;
             set({ data, isLoading: false, error: null, isPreviousData: false });
           },
-          (error) =>
+          (error) => {
             set({
               data: latest,
               isLoading: false,
               error,
               isPreviousData: false,
-            }),
+            });
+          },
         ),
       );
     });
@@ -524,7 +525,7 @@ export function useQuery<M, T>(
     store.subscribe,
     store.snapshot,
     store.snapshot,
-  ) as QueryResult<M>;
+  );
 
   // keepPreviousData retention is deliberately consumer-local: a ref in
   // this hook instance, never the shared store, so one consumer's
@@ -610,7 +611,9 @@ export function useQueryCountResult(
               latest = data;
               set({ data, isLoading: false, error: null });
             },
-            (error) => set({ data: latest, isLoading: false, error }),
+            (error) => {
+              set({ data: latest, isLoading: false, error });
+            },
           ),
       );
     });
@@ -619,7 +622,7 @@ export function useQueryCountResult(
     store ? store.subscribe : noStore.subscribe,
     store ? store.snapshot : () => NO_COUNT,
     store ? store.snapshot : () => NO_COUNT,
-  ) as QueryCountResult;
+  );
 }
 
 const NO_COUNT: QueryCountResult = {

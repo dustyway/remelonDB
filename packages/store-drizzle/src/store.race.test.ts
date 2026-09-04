@@ -56,7 +56,7 @@ d('pull race on real postgres', () => {
         )
       `);
         const store = createDrizzleStore<string>({
-          db: drizzle(pool) as unknown as DrizzleDb,
+          db: drizzle(pool),
           revSequence: 'race_rev',
           metaTable: 'race_meta',
           tables: {

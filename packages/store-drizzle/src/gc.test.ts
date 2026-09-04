@@ -10,14 +10,12 @@ const pullArgs = (cursor: string | null) => ({
   schemaVersion: 1,
   migration: null,
 });
-const created = (rows: Record<string, unknown>[]): SyncChanges =>
-  ({
-    tasks: { created: rows, updated: [], deleted: [] },
-  }) as unknown as SyncChanges;
-const deleted = (ids: string[]): SyncChanges =>
-  ({
-    tasks: { created: [], updated: [], deleted: ids },
-  }) as unknown as SyncChanges;
+const created = (rows: Record<string, unknown>[]): SyncChanges => ({
+  tasks: { created: rows, updated: [], deleted: [] },
+});
+const deleted = (ids: string[]): SyncChanges => ({
+  tasks: { created: [], updated: [], deleted: ids },
+});
 
 describe('gc and scrub', () => {
   it('scrubs tombstoned content, prunes below the floor, degrades old cursors', async () => {

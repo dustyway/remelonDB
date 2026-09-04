@@ -255,16 +255,16 @@ export class Database {
     MC extends {
       new (...args: any[]): Model;
       readonly table: string;
-      readonly schema: TableSchema<ColumnsSpec>;
+      readonly schema: TableSchema;
     },
   >(modelClass: MC): Collection<InstanceType<MC>, ColumnsOf<MC>>;
-  get<T extends TableSchema<ColumnsSpec>>(
+  get<T extends TableSchema>(
     table: T,
   ): Collection<TypedModel<T>, ColumnName<T>>;
   get<M = RawRecord>(table: string): Collection<M>;
   get(
-    arg: string | TableSchema | TypedModelClass<TableSchema<ColumnsSpec>>,
-  ): Collection<unknown, string> {
+    arg: string | TableSchema | TypedModelClass<TableSchema>,
+  ): Collection<unknown> {
     const table =
       typeof arg === 'string'
         ? arg
@@ -277,7 +277,7 @@ export class Database {
         `No collection for table '${table}' — is it in the schema?`,
       );
     }
-    return collection as Collection<unknown, string>;
+    return collection;
   }
 
   /**
@@ -478,7 +478,7 @@ export class Database {
     // Change propagation, sending half (docs/multi-tab.md). Only real
     // commits publish — applyExternalChanges must not re-publish what it
     // received, or two contexts would echo changes forever.
-    this.driver.publishChanges?.(changeSet as ExternalChangeSet);
+    this.driver.publishChanges?.(changeSet);
   }
 
   /**

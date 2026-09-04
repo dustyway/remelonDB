@@ -63,7 +63,7 @@ function ensureValue(value: unknown): Value {
   ) {
     throw new Error(`Q: invalid value ${String(value)} — must be a primitive`);
   }
-  return value as Value;
+  return value;
 }
 
 function ensureNonNullValue(value: unknown): NonNullValue {

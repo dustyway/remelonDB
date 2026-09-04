@@ -56,10 +56,10 @@ export interface ModelClass<M extends Model = Model> {
  * and stays readonly.
  * @category Models
  */
-export type TypedModel<T extends TableSchema<ColumnsSpec>> = Model &
+export type TypedModel<T extends TableSchema> = Model &
   Omit<InferRecord<T>, 'id'>;
 
-export interface TypedModelClass<T extends TableSchema<ColumnsSpec>> {
+export interface TypedModelClass<T extends TableSchema> {
   new (collection: Collection<any>, raw: RawRecord): TypedModel<T>;
   readonly table: string;
   readonly schema: T;
@@ -83,9 +83,7 @@ export interface TypedModelClass<T extends TableSchema<ColumnsSpec>> {
  * ```
  * @category Models
  */
-export function ModelFor<T extends TableSchema<ColumnsSpec>>(
-  schema: T,
-): TypedModelClass<T> {
+export function ModelFor<T extends TableSchema>(schema: T): TypedModelClass<T> {
   class Bound extends Model {
     static override readonly table = schema.name;
     static override readonly schema = schema;
@@ -98,7 +96,7 @@ export function ModelFor<T extends TableSchema<ColumnsSpec>>(
  * @category Models
  */
 export type ColumnsOf<MC> = MC extends { readonly schema: infer T }
-  ? T extends TableSchema<ColumnsSpec>
+  ? T extends TableSchema
     ? ColumnName<T>
     : string
   : string;

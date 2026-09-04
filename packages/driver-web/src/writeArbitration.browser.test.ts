@@ -53,8 +53,8 @@ describe('shared mode write arbitration', () => {
     await tabB.open(name);
 
     const log: string[] = [];
-    const releaseA = await tabA.acquireWorkSlot!(true);
-    const pendingB = tabB.acquireWorkSlot!(true).then((release) => {
+    const releaseA = await tabA.acquireWorkSlot(true);
+    const pendingB = tabB.acquireWorkSlot(true).then((release) => {
       log.push('b granted');
       return release;
     });
@@ -67,8 +67,8 @@ describe('shared mode write arbitration', () => {
     await releaseB();
 
     // shared slots coexist with each other
-    const sharedA = await tabA.acquireWorkSlot!(false);
-    const sharedB = await tabB.acquireWorkSlot!(false);
+    const sharedA = await tabA.acquireWorkSlot(false);
+    const sharedB = await tabB.acquireWorkSlot(false);
     await sharedA();
     await sharedB();
 

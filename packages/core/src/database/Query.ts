@@ -166,8 +166,11 @@ export class Query<M = RawRecord> {
       );
     };
 
-    const unsubscribe = this.collection.database.onChange(this.allTables, () =>
-      refetch('change'),
+    const unsubscribe = this.collection.database.onChange(
+      this.allTables,
+      () => {
+        refetch('change');
+      },
     );
     refetch('initial');
     return () => {
@@ -247,8 +250,11 @@ export class Query<M = RawRecord> {
       );
     };
 
-    const unsubscribe = this.collection.database.onChange(this.allTables, () =>
-      refetch('change'),
+    const unsubscribe = this.collection.database.onChange(
+      this.allTables,
+      () => {
+        refetch('change');
+      },
     );
     refetch('initial');
     return () => {

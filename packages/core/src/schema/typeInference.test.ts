@@ -46,9 +46,9 @@ describe('schema-inferred types', () => {
     assertType<Equal<typeof t.project_id, string | null>>();
     const use = (): void => {
       // @ts-expect-error — misspelled/undeclared fields do not exist
-      void t.nmae;
+      t.nmae;
     };
-    void use;
+    use;
     expect(Task.table).toBe('tasks');
     expect(Task.schema).toBe(tasks);
   });
@@ -70,7 +70,7 @@ describe('schema-inferred types', () => {
       // @ts-expect-error — and/or propagate column checking
       collection.query(Q.or(Q.where('name', 'a'), Q.where('nmae', 'b')));
     };
-    void use;
+    use;
     expect(true).toBe(true);
   });
 });

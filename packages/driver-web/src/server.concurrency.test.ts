@@ -62,17 +62,23 @@ function serveWith(
   const serverListeners: Array<(m: unknown) => void> = [];
   const pending = new Map<number, (r: WorkerResponse) => void>();
   const clientEndpoint: Endpoint = {
-    postMessage: (message) =>
-      queueMicrotask(() => serverListeners.forEach((l) => l(message))),
+    postMessage: (message) => {
+      queueMicrotask(() => {
+        serverListeners.forEach((l) => {
+          l(message);
+        });
+      });
+    },
     addMessageListener: () => {},
   };
   const serverEndpoint: Endpoint = {
-    postMessage: (message) =>
+    postMessage: (message) => {
       queueMicrotask(() => {
         const response = message as WorkerResponse;
         pending.get(response.id)?.(response);
         pending.delete(response.id);
-      }),
+      });
+    },
     addMessageListener: (l) => serverListeners.push(l),
   };
   serveSqliteWorker(serverEndpoint, () => Promise.resolve(sqlite3));
@@ -94,9 +100,7 @@ describe('worker server request serialization', () => {
     ]);
 
     const oks = [a, b].filter((r) => r.ok);
-    const errs = [a, b].filter((r) => !r.ok) as Array<
-      Extract<WorkerResponse, { ok: false }>
-    >;
+    const errs = [a, b].filter((r) => !r.ok);
     expect(oks).toHaveLength(1);
     expect(errs).toHaveLength(1);
     const [err] = errs;

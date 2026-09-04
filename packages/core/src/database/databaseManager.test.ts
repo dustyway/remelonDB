@@ -210,7 +210,9 @@ describe('close() during a pending open', () => {
   const slowDb = () => {
     let settle!: (failure?: Error) => void;
     const closed = new Promise<void>((resolve, reject) => {
-      settle = (failure?: Error) => (failure ? reject(failure) : resolve());
+      settle = (failure?: Error) => {
+        failure ? reject(failure) : resolve();
+      };
     });
     const close = vi.fn(() => closed);
     return {

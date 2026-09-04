@@ -17,11 +17,14 @@ const createWorker = () =>
   new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
 
 const asEndpoint = (worker: Worker): Endpoint => ({
-  postMessage: (message) => worker.postMessage(message),
-  addMessageListener: (listener) =>
-    worker.addEventListener('message', (event) =>
-      listener((event as MessageEvent).data),
-    ),
+  postMessage: (message) => {
+    worker.postMessage(message);
+  },
+  addMessageListener: (listener) => {
+    worker.addEventListener('message', (event) => {
+      listener(event.data);
+    });
+  },
 });
 
 // one shared worker for the conformance suite (single pool owner)

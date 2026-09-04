@@ -143,7 +143,7 @@ const prepare = <Scope>(options: RemelonSyncOptions<Scope>): SyncRuntime => {
       const parsed = wire.pullArgs.safeParse(body);
       if (!parsed.success)
         throw new BadRequestException('malformed pull request');
-      return engine.as(scope as Scope).pull(parsed.data as SyncPullArgs);
+      return engine.as(scope as Scope).pull(parsed.data);
     },
     push: async (scope, body) => {
       const parsed = pushEnvelope.safeParse(body);

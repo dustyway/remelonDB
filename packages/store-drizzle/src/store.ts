@@ -407,10 +407,10 @@ export function createDrizzleStore<Scope>(
       const apply = (subset: typeof values, on: DrizzleTx) =>
         on
           .insert(p.cfg.table)
-          .values(subset as never)
+          .values(subset)
           .onConflictDoUpdate({
             target: p.cfg.id,
-            set: set as never,
+            set: set,
             // never resurrect a tombstone, never touch its rev
             setWhere: isNull(p.cfg.deletedAt),
           });
@@ -449,7 +449,7 @@ export function createDrizzleStore<Scope>(
           [p.deletedKey]: sql`now()`,
           [p.revKey]: rev,
           ...(p.cfg.scrub ?? {}),
-        } as never)
+        })
         .where(
           and(
             inArray(p.cfg.id, [...ids] as never[]),
