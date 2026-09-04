@@ -86,6 +86,7 @@ export function ModelFor<T extends TableSchema>(schema: T): TypedModelClass<T> {
     static override readonly table = schema.name;
     static override readonly schema = schema;
   }
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the returned class IS `Bound`; the assertion only adds the schema-derived accessors this factory exists to declare.
   return Bound as unknown as TypedModelClass<T>;
 }
 
@@ -197,6 +198,7 @@ export class Model {
   }
 
   private association(table: string) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- a Model instance's constructor is its own model class.
     const associations = (this.constructor as ModelClass).associations;
     const association = associations?.[table];
     if (!association) {

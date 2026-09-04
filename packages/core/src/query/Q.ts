@@ -204,6 +204,7 @@ function ensureConditions(
       );
     }
   }
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the loop above checked every clause's discriminant, which is all `Where` constrains.
   return clauses as readonly Where[];
 }
 
@@ -216,7 +217,7 @@ export function where<C extends string>(
     : eq(ensureValue(valueOrComparisonArg));
   return {
     type: 'where',
-    left: ensureName(left, 'column') as C,
+    left: ensureName(left, 'column'),
     comparison: comp,
   };
 }
@@ -224,6 +225,7 @@ export function where<C extends string>(
 export function and<C extends string>(...conditions: Where<C>[]): And<C> {
   return {
     type: 'and',
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the conditions came in as `Where<C>[]`; ensureConditions returns its own argument, having only rechecked it for JavaScript callers.
     conditions: ensureConditions(conditions, 'Q.and') as readonly Where<C>[],
   };
 }
@@ -231,6 +233,7 @@ export function and<C extends string>(...conditions: Where<C>[]): And<C> {
 export function or<C extends string>(...conditions: Where<C>[]): Or<C> {
   return {
     type: 'or',
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- as in Q.and: ensureConditions returns the same `Where<C>[]` it was given.
     conditions: ensureConditions(conditions, 'Q.or') as readonly Where<C>[],
   };
 }
@@ -251,6 +254,7 @@ export function on(table: string, ...args: readonly unknown[]): On {
     return {
       type: 'on',
       table: tableName,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the overloads make this the shorthand form; `where` validates the value itself, and the length check above proves the index.
       conditions: [where(first, args[1] as Value | Comparison)],
     };
   }
@@ -278,7 +282,7 @@ export function sortBy<C extends string>(
   }
   return {
     type: 'sortBy',
-    sortColumn: ensureName(sortColumn, 'column') as C,
+    sortColumn: ensureName(sortColumn, 'column'),
     sortOrder,
   };
 }

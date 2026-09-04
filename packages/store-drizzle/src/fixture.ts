@@ -61,5 +61,6 @@ export const freshDb = async (): Promise<{ client: PGlite; db: DrizzleDb }> => {
       handle text unique
     );
   `);
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- pglite's drizzle instance carries its own query-result HKT; DrizzleDb is the erased form the store accepts.
   return { client, db: drizzle(client) as unknown as DrizzleDb };
 };

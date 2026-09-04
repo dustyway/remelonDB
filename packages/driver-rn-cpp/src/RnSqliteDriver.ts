@@ -50,6 +50,7 @@ export class RnSqliteDriver implements SqliteDriver {
   }
 
   async query(sql: string, args: SqlArgs): Promise<Row[]> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- codegen types the row vocabulary as UnsafeMixed; the C++ side returns column-keyed objects and validates the shape.
     return NativeRemelonDriver.query(this.openName, sql, args) as Row[];
   }
 

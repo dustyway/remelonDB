@@ -108,6 +108,7 @@ export function schemaSuite(options: ResolvedOptions): void {
 
       const steps = stepsForMigration(migrations, { from: 1, to: 3 });
       expect(steps).not.toBeNull();
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- the not.toBeNull() above.
       await driver.executeBatch(asBatch(encodeMigrationSteps(steps!)));
       await driver.setUserVersion(3);
 

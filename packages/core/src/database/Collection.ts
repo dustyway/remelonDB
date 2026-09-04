@@ -78,13 +78,16 @@ export class Collection<M = RawRecord, C extends string = string> {
   /** @internal Raw → public record type (Model when bound, raw otherwise). */
   _recordFor(raw: RawRecord): M {
     if (!this.modelClass) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- M is RawRecord exactly when the collection is unbound, which is what this branch tests; the pairing lives in the type, not in a value.
       return raw as M;
     }
     let model = this.models.get(raw.id);
     if (!model) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- a model constructor takes the erased collection; M's own model class is what produced it.
       model = new this.modelClass(this as Collection<Model>, raw);
       this.models.set(raw.id, model);
     }
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- bound collections have M = their model class, which is what `this.modelClass` constructs.
     return model as M;
   }
 
@@ -99,6 +102,7 @@ export class Collection<M = RawRecord, C extends string = string> {
       return cached;
     }
     // 'id' is in every table's ColumnName union, but C is generic here
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- per the comment above: 'id' is in every table's column union, but C is not resolved here.
     const raws = await this.query(Q.where('id', id) as Clause<C>).fetchRaws();
     const raw = raws[0];
     if (!raw) {

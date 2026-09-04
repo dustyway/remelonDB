@@ -151,6 +151,7 @@ export function encodeQuery(
         return `${col} <= ${encodeValueOrColumn(right, tableContext)}`;
       case 'between': {
         const values = valuesOf(right);
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Q.between builds exactly two values, and only Q.between makes a 'between' comparison.
         return `${col} between ${pushArg(values[0]!)} and ${pushArg(values[1]!)}`;
       }
       case 'oneOf':
@@ -190,6 +191,7 @@ export function encodeQuery(
         const parts = clause.conditions.map((c) =>
           encodeCondition(c, clause.table),
         );
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- guarded by the length check on the same line.
         return parts.length === 1 ? parts[0]! : `(${parts.join(' and ')})`;
       }
       case 'sqlExpr':

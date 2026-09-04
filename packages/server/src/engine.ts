@@ -191,6 +191,7 @@ export function createSyncEngine<Scope>(options: SyncEngineOptions<Scope>): {
               'sync push: record without a usable id',
             );
           }
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the check above proves `raw['id']` is a non-empty string, which is all WireRow adds to DirtyRaw.
           byId.set(id, raw as WireRow);
         }
         // a deletion is the terminal statement for its id: an id named in

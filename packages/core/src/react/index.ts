@@ -406,6 +406,7 @@ function sharedStore<T>(
     registry = new Map();
     registries.set(database, registry);
   }
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- one registry holds stores of every result type; the key is what pairs an entry with its T, and `make` builds the entry for this key.
   let store = registry.get(key) as
     ReturnType<typeof createStore<T>> | undefined;
   if (!store) {
@@ -421,6 +422,7 @@ function sharedStore<T>(
       snapshot: created.snapshot,
       idle: created.idle,
     };
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the registry's value type is the erased store, which is why reading one back needs the assertion above.
     registry.set(key, store as ReturnType<typeof createStore<never>>);
   }
   return store;

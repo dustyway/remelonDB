@@ -101,6 +101,7 @@ export function syncEngineFromOptions<Scope>(
         name,
         {
           ...options.tableOptions?.[name],
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- `name` iterates the keys of `options.tables`, and `wire.rows` is keyed by those same tables.
           validate: (row: unknown) => wire.rows[name]!.safeParse(row).success,
         },
       ]),
@@ -142,6 +143,7 @@ const prepare = <Scope>(options: RemelonSyncOptions<Scope>): SyncRuntime => {
       const parsed = wire.pullArgs.safeParse(body);
       if (!parsed.success)
         throw new BadRequestException('malformed pull request');
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- SyncRuntime is deliberately non-generic; the scope reaching it came from this closure's own `scopeFrom`.
       return engine.as(scope as Scope).pull(parsed.data);
     },
     push: async (scope, body) => {
@@ -150,7 +152,9 @@ const prepare = <Scope>(options: RemelonSyncOptions<Scope>): SyncRuntime => {
         throw new BadRequestException('malformed push request');
       try {
         return await engine
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- as above: SyncRuntime erases Scope, the value came from this closure's own `scopeFrom`.
           .as(scope as Scope)
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the envelope validates shape and ids only, on purpose (see above); the engine re-checks every row's values per table.
           .push(parsed.data as SyncPushArgs);
       } catch (error) {
         if (error instanceof SyncProtocolError) {

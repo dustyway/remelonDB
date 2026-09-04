@@ -115,7 +115,9 @@ export function schemaMigrations(spec: {
       );
     }
   });
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- the empty check above.
   const first = migrations[0]!;
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- the empty check above.
   const last = migrations[migrations.length - 1]!;
   return deepFreeze({
     migrations: [...migrations],

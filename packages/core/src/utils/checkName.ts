@@ -5,7 +5,10 @@ const IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
  * lets the SQL encoders interpolate identifiers into SQL text — everything
  * that doesn't match the strict pattern is rejected at construction time.
  */
-export function ensureName(name: string, kind: 'column' | 'table'): string {
+export function ensureName<S extends string>(
+  name: S,
+  kind: 'column' | 'table',
+): S {
   if (typeof name !== 'string' || !IDENTIFIER.test(name)) {
     throw new Error(
       // String() rather than plain interpolation: the guard above exists

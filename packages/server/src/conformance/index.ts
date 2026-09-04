@@ -122,6 +122,7 @@ const liveIds = (changes: SyncChanges, table: string): string[] => {
  */
 export const pulled = (result: SyncPullResult) => {
   expect(result).not.toHaveProperty('resyncRequired');
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the expect above rules out the resyncRequired arm; the mutable shape is this helper's published return type.
   return result as { changes: SyncChanges; cursor: string };
 };
 /**
@@ -131,6 +132,7 @@ export const pulled = (result: SyncPullResult) => {
  */
 export const accepted = (result: SyncPushResult) => {
   expect(result).not.toHaveProperty('conflict');
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the expect above rules out the conflict arm; the mutable shape is this helper's published return type.
   const ok = result as {
     cursor: string | null;
     changes: SyncChanges | null;
@@ -162,11 +164,11 @@ export const accepted = (result: SyncPushResult) => {
 export function registerServerConformance(
   options: ServerConformanceOptions,
 ): void {
-  const tables = Object.keys(options.fixtures);
-  if (tables.length === 0) {
+  const table = Object.keys(options.fixtures)[0];
+  if (table === undefined) {
     throw new Error('registerServerConformance: at least one table fixture');
   }
-  const table = tables[0]!;
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- `table` is one of `options.fixtures`' own keys.
   const fixture = options.fixtures[table]!;
   const changesWith = (
     rows: WireRow[],
@@ -375,6 +377,7 @@ export function registerServerConformance(
         await handlers.push({ changes: changesWith([mine]), cursor: myCursor }),
       );
       if (result.cursor !== null) {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- `accepted` asserts cursor and changes are both-or-neither, and this branch has a cursor.
         const ids = liveIds(result.changes!, table);
         expect(ids).toContain(foreign.id);
         expect(ids).not.toContain(mine.id);
@@ -505,7 +508,9 @@ export function registerServerConformance(
     case13(
       '13. a write to an existing id in an appendOnly table is rejected by id',
       async () => {
-        const { table: aoTable, fixture: aoFixture } = appendOnly!;
+        const { table: aoTable, fixture: aoFixture } =
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- the case registers as `it.skip` when `options.appendOnly` is absent, so the body only runs when it is present.
+          appendOnly!;
         const { handlers } = await options.makeContext();
         const row = aoFixture.validRow();
         const changes = (rows: WireRow[], asUpdated = false): SyncChanges => ({
@@ -552,7 +557,9 @@ export function registerServerConformance(
     case14(
       '14. a storage constraint refusal is a per-record rejection, and the rest of the batch applies (needs `uniqueColumn`)',
       async (ctx) => {
-        const { table: uqTable, row: uqRow } = uniqueColumn!;
+        const { table: uqTable, row: uqRow } =
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- the case registers as `it.skip` when `options.uniqueColumn` is absent, so the body only runs when it is present.
+          uniqueColumn!;
         const { handlers, secondUser } = await options.makeContext();
         if (!secondUser) return ctx.skip();
         const changes = (rows: WireRow[]): SyncChanges => ({
@@ -587,6 +594,7 @@ export function registerServerConformance(
         const recovered = accepted(
           await secondUser.push({
             changes: changes([uqRow('uq-b1', 'fresh')]),
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- a conformant backend answers an accepted push with a cursor; the degraded (null) case is its own scenario.
             cursor: collide.cursor!,
           }),
         );
@@ -599,7 +607,9 @@ export function registerServerConformance(
     caseCross(
       '15. a cross-validation refusal is reported in rejected and the row is not applied (needs `crossValidation`)',
       async () => {
-        const { table: cvTable, rejectedRow } = crossValidation!;
+        const { table: cvTable, rejectedRow } =
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- the case registers as `it.skip` when `options.crossValidation` is absent, so the body only runs when it is present.
+          crossValidation!;
         const { handlers } = await options.makeContext();
         const bad = rejectedRow();
 
@@ -622,7 +632,9 @@ export function registerServerConformance(
     caseCross(
       '16. a cross-validation refusal of a deletion keeps the row alive (needs `crossValidation`)',
       async () => {
-        const { table: cvTable, undeletableRow } = crossValidation!;
+        const { table: cvTable, undeletableRow } =
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- the case registers as `it.skip` when `options.crossValidation` is absent, so the body only runs when it is present.
+          crossValidation!;
         const { handlers } = await options.makeContext();
         const keystone = undeletableRow();
 
@@ -645,6 +657,7 @@ export function registerServerConformance(
             changes: {
               [cvTable]: { created: [], updated: [], deleted: [keystone.id] },
             },
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- a conformant backend answers an accepted push with a cursor; the degraded (null) case is its own scenario.
             cursor: seeded.cursor!,
           }),
         );
@@ -695,11 +708,9 @@ export function registerServerConformance(
     case18(
       '18. a refused deletion of a duplicated id rejects the id and keeps the pre-push content (needs `crossValidation`)',
       async () => {
-        const {
-          table: cvTable,
-          undeletableRow,
-          mutateUndeletableRow,
-        } = crossValidation!;
+        const { table: cvTable, undeletableRow, mutateUndeletableRow } =
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- the case registers as `it.skip` when `options.crossValidation` is absent, so the body only runs when it is present.
+          crossValidation!;
         const { handlers } = await options.makeContext();
         const keystone = undeletableRow();
         const cvChanges = (
@@ -726,6 +737,7 @@ export function registerServerConformance(
         const denied = accepted(
           await handlers.push({
             changes: cvChanges([mutated], [keystone.id]),
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- a conformant backend answers an accepted push with a cursor; the degraded (null) case is its own scenario.
             cursor: seeded.cursor!,
           }),
         );

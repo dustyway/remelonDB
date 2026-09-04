@@ -79,8 +79,9 @@ export function randomId(source?: RandomSource): string {
   const bytes = new Uint8Array(16);
   fillRandomValues(bytes, source);
   let id = '';
-  for (let i = 0; i < bytes.length; i++) {
-    id += ALPHABET[bytes[i]! % ALPHABET.length]!;
+  for (const byte of bytes) {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- the modulo keeps the index inside ALPHABET.
+    id += ALPHABET[byte % ALPHABET.length]!;
   }
   return id;
 }

@@ -54,6 +54,7 @@ const columnFor = (key: string, field: z.ZodType): ColumnDef => {
   let nullable = false;
   if (inner instanceof z.ZodNullable) {
     nullable = true;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- zod types `unwrap()` by its own internals; the instanceof above is what says there is a ZodType inside.
     inner = inner.unwrap() as z.ZodType;
   }
   if (inner instanceof z.ZodOptional) {
@@ -112,9 +113,11 @@ export function zodTable<Shape extends z.ZodRawShape>(
   }
   const spec: Record<string, ColumnDef> = {};
   for (const [key, field] of Object.entries(schema.shape)) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- a ZodRawShape's values are ZodTypes; Object.entries loses that.
     const def = columnFor(key, field as z.ZodType);
     spec[key] = indexed.has(key) ? def.indexed() : def;
   }
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- ColumnsFor<Shape> re-states, at the type level, the mapping the loop above just performed.
   return table(name, spec as ColumnsSpec) as TableSchema<ColumnsFor<Shape>>;
 }
 
@@ -174,6 +177,7 @@ export function syncSchemas<
   // output never contains explicit-undefined entries (absent tables are
   // absent keys), so `SyncChanges` — the type `synchronize` and the
   // server engine take — is the honest static type.
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- per the comment above: parse output never carries explicit-undefined entries.
   const changes = z
     .strictObject(changeSets)
     .partial() as unknown as z.ZodType<SyncChanges>;
@@ -199,6 +203,7 @@ export function syncSchemas<
   // Same story as `changes` for `rejected`: `.optional()` infers
   // `| undefined`, which JSON input can never produce, so the core
   // result type is the honest one (and the one `synchronize` takes).
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- per the comment above: `rejected` is absent or present, never explicitly undefined.
   const pushResult = z.union([
     z
       .strictObject({
