@@ -44,6 +44,7 @@ export class NodeSqliteDriver implements SqliteDriver {
     }
     this.db = db;
     this.name = name;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- better-sqlite3 types `pragma` as `unknown`; `user_version` is an integer by SQLite's own definition.
     const userVersion = db.pragma('user_version', { simple: true }) as number;
     return { userVersion };
   }
@@ -54,6 +55,7 @@ export class NodeSqliteDriver implements SqliteDriver {
   }
 
   async query(sql: string, args: SqlArgs): Promise<Row[]> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- better-sqlite3 types `all()` as `unknown[]`; the driver contract is that callers ask for columns SQLite can return.
     return this.openDb.prepare(sql).all(...bindArgs(args)) as Row[];
   }
 
