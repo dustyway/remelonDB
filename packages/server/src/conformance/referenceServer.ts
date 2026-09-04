@@ -154,6 +154,7 @@ export function createReferenceServer(
         const rows = tableOf(user, table);
         const validate = options.validate?.[table];
         for (const raw of [...change.created, ...change.updated]) {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the wire contract gives every pushed record a string id; the engine rejects a push without one before a store ever sees it.
           const row = raw as DirtyRaw & { id: string };
           if (validate && !validate(row)) {
             (rejected[table] ??= []).push(row.id);
