@@ -65,7 +65,7 @@ export {
 } from './rawRecord/index';
 export type { RawRecord, DirtyRaw, SyncStatus } from './rawRecord/index';
 
-export { randomId } from './utils/randomId';
+export { randomId, type RandomSource } from './utils/randomId';
 
 export { Database } from './database/Database';
 export { createDatabaseManager } from './database/DatabaseManager';

@@ -1,6 +1,16 @@
 const ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
 
 /**
+ * An app-supplied random filler, `crypto.getRandomValues`-shaped: it
+ * fills the array it is given synchronously and returns that same array,
+ * which is what `crypto.getRandomValues` and `expo-crypto`'s
+ * `getRandomValues` both do. The return value is checked at runtime so
+ * an async source, which would leave the buffer zeroed and make every id
+ * identical, fails loudly instead.
+ */
+export type RandomSource = (bytes: Uint8Array) => Uint8Array;
+
+/**
  * Fill `bytes` from `crypto.getRandomValues`, the one host capability
  * remelonDB needs that it does not receive through an option.
  *
@@ -12,7 +22,33 @@ const ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
  * polyfill's JS half arrived without its native half, which is what an
  * un-rebuilt React Native app looks like.
  */
-export function fillRandomValues(bytes: Uint8Array): void {
+export function fillRandomValues(
+  bytes: Uint8Array,
+  source?: RandomSource,
+): void {
+  if (source) {
+    let result: Uint8Array;
+    try {
+      result = source(bytes);
+    } catch (cause) {
+      throw new Error(
+        'the randomSource passed to Database.open failed. A browser or ' +
+          'Node crypto.getRandomValues must be bound first: pass ' +
+          'crypto.getRandomValues.bind(crypto). On React Native this ' +
+          'usually means a native module is missing from the build.',
+        { cause },
+      );
+    }
+    if (result !== bytes) {
+      throw new Error(
+        'the randomSource passed to Database.open must fill the given ' +
+          'array synchronously and return it, as crypto.getRandomValues ' +
+          'does. An async source cannot work: ids would be read before ' +
+          'it resolves.',
+      );
+    }
+    return;
+  }
   const crypto = globalThis.crypto;
   if (typeof crypto?.getRandomValues !== 'function') {
     throw new Error(
@@ -35,9 +71,9 @@ export function fillRandomValues(bytes: Uint8Array): void {
 }
 
 /** 16-character record id, format-compatible with upstream WatermelonDB. */
-export function randomId(): string {
+export function randomId(source?: RandomSource): string {
   const bytes = new Uint8Array(16);
-  fillRandomValues(bytes);
+  fillRandomValues(bytes, source);
   let id = '';
   for (let i = 0; i < bytes.length; i++) {
     id += ALPHABET[bytes[i]! % ALPHABET.length]!;

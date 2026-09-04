@@ -11,7 +11,7 @@
  */
 import type { SqlValue } from '../driver/SqliteDriver';
 import type { ColumnSchema, TableSchema } from '../schema/index';
-import { randomId } from '../utils/randomId';
+import { randomId, type RandomSource } from '../utils/randomId';
 
 export type SyncStatus = 'synced' | 'created' | 'updated' | 'deleted';
 
@@ -76,12 +76,16 @@ function isSyncStatus(value: unknown): value is SyncStatus {
   );
 }
 
-export function sanitizedRaw(dirty: DirtyRaw, table: TableSchema): RawRecord {
+export function sanitizedRaw(
+  dirty: DirtyRaw,
+  table: TableSchema,
+  randomSource?: RandomSource,
+): RawRecord {
   const id = dirty['id'];
   const status = dirty['_status'];
   const changed = dirty['_changed'];
   const raw: RawRecord = {
-    id: typeof id === 'string' && id !== '' ? id : randomId(),
+    id: typeof id === 'string' && id !== '' ? id : randomId(randomSource),
     _status: isSyncStatus(status) ? status : 'created',
     _changed: typeof changed === 'string' ? changed : '',
   };

@@ -50,3 +50,64 @@ describe('Database.open random-source probe', () => {
     expect(driver.open).not.toHaveBeenCalled();
   });
 });
+
+describe('the randomSource option (#47)', () => {
+  const workingDriver = () =>
+    ({
+      open: vi.fn(async () => ({ userVersion: schema.version })),
+      close: vi.fn(async () => {}),
+      query: vi.fn(async () => []),
+      execute: vi.fn(async () => {}),
+      executeBatch: vi.fn(async () => {}),
+      setUserVersion: vi.fn(async () => {}),
+      destroy: vi.fn(async () => {}),
+    }) as unknown as SqliteDriver;
+
+  it('opens and creates records without any ambient crypto', async () => {
+    setCrypto(undefined);
+    let counter = 0;
+    const source = vi.fn((bytes: Uint8Array) => bytes.fill(counter++));
+    const db = await Database.open({
+      driver: workingDriver(),
+      schema,
+      name: 'source.db',
+      randomSource: source,
+    });
+    // the probe used the source, not the (absent) global
+    expect(source).toHaveBeenCalledTimes(1);
+
+    const op = db.get('tasks').prepareCreate({ name: 'x' });
+    expect(op.raw.id).toBe('b'.repeat(16));
+    expect(db.randomId()).toBe('c'.repeat(16));
+    expect(source).toHaveBeenCalledTimes(3);
+  });
+
+  it('rejects before driver.open when the source throws', async () => {
+    const driver = driverThatMustNotOpen();
+    await expect(
+      Database.open({
+        driver,
+        schema,
+        name: 'source.db',
+        randomSource: () => {
+          throw new Error('no native module');
+        },
+      }),
+    ).rejects.toThrowError(/randomSource passed/);
+    expect(driver.open).not.toHaveBeenCalled();
+  });
+
+  it('a passed source wins over the ambient crypto', async () => {
+    const ambient = vi.fn();
+    setCrypto({ getRandomValues: ambient });
+    const source = vi.fn((bytes: Uint8Array) => bytes.fill(0));
+    await Database.open({
+      driver: workingDriver(),
+      schema,
+      name: 'source.db',
+      randomSource: source,
+    });
+    expect(source).toHaveBeenCalled();
+    expect(ambient).not.toHaveBeenCalled();
+  });
+});
