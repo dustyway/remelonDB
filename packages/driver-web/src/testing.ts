@@ -35,7 +35,7 @@ export function createChannel(): [Endpoint, Endpoint] {
 // so this assertion adds what the runtime accepts. eslint's
 // no-unnecessary-type-assertion misjudges it and its fixer breaks the
 // call below; the disable is deliberate.
-// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-unsafe-type-assertion
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
 const init = sqlite3InitModule as (options?: {
   print?: (message: string) => void;
   printErr?: (message: string) => void;
