@@ -202,6 +202,7 @@ export class WebSqliteDriver implements SqliteDriver {
         },
         addMessageListener: (listener) => {
           shared.port.addEventListener('message', (event) => {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- MessageEvent.data is `any` across the port boundary; the protocol module is the contract and the `control` check below discriminates.
             const data = event.data as WorkerResponse | BrokerControlMessage;
             if ('control' in data) {
               switch (data.control) {
@@ -361,6 +362,7 @@ export class WebSqliteDriver implements SqliteDriver {
     const id = this.nextId++;
     return new Promise<T>((resolve, reject) => {
       this.pending.set(id, {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- `pending` holds resolvers for every request type at once, so the map erases T; `request<T>` re-applies it at the call site.
         resolve: resolve as (value: unknown) => void,
         reject,
       });
@@ -369,6 +371,7 @@ export class WebSqliteDriver implements SqliteDriver {
   }
 
   private handleResponse(message: unknown): void {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the worker answers `unknown` over postMessage; the protocol module is the contract, and an unknown id falls out below.
     const response = message as WorkerResponse;
     const pending = this.pending.get(response.id);
     if (!pending) {

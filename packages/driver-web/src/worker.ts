@@ -20,6 +20,7 @@ interface PortLike {
   start?(): void;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- DedicatedWorkerGlobalScope is not in this project's lib, so the worker scope's own postMessage/addEventListener are declared here.
 const scope = globalThis as unknown as {
   postMessage(message: unknown): void;
   addEventListener(
@@ -58,6 +59,7 @@ serve(endpoint);
 // Port adoption (docs/multi-tab.md): the spawning tab hands us a port
 // wired to the SharedWorker broker; the same server answers on it.
 scope.addEventListener('message', (event) => {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the message is `unknown` across the boundary; the optional field is read defensively below rather than trusted.
   const data = event.data as { __remelondbAdoptPort?: boolean } | null;
   const port = event.ports?.[0];
   if (data?.__remelondbAdoptPort === true && port) {

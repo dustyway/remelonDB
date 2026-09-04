@@ -42,6 +42,7 @@ const fromColumn = (value: unknown): SqlValue => {
   if (typeof value === 'bigint') {
     return Number(value);
   }
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- wasm sqlite types column values as `unknown`; SqlValue is the vocabulary the seam defines for them, bigint having been handled above.
   return value as SqlValue;
 };
 
@@ -256,6 +257,7 @@ export function createSqliteWorkerServing(
   let queue: Promise<unknown> = serverPromise;
   return (endpoint) => {
     endpoint.addMessageListener((message) => {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- an endpoint delivers `unknown`; the protocol module is the contract, and the `op` check below drops anything else.
       const request = message as WorkerRequest;
       if (typeof (request as { op?: unknown }).op !== 'string') {
         return; // control traffic (port adoption), not a request

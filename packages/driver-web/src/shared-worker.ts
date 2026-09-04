@@ -57,6 +57,7 @@ interface Route {
   readonly onFailure?: () => void;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- SharedWorkerGlobalScope is not in this project's lib, so the connect event is declared here.
 const scope = globalThis as unknown as {
   addEventListener(
     type: 'connect',
@@ -294,16 +295,9 @@ const resetEpoch = (): void => {
   // whose own open is among the replayed requests are excluded — the
   // replay opens those itself.
   const replayedOpens = new Set(
-    pending
-      .concat(backlog.map((item) => ({ request: item.request })) as never[])
-      .filter(
-        (route) => (route as { request: WorkerRequest }).request.op === 'open',
-      )
-      .map(
-        (route) =>
-          ((route as { request: WorkerRequest }).request as { name: string })
-            .name,
-      ),
+    [...pending, ...backlog].flatMap(({ request }) =>
+      request.op === 'open' ? [request.name] : [],
+    ),
   );
   namesToRestore = [...holders.keys()].filter(
     (name) => !replayedOpens.has(name),
@@ -333,6 +327,7 @@ const adoptComputePort = (port: PortLike): void => {
   computePort = port;
   stopRecruitment();
   port.addEventListener('message', (event) => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- MessageEvent.data is `any` across the port boundary; the protocol module is the contract, and an unrouted id falls out below.
     const response = event.data as WorkerResponse;
     const route = routes.get(response.id);
     if (!route) {
@@ -419,6 +414,7 @@ const send = (
   const base = { port, originalId: request.id, request };
   const route = transform ? { ...base, transform } : base;
   routes.set(routeId, onFailure ? { ...route, onFailure } : route);
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- `send` states a live compute channel as its precondition; callers backlog the request instead when there is none.
   computePort!.postMessage({ ...request, id: routeId });
   scheduleWatchdog();
 };
@@ -468,6 +464,7 @@ const heldExclusive = (): boolean =>
 
 const grantSlots = (): void => {
   while (slotQueue.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- the loop condition is `slotQueue.length > 0`, so index 0 exists.
     const head = slotQueue[0]!;
     const canGrant = head.exclusive ? heldSlots.size === 0 : !heldExclusive();
     if (!canGrant) {
@@ -557,6 +554,7 @@ const handle = (port: PortLike, request: WorkerRequest): void => {
           },
           (rows) => ({
             userVersion: Number(
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- a transform receives the worker's result as `unknown`; this one reads the single column its own `pragma user_version` query selects.
               (rows as readonly { user_version?: unknown }[])[0]
                 ?.user_version ?? 0,
             ),
@@ -628,6 +626,7 @@ scope.addEventListener('connect', (event) => {
     return;
   }
   port.addEventListener('message', (messageEvent) => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- MessageEvent.data is `any` across the port boundary; the protocol module is the contract and the control check below discriminates.
     const data = messageEvent.data as WorkerRequest | ClientControlMessage;
     // A control is never a request: anything carrying the field leaves
     // here, and the handoff branch is entered by name rather than by
