@@ -58,11 +58,11 @@ export class RnSqliteDriver implements SqliteDriver {
   }
 
   async query(sql: string, args: SqlArgs): Promise<Row[]> {
-    return this.openDb.getAllAsync<Row>(sql, args as SQLite.SQLiteBindValue[]);
+    return this.openDb.getAllAsync<Row>(sql, bindArgs(args));
   }
 
   async execute(sql: string, args: SqlArgs): Promise<void> {
-    await this.openDb.runAsync(sql, args as SQLite.SQLiteBindValue[]);
+    await this.openDb.runAsync(sql, bindArgs(args));
   }
 
   async executeBatch(statements: readonly BatchStatement[]): Promise<void> {
@@ -72,7 +72,7 @@ export class RnSqliteDriver implements SqliteDriver {
         const statement = await db.prepareAsync(sql);
         try {
           for (const args of argSets) {
-            await statement.executeAsync(args as SQLite.SQLiteBindValue[]);
+            await statement.executeAsync(bindArgs(args));
           }
         } finally {
           await statement.finalizeAsync();
@@ -101,3 +101,9 @@ export class RnSqliteDriver implements SqliteDriver {
     }
   }
 }
+
+// SqlValue is a subset of SQLiteBindValue, so the only mismatch is the seam's
+// `readonly` array against expo-sqlite's mutable parameter type; it binds the
+// values and never writes to the array.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- readonly-to-mutable only, no value-level narrowing.
+const bindArgs = (args: SqlArgs) => args as SQLite.SQLiteBindValue[];
