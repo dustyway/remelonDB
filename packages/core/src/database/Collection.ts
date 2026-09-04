@@ -134,7 +134,7 @@ export class Collection<M = RawRecord, C extends string = string> {
     ) {
       stamped['updated_at'] = now;
     }
-    const raw = sanitizedRaw(stamped, this.schema);
+    const raw = sanitizedRaw(stamped, this.schema, this.database.randomSource);
     raw._status = 'created';
     raw._changed = '';
     return { type: 'create', table: this.table, raw };

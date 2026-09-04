@@ -16,7 +16,11 @@ import type {
   SqlArgs,
   SqliteDriver,
 } from '../driver/SqliteDriver';
-import { fillRandomValues } from '../utils/randomId';
+import {
+  fillRandomValues,
+  randomId,
+  type RandomSource,
+} from '../utils/randomId';
 import type {
   AppSchema,
   ColumnName,
@@ -62,6 +66,13 @@ export interface DatabaseOptions {
   readonly name: string;
   /** Optional, passive instrumentation for reactive query refetches. */
   readonly onObservation?: (event: ObservationDiagnostic) => void;
+  /**
+   * App-supplied random filler for record ids, replacing the ambient
+   * `globalThis.crypto.getRandomValues` (which stays the default). Lets
+   * React Native apps pass e.g. `expo-crypto`'s `getRandomValues` instead
+   * of installing a global polyfill (#47).
+   */
+  readonly randomSource?: RandomSource;
 }
 
 export interface ObservationDiagnostic {
@@ -124,6 +135,7 @@ export class Database {
     associations: readonly QueryAssociation[],
     readonly migrations?: SchemaMigrations,
     readonly onObservation?: (event: ObservationDiagnostic) => void,
+    readonly randomSource?: RandomSource,
   ) {
     this.associations = associations;
     this.localStorage = new LocalStorage(driver);
@@ -138,14 +150,26 @@ export class Database {
     }
   }
 
+  /**
+   * A 16-character record id from this database's random source (the
+   * `randomSource` option, or the ambient WebCrypto default). Apps that
+   * mint ids themselves, e.g. to derive deterministic child ids, use this
+   * instead of the module-level `randomId` so a configured source covers
+   * every id (#47).
+   */
+  randomId(): string {
+    return randomId(this.randomSource);
+  }
+
   /** Open the database, running setup or migrations as needed. */
   static async open(options: DatabaseOptions): Promise<Database> {
-    const { driver, schema, migrations, name } = options;
+    const { driver, schema, migrations, name, randomSource } = options;
     // One probe byte before the driver opens anything: a runtime without
     // a working random source cannot create records, and learning that at
     // the first save, with a database already open, is the failure this
-    // prevents.
-    fillRandomValues(new Uint8Array(1));
+    // prevents. The probe exercises whichever source this database will
+    // actually use.
+    fillRandomValues(new Uint8Array(1), randomSource);
     const { userVersion } = await driver.open(name);
 
     if (userVersion === 0) {
@@ -204,6 +228,7 @@ export class Database {
       associations,
       migrations,
       options.onObservation,
+      randomSource,
     );
     for (const modelClass of options.modelClasses ?? []) {
       database.get(modelClass.table)._bindModelClass(modelClass);
