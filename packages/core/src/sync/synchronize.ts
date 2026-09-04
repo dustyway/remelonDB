@@ -201,6 +201,9 @@ async function runSynchronize(
 
   // Multi-tab: only the sync-lease holder runs; everyone else's tick is
   // a cheap no-op. Drivers without shared storage have no hook.
+  // Read off the driver to test for presence; it is invoked below with
+  // .call(database.driver, …), so `this` is never lost.
+  // eslint-disable-next-line @typescript-eslint/unbound-method
   const requestSyncTurn = database.driver.requestSyncTurn;
   const turn = requestSyncTurn
     ? await runDirect(database, () => requestSyncTurn.call(database.driver))

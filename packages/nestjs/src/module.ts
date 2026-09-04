@@ -21,7 +21,6 @@ import {
 import type { DynamicModule, FactoryProvider } from '@nestjs/common';
 import { z } from 'zod';
 import type {
-  SyncPullArgs,
   SyncPullResult,
   SyncPushArgs,
   SyncPushResult,
@@ -143,7 +142,7 @@ const prepare = <Scope>(options: RemelonSyncOptions<Scope>): SyncRuntime => {
       const parsed = wire.pullArgs.safeParse(body);
       if (!parsed.success)
         throw new BadRequestException('malformed pull request');
-      return engine.as(scope as Scope).pull(parsed.data as SyncPullArgs);
+      return engine.as(scope as Scope).pull(parsed.data);
     },
     push: async (scope, body) => {
       const parsed = pushEnvelope.safeParse(body);
@@ -191,6 +190,9 @@ export class RemelonSyncController {
 }
 
 @Module({})
+// A Nest module is a class with static factories by construction; there is
+// nothing to instantiate.
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class RemelonSyncModule {
   static forRoot<Scope>(options: RemelonSyncOptions<Scope>): DynamicModule {
     return {

@@ -12,8 +12,13 @@ import { WebSqliteDriver } from './WebSqliteDriver';
 export function createChannel(): [Endpoint, Endpoint] {
   const aListeners: Array<(m: unknown) => void> = [];
   const bListeners: Array<(m: unknown) => void> = [];
-  const post = (peers: Array<(m: unknown) => void>) => (message: unknown) =>
-    queueMicrotask(() => peers.forEach((listener) => listener(message)));
+  const post = (peers: Array<(m: unknown) => void>) => (message: unknown) => {
+    queueMicrotask(() => {
+      peers.forEach((listener) => {
+        listener(message);
+      });
+    });
+  };
   return [
     {
       postMessage: post(bListeners),
@@ -26,7 +31,11 @@ export function createChannel(): [Endpoint, Endpoint] {
   ];
 }
 
-// the init options (print/printErr) are untyped in sqlite-wasm's d.ts
+// the init options (print/printErr) are untyped in sqlite-wasm's d.ts,
+// so this assertion adds what the runtime accepts. eslint's
+// no-unnecessary-type-assertion misjudges it and its fixer breaks the
+// call below; the disable is deliberate.
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
 const init = sqlite3InitModule as (options?: {
   print?: (message: string) => void;
   printErr?: (message: string) => void;

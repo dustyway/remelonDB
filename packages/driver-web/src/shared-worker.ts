@@ -634,6 +634,9 @@ scope.addEventListener('connect', (event) => {
     // the field's presence, so a control added later is ignored instead
     // of being read as an adoption or forwarded to the worker.
     if ('control' in data) {
+      // Checked by name on purpose, as the comment above says: the union
+      // has one member today, so the type says this can never be true.
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (data.control !== 'adoptWorkerPort') {
         return;
       }

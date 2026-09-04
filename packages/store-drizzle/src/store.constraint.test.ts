@@ -69,7 +69,7 @@ describe('constraint violations surface as per-record rejections', () => {
     // the collision is a rejection, not a throw; the clean row applied
     expect(result.rejected?.profiles).toEqual(['b1']);
     const afterB = pulled(await userB.pull(pullArgs));
-    const applied = afterB.changes?.profiles?.updated?.map((r) => r.id) ?? [];
+    const applied = afterB.changes.profiles?.updated.map((r) => r.id) ?? [];
     expect(applied).toContain('b2');
     expect(applied).not.toContain('b1');
 
@@ -85,7 +85,7 @@ describe('constraint violations surface as per-record rejections', () => {
 
     // A's original row is untouched throughout
     const afterA = pulled(await userA.pull(pullArgs));
-    const aRows = afterA.changes?.profiles?.updated ?? [];
+    const aRows = afterA.changes.profiles?.updated ?? [];
     expect(aRows).toEqual([
       expect.objectContaining({ id: 'a1', handle: 'zorro' }),
     ]);

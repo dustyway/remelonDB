@@ -11,22 +11,13 @@
  * user_version; core decides fresh-setup / migrate / ready / error. A
  * missing migration path is an explicit error, never a silent reset.
  */
-import type {
-  ExternalChangeSet,
-  SqlArgs,
-  SqliteDriver,
-} from '../driver/SqliteDriver';
+import type { SqlArgs, SqliteDriver } from '../driver/SqliteDriver';
 import {
   fillRandomValues,
   randomId,
   type RandomSource,
 } from '../utils/randomId';
-import type {
-  AppSchema,
-  ColumnName,
-  ColumnsSpec,
-  TableSchema,
-} from '../schema/index';
+import type { AppSchema, ColumnName, TableSchema } from '../schema/index';
 import { stepsForMigration, type SchemaMigrations } from '../schema/migrations';
 import { encodeMigrationSteps, encodeSchema } from '../schema/encodeSchema';
 import type { QueryAssociation } from '../query/encodeQuery';
@@ -253,18 +244,22 @@ export class Database {
    */
   get<
     MC extends {
+      // any[] is the constraint that accepts every model constructor:
+      // unknown[] would reject them contravariantly, and narrowing the
+      // shape here would change the public overload.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       new (...args: any[]): Model;
       readonly table: string;
-      readonly schema: TableSchema<ColumnsSpec>;
+      readonly schema: TableSchema;
     },
   >(modelClass: MC): Collection<InstanceType<MC>, ColumnsOf<MC>>;
-  get<T extends TableSchema<ColumnsSpec>>(
+  get<T extends TableSchema>(
     table: T,
   ): Collection<TypedModel<T>, ColumnName<T>>;
   get<M = RawRecord>(table: string): Collection<M>;
   get(
-    arg: string | TableSchema | TypedModelClass<TableSchema<ColumnsSpec>>,
-  ): Collection<unknown, string> {
+    arg: string | TableSchema | TypedModelClass<TableSchema>,
+  ): Collection<unknown> {
     const table =
       typeof arg === 'string'
         ? arg
@@ -277,7 +272,7 @@ export class Database {
         `No collection for table '${table}' — is it in the schema?`,
       );
     }
-    return collection as Collection<unknown, string>;
+    return collection;
   }
 
   /**
@@ -327,6 +322,9 @@ export class Database {
     // count drops after release(), so the slot is given back first.
     this.acceptedWork += 1;
     try {
+      // Read off the driver to test for presence; it is invoked below
+      // with .call(this.driver, …), so `this` is never lost.
+      // eslint-disable-next-line @typescript-eslint/unbound-method
       const acquire = this.driver.acquireWorkSlot;
       if (!acquire) {
         return await this.queue.enqueue(work, exclusive);
@@ -478,7 +476,7 @@ export class Database {
     // Change propagation, sending half (docs/multi-tab.md). Only real
     // commits publish — applyExternalChanges must not re-publish what it
     // received, or two contexts would echo changes forever.
-    this.driver.publishChanges?.(changeSet as ExternalChangeSet);
+    this.driver.publishChanges?.(changeSet);
   }
 
   /**

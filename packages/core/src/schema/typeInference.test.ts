@@ -21,10 +21,16 @@ type TaskRecord = InferRecord<typeof tasks>;
 
 // Compile-time-only helpers
 type Equal<A, B> =
+  // The two single-use type parameters are the identity trick itself: the
+  // conditional types have to be deferred to compare A and B exactly.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
     ? true
     : false;
+// The parameter is never used at runtime; the constraint is the assertion.
+/* eslint-disable @typescript-eslint/no-unnecessary-type-parameters, @typescript-eslint/no-unused-vars */
 const assertType = <_T extends true>(): void => undefined;
+/* eslint-enable @typescript-eslint/no-unnecessary-type-parameters, @typescript-eslint/no-unused-vars */
 
 describe('schema-inferred types', () => {
   it('infers exact field types from the table definition', () => {
@@ -34,8 +40,11 @@ describe('schema-inferred types', () => {
     // optional column: | null, not | undefined
     assertType<Equal<TaskRecord['project_id'], string | null>>();
     assertType<Equal<TaskRecord['id'], string>>();
+    /* eslint-disable @typescript-eslint/no-unused-vars -- the alias only
+       exists so the @ts-expect-error below is checked. */
     // @ts-expect-error — _status is core-internal, not on app-facing records
     type Internal = TaskRecord['_status'];
+    /* eslint-enable @typescript-eslint/no-unused-vars */
     expect(tasks.name).toBe('tasks');
   });
 
@@ -44,11 +53,11 @@ describe('schema-inferred types', () => {
     const t = null as unknown as Task;
     assertType<Equal<typeof t.name, string>>();
     assertType<Equal<typeof t.project_id, string | null>>();
-    const use = (): void => {
+    const use = (): unknown => {
       // @ts-expect-error — misspelled/undeclared fields do not exist
-      void t.nmae;
+      return t.nmae;
     };
-    void use;
+    expect(use).toBeTypeOf('function');
     expect(Task.table).toBe('tasks');
     expect(Task.schema).toBe(tasks);
   });
@@ -70,7 +79,6 @@ describe('schema-inferred types', () => {
       // @ts-expect-error — and/or propagate column checking
       collection.query(Q.or(Q.where('name', 'a'), Q.where('nmae', 'b')));
     };
-    void use;
-    expect(true).toBe(true);
+    expect(use).toBeTypeOf('function');
   });
 });

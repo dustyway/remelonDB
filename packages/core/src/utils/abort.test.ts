@@ -12,12 +12,18 @@ const bareSignal = (aborted: boolean, reason?: unknown): AbortSignal =>
 
 describe('throwIfAborted', () => {
   it('does nothing without a signal', () => {
-    expect(() => throwIfAborted(undefined)).not.toThrow();
+    expect(() => {
+      throwIfAborted(undefined);
+    }).not.toThrow();
   });
 
   it('does nothing while the signal is not aborted', () => {
-    expect(() => throwIfAborted(new AbortController().signal)).not.toThrow();
-    expect(() => throwIfAborted(bareSignal(false))).not.toThrow();
+    expect(() => {
+      throwIfAborted(new AbortController().signal);
+    }).not.toThrow();
+    expect(() => {
+      throwIfAborted(bareSignal(false));
+    }).not.toThrow();
   });
 
   it('throws the abort reason itself, not a copy of it', () => {
@@ -25,12 +31,22 @@ describe('throwIfAborted', () => {
     const reason = new Error('owner logged out');
     controller.abort(reason);
 
-    expect(caught(() => throwIfAborted(controller.signal))).toBe(reason);
-    expect(caught(() => throwIfAborted(bareSignal(true, reason)))).toBe(reason);
+    expect(
+      caught(() => {
+        throwIfAborted(controller.signal);
+      }),
+    ).toBe(reason);
+    expect(
+      caught(() => {
+        throwIfAborted(bareSignal(true, reason));
+      }),
+    ).toBe(reason);
   });
 
   it('throws an AbortError for a signal that carries no reason', () => {
-    const error = caught(() => throwIfAborted(bareSignal(true)));
+    const error = caught(() => {
+      throwIfAborted(bareSignal(true));
+    });
 
     expect(error).toBeInstanceOf(Error);
     expect((error as Error).name).toBe('AbortError');
@@ -39,7 +55,9 @@ describe('throwIfAborted', () => {
   it('checks the flag rather than calling a method the runtime may lack', () => {
     // The regression: `signal?.throwIfAborted()` guards a missing signal,
     // not a missing method, so a signal without one threw TypeError.
-    expect(() => throwIfAborted(bareSignal(false))).not.toThrow();
+    expect(() => {
+      throwIfAborted(bareSignal(false));
+    }).not.toThrow();
   });
 });
 

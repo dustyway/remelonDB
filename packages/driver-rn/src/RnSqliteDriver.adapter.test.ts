@@ -23,8 +23,14 @@ const database = {
   closeAsync: vi.fn(async () => undefined),
 };
 
-const openDatabaseAsync = vi.fn(async (_name: string) => database);
-const deleteDatabaseAsync = vi.fn(async (_name: string) => undefined);
+// The signatures are written out so the toHaveBeenCalledWith assertions
+// stay typed; the name itself is not needed by the fakes.
+const openDatabaseAsync = vi.fn<(name: string) => Promise<typeof database>>(
+  async () => database,
+);
+const deleteDatabaseAsync = vi.fn<(name: string) => Promise<undefined>>(
+  async () => undefined,
+);
 
 vi.mock('expo-sqlite', () => ({
   openDatabaseAsync: (name: string) => openDatabaseAsync(name),

@@ -1,10 +1,16 @@
 import 'reflect-metadata';
+import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { z } from 'zod';
 import { afterAll, describe, expect, it } from 'vitest';
-import type { SyncPullArgs, SyncPushArgs } from '@remelondb/core';
+import type {
+  SyncPullArgs,
+  SyncPullResult,
+  SyncPushArgs,
+  SyncPushResult,
+} from '@remelondb/core';
 import { createMemoryStore } from '@remelondb/server';
 import { registerServerConformance } from '@remelondb/server/conformance';
 import type { SyncHandlers } from '@remelondb/server/conformance';
@@ -38,7 +44,7 @@ const makeBase = async (): Promise<string> => {
   const app = moduleRef.createNestApplication({ logger: false });
   await app.listen(0);
   apps.push(app);
-  const { port } = app.getHttpServer().address() as AddressInfo;
+  const { port } = (app.getHttpServer() as Server).address() as AddressInfo;
   return `http://127.0.0.1:${port}`;
 };
 
@@ -61,12 +67,12 @@ const overHttp = (base: string, scope: string): SyncHandlers => ({
   pull: async (args: SyncPullArgs) => {
     const response = await call(base, '/sync/pull', scope, args);
     expect(response.status).toBe(200);
-    return response.json();
+    return response.json() as Promise<SyncPullResult>;
   },
   push: async (args: SyncPushArgs) => {
     const response = await call(base, '/sync/push', scope, args);
     expect(response.status).toBe(200);
-    return response.json();
+    return response.json() as Promise<SyncPushResult>;
   },
 });
 
@@ -160,7 +166,7 @@ describe('shared engine configuration', () => {
     const app = moduleRef.createNestApplication({ logger: false });
     await app.listen(0);
     apps.push(app);
-    const { port } = app.getHttpServer().address() as AddressInfo;
+    const { port } = (app.getHttpServer() as Server).address() as AddressInfo;
     const viaHttp = overHttp(`http://127.0.0.1:${port}`, 'scope-a');
 
     for (const handlers of [direct, viaHttp]) {

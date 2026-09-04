@@ -90,6 +90,7 @@ jobs:
         env:
           REMELON_TEST_PG: postgres://postgres:postgres@localhost:5432/postgres
       - run: pnpm typecheck
+      - run: pnpm lint
       # publishConfig.exports must stay derivable from the exports map
       # (the @remelondb/core/react 0.1.0 packaging bug)
       - run: node scripts/sync-exports.mjs --check

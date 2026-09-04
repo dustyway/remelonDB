@@ -36,10 +36,9 @@ const DESIGNED_ERRORS = [
 const withDeadline = async <T>(what: string, work: Promise<T>): Promise<T> => {
   let timer: ReturnType<typeof setTimeout>;
   const guard = new Promise<never>((_, reject) => {
-    timer = setTimeout(
-      () => reject(new Error(`HANG: ${what} exceeded ${OP_DEADLINE_MS}ms`)),
-      OP_DEADLINE_MS,
-    );
+    timer = setTimeout(() => {
+      reject(new Error(`HANG: ${what} exceeded ${OP_DEADLINE_MS}ms`));
+    }, OP_DEADLINE_MS);
   });
   try {
     return await Promise.race([work, guard]);
@@ -99,6 +98,9 @@ describe('shared broker chaos (seeded)', () => {
               'query',
               tab.driver.query('select count(*) as n from t', []),
             );
+            // The cast claims a number; Number() is what makes that true,
+            // since a count can come back as a string from the driver.
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-conversion
             expect(Number((rows[0] as { n: number }).n)).toBeGreaterThanOrEqual(
               0,
             );

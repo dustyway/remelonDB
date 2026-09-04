@@ -85,7 +85,7 @@ export const column = {
  * @category Schema
  */
 export type ColumnsSpec = {
-  readonly [name: string]: ColumnDef<ColumnType, boolean>;
+  readonly [name: string]: ColumnDef;
 };
 
 /**
@@ -124,11 +124,11 @@ export interface AppSchema {
  * ```
  * @category Schema
  */
-export type InferRecord<T extends TableSchema<ColumnsSpec>> =
+export type InferRecord<T extends TableSchema> =
   T extends TableSchema<infer Cols>
     ? { readonly id: string } & {
         [K in keyof Cols & string]:
-          | (Cols[K] extends ColumnDef<infer CT, boolean>
+          | (Cols[K] extends ColumnDef<infer CT>
               ? CT extends 'string'
                 ? string
                 : CT extends 'number'
@@ -143,7 +143,7 @@ export type InferRecord<T extends TableSchema<ColumnsSpec>> =
  * The column names Q clauses may reference for a table (includes `id`).
  * @category Schema
  */
-export type ColumnName<T extends TableSchema<ColumnsSpec>> =
+export type ColumnName<T extends TableSchema> =
   T extends TableSchema<infer Cols> ? (keyof Cols & string) | 'id' : string;
 
 const RESERVED_COLUMNS = new Set([
@@ -163,6 +163,9 @@ export function validateColumnSchema(column: ColumnSchema): ColumnSchema {
   }
   if (!['string', 'number', 'boolean'].includes(column.type)) {
     throw new Error(
+      // String() for the same reason as in ensureName: this validates
+      // input from untyped callers, where the value need not be a string.
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-conversion
       `Column '${column.name}' has invalid type '${String(column.type)}'`,
     );
   }

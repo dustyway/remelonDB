@@ -6,7 +6,6 @@ import type { SyncChanges } from '@remelondb/core';
 import { createSyncEngine } from '@remelondb/server';
 import { accepted, pulled } from '@remelondb/server/conformance';
 import { createDrizzleStore } from './store';
-import type { DrizzleDb } from './store';
 
 // The lost-write race, constructed deterministically (conformance item 4
 // needs interleaving its generic hook cannot force): pin a pull snapshot
@@ -56,7 +55,7 @@ d('pull race on real postgres', () => {
         )
       `);
         const store = createDrizzleStore<string>({
-          db: drizzle(pool) as unknown as DrizzleDb,
+          db: drizzle(pool),
           revSequence: 'race_rev',
           metaTable: 'race_meta',
           tables: {
@@ -133,8 +132,11 @@ d('pull race on real postgres', () => {
         const snapshot = await racingPull;
 
         const duringRev = Number(
-          (await pool.query(`select rev from race_tasks where id = 'during'`))
-            .rows[0].rev,
+          (
+            await pool.query<{ rev: string }>(
+              `select rev from race_tasks where id = 'during'`,
+            )
+          ).rows[0]!.rev,
         );
         // the open snapshot cannot see the concurrent commit...
         expect(snapshot.ids).not.toContain('during');

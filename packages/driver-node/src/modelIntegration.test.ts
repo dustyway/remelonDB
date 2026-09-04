@@ -13,7 +13,6 @@ import {
   synchronize,
   table,
   type AssociationsMap,
-  type SyncPullArgs,
   type SyncPullResult,
 } from '@remelondb/core';
 import { NodeSqliteDriver } from './NodeSqliteDriver';
@@ -350,9 +349,7 @@ describe('Model layer', () => {
     const task = await db.write(() =>
       db.get(Task).create({ id: 't1', name: 'local', is_done: false }),
     );
-    const pullChanges = async (
-      _args: SyncPullArgs,
-    ): Promise<SyncPullResult> => ({
+    const pullChanges = async (): Promise<SyncPullResult> => ({
       changes: {
         tasks: {
           created: [],

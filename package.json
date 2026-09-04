@@ -15,11 +15,13 @@
     "check:reference": "node scripts/check-reference.mjs",
     "guide:epub": "pandoc docs/codebase-guide.md -o remelondb-guide.epub --toc --toc-depth=2 -N --resource-path=docs --css docs/codebase-guide.epub.css",
     "format": "prettier --write \"packages/*/src/**/*.{ts,tsx}\" \"packages/*/e2e/**/*.{ts,tsx}\" \"examples/**/*.{ts,tsx}\" \"scripts/**/*.mjs\"",
-    "format:check": "prettier --check \"packages/*/src/**/*.{ts,tsx}\" \"packages/*/e2e/**/*.{ts,tsx}\" \"examples/**/*.{ts,tsx}\" \"scripts/**/*.mjs\""
+    "format:check": "prettier --check \"packages/*/src/**/*.{ts,tsx}\" \"packages/*/e2e/**/*.{ts,tsx}\" \"examples/**/*.{ts,tsx}\" \"scripts/**/*.mjs\"",
+    "lint": "eslint --max-warnings 107 'packages/*/src/**/*.ts'"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.2",
     "@types/node": "^24.13.3",
+    "eslint": "^10.9.1",
     "fast-check": "^4.9.0",
     "jsdom": "^30.0.1",
     "prettier": "^3.9.6",
@@ -27,6 +29,7 @@
     "tsdown": "^0.22.7",
     "typedoc": "^0.28.20",
     "typescript": "^5.8.3",
+    "typescript-eslint": "^8.69.0",
     "vitest": "^3.2.4",
     "zod": "^4.4.3"
   },

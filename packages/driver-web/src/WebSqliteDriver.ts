@@ -197,11 +197,12 @@ export class WebSqliteDriver implements SqliteDriver {
       };
       shared.port.start();
       return {
-        postMessage: (message) => shared.port.postMessage(message),
-        addMessageListener: (listener) =>
+        postMessage: (message) => {
+          shared.port.postMessage(message);
+        },
+        addMessageListener: (listener) => {
           shared.port.addEventListener('message', (event) => {
-            const data = (event as MessageEvent).data as
-              WorkerResponse | BrokerControlMessage;
+            const data = event.data as WorkerResponse | BrokerControlMessage;
             if ('control' in data) {
               switch (data.control) {
                 case 'externalChanges':
@@ -240,20 +241,30 @@ export class WebSqliteDriver implements SqliteDriver {
               }
             }
             listener(data);
-          }),
+          });
+        },
         // closing OUR port must not kill the shared broker — other tabs
         // may be using it; the browser reclaims it with the last tab.
-        terminate: () => shared.port.close(),
+        terminate: () => {
+          shared.port.close();
+        },
       };
     }
     const worker = new Worker(new URL('./worker.ts', import.meta.url), {
       type: 'module',
     });
     return {
-      postMessage: (message) => worker.postMessage(message),
-      addMessageListener: (listener) =>
-        worker.addEventListener('message', (event) => listener(event.data)),
-      terminate: () => worker.terminate(),
+      postMessage: (message) => {
+        worker.postMessage(message);
+      },
+      addMessageListener: (listener) => {
+        worker.addEventListener('message', (event) => {
+          listener(event.data);
+        });
+      },
+      terminate: () => {
+        worker.terminate();
+      },
     };
   }
 
@@ -264,8 +275,14 @@ export class WebSqliteDriver implements SqliteDriver {
    * contexts) — coordination is then skipped and behavior is unchanged.
    */
   private async acquireTabLock(name: string): Promise<boolean> {
+    // The optional chain is not redundant at runtime: some embedders
+    // define navigator as null rather than leaving it out, which the DOM
+    // types do not model (docs/reference/runtimes.md).
     const locks =
-      typeof navigator === 'undefined' ? undefined : navigator?.locks;
+      typeof navigator === 'undefined'
+        ? undefined
+        : // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+          navigator?.locks;
     if (!locks) {
       return false;
     }
@@ -394,9 +411,9 @@ export class WebSqliteDriver implements SqliteDriver {
     this.takenOver = false;
     if (!this.endpoint) {
       this.endpoint = this.createEndpoint();
-      this.endpoint.addMessageListener((message) =>
-        this.handleResponse(message),
-      );
+      this.endpoint.addMessageListener((message) => {
+        this.handleResponse(message);
+      });
     }
     // After a takeover the losing tab's worker needs a moment to die and
     // release the pool's file locks — retry briefly instead of failing.
@@ -415,21 +432,19 @@ export class WebSqliteDriver implements SqliteDriver {
           ? await Promise.race([
               openRequest,
               new Promise<never>((_, timeoutReject) =>
-                setTimeout(
-                  () =>
-                    timeoutReject(
-                      new Error(
-                        'WebSqliteDriver: the shared worker did not answer ' +
-                          `the open request within ${deadlineMs}ms. Either ` +
-                          'the database worker was lost and no tab could ' +
-                          'host a replacement, or the broker script failed ' +
-                          'to load — with Vite, add ' +
-                          "'@remelondb/driver-web' to optimizeDeps.exclude; " +
-                          'see the driver README, Bundlers section.',
-                      ),
+                setTimeout(() => {
+                  timeoutReject(
+                    new Error(
+                      'WebSqliteDriver: the shared worker did not answer ' +
+                        `the open request within ${deadlineMs}ms. Either ` +
+                        'the database worker was lost and no tab could ' +
+                        'host a replacement, or the broker script failed ' +
+                        'to load — with Vite, add ' +
+                        "'@remelondb/driver-web' to optimizeDeps.exclude; " +
+                        'see the driver README, Bundlers section.',
                     ),
-                  deadlineMs,
-                ),
+                  );
+                }, deadlineMs),
               ),
             ])
           : await openRequest;

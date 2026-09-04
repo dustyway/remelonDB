@@ -20,11 +20,17 @@ const Task = z.object({
 });
 
 type Equal<A, B> =
+  // The two single-use type parameters are the identity trick itself: the
+  // conditional types have to be deferred to compare A and B exactly.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
     ? true
     : false;
 type Extends<A, B> = A extends B ? true : false;
+// The parameter is never used at runtime; the constraint is the assertion.
+/* eslint-disable @typescript-eslint/no-unnecessary-type-parameters, @typescript-eslint/no-unused-vars */
 const assertType = <_T extends true>(): void => undefined;
+/* eslint-enable @typescript-eslint/no-unnecessary-type-parameters, @typescript-eslint/no-unused-vars */
 
 describe('zodTable', () => {
   it('produces exactly what hand-written builders produce', () => {
@@ -52,12 +58,18 @@ describe('zodTable', () => {
     };
     assertType<Equal<Derived, Expected>>();
     assertType<Equal<Derived['note'], string | null>>();
+    /* eslint-disable @typescript-eslint/no-unused-vars -- the alias only
+       exists so the @ts-expect-error below is checked. */
     // @ts-expect-error — columns not in the Zod object do not exist
     type Missing = Derived['nmae'];
+    /* eslint-enable @typescript-eslint/no-unused-vars */
     expect(derived.name).toBe('tasks');
   });
 
   it('keeps refined primitives as their base column type', () => {
+    // The deprecated form is the one under test: .email() on a ZodString
+    // is a refined primitive, which z.email() is not.
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
     const derived = zodTable('users', z.object({ mail: z.string().email() }));
     expect(derived.columns['mail']).toMatchObject({ type: 'string' });
   });

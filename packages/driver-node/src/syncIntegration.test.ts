@@ -784,7 +784,9 @@ describe('sync controller end to end', () => {
     const states: string[] = [];
     controller.subscribe((s) => states.push(s.status));
     controller.start();
-    await vi.waitFor(() => expect(controller.state.status).toBe('idle'));
+    await vi.waitFor(() => {
+      expect(controller.state.status).toBe('idle');
+    });
 
     expect(states).toEqual(['idle', 'syncing', 'idle']);
     expect(controller.state.lastResult).toMatchObject({
@@ -826,7 +828,9 @@ describe('sync controller end to end', () => {
     controller.start();
     await started;
     controller.dispose();
-    await vi.waitFor(() => expect(sawAbort).toBe(true));
+    await vi.waitFor(() => {
+      expect(sawAbort).toBe(true);
+    });
     await db.driver.close();
   });
 });

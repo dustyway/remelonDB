@@ -143,7 +143,12 @@ export interface SyncSchemasOptions {
  * ```
  * @category Adapter
  */
+// The type parameter appears once by design: it constrains the caller's
+// table map, and every schema below is built dynamically, so the return
+// type is independent of it. Dropping it would change an exported
+// signature for no gain.
 export function syncSchemas<
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
   Tables extends Record<string, z.ZodObject<z.ZodRawShape>>,
 >(tables: Tables, options: SyncSchemasOptions = {}) {
   const id = options.id ?? z.string().min(1);

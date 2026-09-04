@@ -167,7 +167,10 @@ const fnv64 = (input: string): bigint => {
   return BigInt.asIntN(64, hash);
 };
 
+// The driver hands back either the rows themselves or a { rows } wrapper,
+// depending on the dialect; Array.isArray widens the first branch to any[].
 const rowsOf = (result: unknown): Record<string, unknown>[] =>
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-return
   Array.isArray(result)
     ? result
     : (result as { rows: Record<string, unknown>[] }).rows;
@@ -303,7 +306,7 @@ export function createDrizzleStore<Scope>(
     return Number(rows[0]!['rev']);
   };
 
-  const txFor = (tx: DrizzleTx, scope: Scope): SyncStoreTx<Scope> => ({
+  const txFor = (tx: DrizzleTx): SyncStoreTx<Scope> => ({
     changedSince: async (name, txScope, since) => {
       const p = tableOf(name);
       if (p.cfg.overrides?.changedSince)
@@ -407,10 +410,10 @@ export function createDrizzleStore<Scope>(
       const apply = (subset: typeof values, on: DrizzleTx) =>
         on
           .insert(p.cfg.table)
-          .values(subset as never)
+          .values(subset)
           .onConflictDoUpdate({
             target: p.cfg.id,
-            set: set as never,
+            set: set,
             // never resurrect a tombstone, never touch its rev
             setWhere: isNull(p.cfg.deletedAt),
           });
@@ -449,7 +452,7 @@ export function createDrizzleStore<Scope>(
           [p.deletedKey]: sql`now()`,
           [p.revKey]: rev,
           ...(p.cfg.scrub ?? {}),
-        } as never)
+        })
         .where(
           and(
             inArray(p.cfg.id, [...ids] as never[]),
@@ -486,7 +489,7 @@ export function createDrizzleStore<Scope>(
               ),
             );
           }
-          return work(txFor(tx, scope));
+          return work(txFor(tx));
         },
         mode === 'pull' ? { isolationLevel: 'repeatable read' } : undefined,
       ),
