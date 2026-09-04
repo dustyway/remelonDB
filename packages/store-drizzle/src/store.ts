@@ -161,6 +161,7 @@ interface Prepared<Scope> {
 const fnv64 = (input: string): bigint => {
   let hash = 0xcbf29ce484222325n;
   for (const char of input) {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- `for...of` over a string yields one non-empty code point at a time, so index 0 exists.
     hash ^= BigInt(char.codePointAt(0)!);
     hash = BigInt.asUintN(64, hash * 0x100000001b3n);
   }
@@ -173,16 +174,25 @@ const rowsOf = (result: unknown): Record<string, unknown>[] =>
   // eslint-disable-next-line @typescript-eslint/no-unsafe-return
   Array.isArray(result)
     ? result
-    : (result as { rows: Record<string, unknown>[] }).rows;
+    : // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the dialect's own result type, per the comment above.
+      (result as { rows: Record<string, unknown>[] }).rows;
 
 const excluded = (column: string): SQL => sql.raw(`excluded."${column}"`);
+
+// Drizzle infers an operator's operand type from a statically known column.
+// These columns arrive as runtime config (`PgColumn`), so that inference has
+// nothing to work with and collapses to `never`. Identity at runtime.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the reason is the paragraph above; it applies to every operand this store builds.
+const operand = (value: unknown) => value as never;
 
 const prepare = <Scope>(
   name: string,
   cfg: DrizzleTableConfig<Scope>,
 ): Prepared<Scope> => {
   const columns = getTableColumns(cfg.table);
-  const keyOf = (column: PgColumn | undefined): string | null => {
+  function keyOf(column: PgColumn): string;
+  function keyOf(column: PgColumn | undefined): string | null;
+  function keyOf(column: PgColumn | undefined): string | null {
     if (!column) return null;
     for (const [key, candidate] of Object.entries(columns)) {
       if (candidate === column) return key;
@@ -190,10 +200,10 @@ const prepare = <Scope>(
     throw new Error(
       `store-drizzle: table '${name}' config references a column not on its table`,
     );
-  };
-  const idKey = keyOf(cfg.id)!;
-  const revKey = keyOf(cfg.rev)!;
-  const deletedKey = keyOf(cfg.deletedAt)!;
+  }
+  const idKey = keyOf(cfg.id);
+  const revKey = keyOf(cfg.rev);
+  const deletedKey = keyOf(cfg.deletedAt);
   const scopeKey = keyOf(cfg.scope);
   if (!scopeKey) {
     const o = cfg.overrides ?? {};
@@ -228,6 +238,7 @@ const prepare = <Scope>(
       ((row) => {
         const wire: Record<string, unknown> = { id: row[idKey] };
         for (const column of userColumns) wire[column.name] = row[column.key];
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- WireRow adds only `id: string` to a raw row, and the id column is the table's text primary key.
         return wire as WireRow;
       }),
     fromWire:
@@ -303,6 +314,7 @@ export function createDrizzleStore<Scope>(
     const rows = rowsOf(
       await tx.execute(sql.raw(`select nextval('${sequence}') as rev`)),
     );
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- `select nextval(...)` returns exactly one row.
     return Number(rows[0]!['rev']);
   };
 
@@ -316,8 +328,9 @@ export function createDrizzleStore<Scope>(
         .from(p.cfg.table)
         .where(
           and(
-            eq(p.cfg.scope!, txScope as never),
-            gt(p.cfg.rev, since as never),
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- `prepare` rejects a scope-less table unless it overrides this very method, and the override path returned above.
+            eq(p.cfg.scope!, operand(txScope)),
+            gt(p.cfg.rev, operand(since)),
           ),
         )) as Record<string, unknown>[];
       return rows.map((row) => ({
@@ -332,8 +345,10 @@ export function createDrizzleStore<Scope>(
         const contribution = p.cfg.overrides?.maxRev
           ? await p.cfg.overrides.maxRev(tx, txScope)
           : Number(
+              // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- a `coalesce(max(...), 0)` aggregate returns exactly one row.
               rowsOf(
                 await tx.execute(
+                  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- `prepare` rejects a scope-less table unless it overrides this very method, and the override path returned above.
                   sql`select coalesce(max(${p.cfg.rev}), 0) as rev from ${p.cfg.table} where ${p.cfg.scope!} = ${txScope}`,
                 ),
               )[0]!['rev'],
@@ -353,8 +368,9 @@ export function createDrizzleStore<Scope>(
         .from(p.cfg.table)
         .where(
           and(
-            inArray(p.cfg.id, [...ids] as never[]),
-            eq(p.cfg.scope!, txScope as never),
+            inArray(p.cfg.id, operand([...ids])),
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- `prepare` rejects a scope-less table unless it overrides this very method, and the override path returned above.
+            eq(p.cfg.scope!, operand(txScope)),
           ),
         );
       return new Map(rows.map((row) => [String(row.id), Number(row.rev)]));
@@ -369,8 +385,9 @@ export function createDrizzleStore<Scope>(
         .from(p.cfg.table)
         .where(
           and(
-            inArray(p.cfg.id, [...ids] as never[]),
-            ne(p.cfg.scope!, txScope as never),
+            inArray(p.cfg.id, operand([...ids])),
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- `prepare` rejects a scope-less table unless it overrides this very method, and the override path returned above.
+            ne(p.cfg.scope!, operand(txScope)),
           ),
         );
       return rows.map((row) => String(row.id));
@@ -385,9 +402,9 @@ export function createDrizzleStore<Scope>(
         .from(p.cfg.table)
         .where(
           and(
-            inArray(p.cfg.id, [...ids] as never[]),
+            inArray(p.cfg.id, operand([...ids])),
             isNotNull(p.cfg.deletedAt),
-            p.cfg.scope ? eq(p.cfg.scope, txScope as never) : undefined,
+            p.cfg.scope ? eq(p.cfg.scope, operand(txScope)) : undefined,
           ),
         );
       return rows.map((row) => String(row.id));
@@ -455,9 +472,9 @@ export function createDrizzleStore<Scope>(
         })
         .where(
           and(
-            inArray(p.cfg.id, [...ids] as never[]),
+            inArray(p.cfg.id, operand([...ids])),
             isNull(p.cfg.deletedAt),
-            p.cfg.scope ? eq(p.cfg.scope, txScope as never) : undefined,
+            p.cfg.scope ? eq(p.cfg.scope, operand(txScope)) : undefined,
           ),
         );
     },
@@ -470,6 +487,7 @@ export function createDrizzleStore<Scope>(
         sql.raw(`select value from ${meta} where key = 'gc_floor'`),
       ),
     );
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- guarded by the length check on the same line.
     return rows.length === 0 ? 0 : Number(rows[0]!['value']);
   };
 
@@ -514,7 +532,7 @@ export function createDrizzleStore<Scope>(
             .where(
               and(
                 isNotNull(p.cfg.deletedAt),
-                lte(p.cfg.rev, effective as never),
+                lte(p.cfg.rev, operand(effective)),
               ),
             );
         }
