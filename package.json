@@ -16,7 +16,7 @@
     "guide:epub": "pandoc docs/codebase-guide.md -o remelondb-guide.epub --toc --toc-depth=2 -N --resource-path=docs --css docs/codebase-guide.epub.css",
     "format": "prettier --write \"packages/*/src/**/*.{ts,tsx}\" \"packages/*/e2e/**/*.{ts,tsx}\" \"examples/**/*.{ts,tsx}\" \"scripts/**/*.mjs\"",
     "format:check": "prettier --check \"packages/*/src/**/*.{ts,tsx}\" \"packages/*/e2e/**/*.{ts,tsx}\" \"examples/**/*.{ts,tsx}\" \"scripts/**/*.mjs\"",
-    "lint": "eslint --max-warnings 101 'packages/*/src/**/*.ts'"
+    "lint": "eslint --max-warnings 97 'packages/*/src/**/*.ts'"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.2",
