@@ -20,7 +20,8 @@ const decks = pgTable('user_decks', {
   position: integer('position'),
 });
 
-const schema = { decks };
+// Exported so it counts as used: this file is compiled, never imported.
+export const schema = { decks };
 declare const db: ReturnType<typeof drizzle<typeof schema>>;
 
 // a fully typed database and typed columns, no casts anywhere

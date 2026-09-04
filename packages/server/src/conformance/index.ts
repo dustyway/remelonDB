@@ -248,7 +248,6 @@ export function registerServerConformance(
         return;
       }
       const { handlers, concurrently } = context;
-      const row = fixture.validRow();
       const start = pulled(await pullNull(handlers));
       const during = fixture.validRow();
 

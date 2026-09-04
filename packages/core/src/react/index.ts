@@ -339,7 +339,9 @@ function createStore<T>(
   let stop: Unsubscribe | null = null;
   const listeners = new Set<() => void>();
   return {
-    subscribe(listener: () => void): Unsubscribe {
+    // An arrow rather than a method so callers can hand subscribe straight
+    // to useSyncExternalStore; it closes over `listeners`, never `this`.
+    subscribe: (listener: () => void): Unsubscribe => {
       listeners.add(listener);
       if (listeners.size === 1) {
         stop = start((next) => {
@@ -374,9 +376,7 @@ const NO_QUERY: QueryResult<never> = {
   isPreviousData: false,
 };
 const noStore = {
-  subscribe:
-    (_: () => void): Unsubscribe =>
-    () => {},
+  subscribe: (): Unsubscribe => () => {},
   snapshot: () => NO_QUERY,
 };
 
@@ -497,8 +497,8 @@ export function useQuery<M, T>(
   const database = query ? query.collection.database : null;
   const key = query ? queryKey(query) : null;
   // The first structurally-equal query instance is captured for the
-  // subscription; later equivalent instances are deliberately ignored.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // subscription; later equivalent instances are deliberately ignored,
+  // which is why `query` is not in the dependency list.
   const store = useMemo(() => {
     if (!query || !database || !key) return noStore;
     return sharedStore<QueryResult<M>>(database, `q:${key}`, () => {
@@ -598,7 +598,8 @@ export function useQueryCountResult(
 ): QueryCountResult {
   const database = query ? query.collection.database : null;
   const key = query ? queryKey(query) : null;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // As in useQueryResult: the captured query instance is the first
+  // structurally-equal one, so `query` is not a dependency.
   const store = useMemo(() => {
     if (!query || !database || !key) return null;
     return sharedStore<QueryCountResult>(database, `c:${key}`, () => {

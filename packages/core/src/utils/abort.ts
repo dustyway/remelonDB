@@ -11,6 +11,9 @@
 export function throwIfAborted(signal?: AbortSignal): void {
   if (!signal?.aborted) return;
   const reason: unknown = signal.reason;
+  // A signal's reason is whatever the aborting side passed, so rethrowing
+  // a non-Error is the contract here, not a mistake.
+  // eslint-disable-next-line @typescript-eslint/only-throw-error
   if (reason !== undefined) throw reason;
   const error = new Error('The operation was aborted');
   error.name = 'AbortError';

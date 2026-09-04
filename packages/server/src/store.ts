@@ -57,7 +57,12 @@ export interface SyncStoreTx<Scope> {
     table: string,
     scope: Scope,
     rows: readonly WireRow[],
-  ): Promise<void | readonly string[]>;
+  ): Promise<
+    // The union is the contract: a store either returns nothing or the ids
+    // it refused, and implementations return Promise<void> today.
+    // eslint-disable-next-line @typescript-eslint/no-invalid-void-type
+    void | readonly string[]
+  >;
   /** Tombstone the ids (fresh revisions); unknown ids are a no-op. */
   tombstone(table: string, scope: Scope, ids: readonly string[]): Promise<void>;
   /** Oldest revision still fully served (tombstone retention floor). */

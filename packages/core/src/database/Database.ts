@@ -11,22 +11,13 @@
  * user_version; core decides fresh-setup / migrate / ready / error. A
  * missing migration path is an explicit error, never a silent reset.
  */
-import type {
-  ExternalChangeSet,
-  SqlArgs,
-  SqliteDriver,
-} from '../driver/SqliteDriver';
+import type { SqlArgs, SqliteDriver } from '../driver/SqliteDriver';
 import {
   fillRandomValues,
   randomId,
   type RandomSource,
 } from '../utils/randomId';
-import type {
-  AppSchema,
-  ColumnName,
-  ColumnsSpec,
-  TableSchema,
-} from '../schema/index';
+import type { AppSchema, ColumnName, TableSchema } from '../schema/index';
 import { stepsForMigration, type SchemaMigrations } from '../schema/migrations';
 import { encodeMigrationSteps, encodeSchema } from '../schema/encodeSchema';
 import type { QueryAssociation } from '../query/encodeQuery';
@@ -253,6 +244,10 @@ export class Database {
    */
   get<
     MC extends {
+      // any[] is the constraint that accepts every model constructor:
+      // unknown[] would reject them contravariantly, and narrowing the
+      // shape here would change the public overload.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       new (...args: any[]): Model;
       readonly table: string;
       readonly schema: TableSchema;
@@ -327,6 +322,9 @@ export class Database {
     // count drops after release(), so the slot is given back first.
     this.acceptedWork += 1;
     try {
+      // Read off the driver to test for presence; it is invoked below
+      // with .call(this.driver, …), so `this` is never lost.
+      // eslint-disable-next-line @typescript-eslint/unbound-method
       const acquire = this.driver.acquireWorkSlot;
       if (!acquire) {
         return await this.queue.enqueue(work, exclusive);

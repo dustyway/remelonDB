@@ -31,13 +31,14 @@ export function createMemoryStore(): MemoryStore {
 
   const tableOf = (scope: string, table: string): Map<string, Stored> => {
     let tables = scopes.get(scope);
-    if (!tables) scopes.set(scope, (tables = new Map()));
+    if (!tables)
+      scopes.set(scope, (tables = new Map<string, Map<string, Stored>>()));
     let rows = tables.get(table);
-    if (!rows) tables.set(table, (rows = new Map()));
+    if (!rows) tables.set(table, (rows = new Map<string, Stored>()));
     return rows;
   };
 
-  const txFor = (scope: string): SyncStoreTx<string> => ({
+  const txFor = (): SyncStoreTx<string> => ({
     changedSince: async (table, txScope, since) => {
       const changes: StoredChange[] = [];
       for (const stored of tableOf(txScope, table).values()) {
@@ -107,7 +108,7 @@ export function createMemoryStore(): MemoryStore {
   });
 
   return {
-    transaction: async (scope, _mode, work) => work(txFor(scope)),
+    transaction: async (_scope, _mode, work) => work(txFor()),
     gc: (newFloor: number) => {
       floor = Math.max(floor, newFloor);
       for (const tables of scopes.values()) {

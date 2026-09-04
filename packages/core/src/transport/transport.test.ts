@@ -28,10 +28,8 @@ const jsonResponse = (status: number, body: unknown) =>
     headers: { 'content-type': 'application/json' },
   });
 
-const fetchPost =
-  (impl: () => Promise<Response>) =>
-  (path: 'pull' | 'push', _body: unknown, _signal?: AbortSignal) =>
-    readSyncResponse(path, impl);
+const fetchPost = (impl: () => Promise<Response>) => (path: 'pull' | 'push') =>
+  readSyncResponse(path, impl);
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -119,6 +117,8 @@ describe('sync transport', () => {
     const { pullChanges } = createSyncTransport({
       post: async () => ({}),
       validatePullResult: () => {
+        // A non-Error throw is the point of this test.
+        // eslint-disable-next-line @typescript-eslint/only-throw-error
         throw 'nope';
       },
       validatePushResult: (raw) => wire.pushResult.parse(raw),

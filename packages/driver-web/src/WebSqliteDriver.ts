@@ -275,8 +275,14 @@ export class WebSqliteDriver implements SqliteDriver {
    * contexts) — coordination is then skipped and behavior is unchanged.
    */
   private async acquireTabLock(name: string): Promise<boolean> {
+    // The optional chain is not redundant at runtime: some embedders
+    // define navigator as null rather than leaving it out, which the DOM
+    // types do not model (docs/reference/runtimes.md).
     const locks =
-      typeof navigator === 'undefined' ? undefined : navigator?.locks;
+      typeof navigator === 'undefined'
+        ? undefined
+        : // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+          navigator?.locks;
     if (!locks) {
       return false;
     }

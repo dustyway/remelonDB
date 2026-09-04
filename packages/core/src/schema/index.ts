@@ -163,6 +163,9 @@ export function validateColumnSchema(column: ColumnSchema): ColumnSchema {
   }
   if (!['string', 'number', 'boolean'].includes(column.type)) {
     throw new Error(
+      // String() for the same reason as in ensureName: this validates
+      // input from untyped callers, where the value need not be a string.
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-conversion
       `Column '${column.name}' has invalid type '${String(column.type)}'`,
     );
   }

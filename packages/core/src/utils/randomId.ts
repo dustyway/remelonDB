@@ -50,6 +50,10 @@ export function fillRandomValues(
     return;
   }
   const crypto = globalThis.crypto;
+  // The optional chain is needed on React Native: Hermes ships no
+  // WebCrypto, so globalThis.crypto is undefined there even though the
+  // DOM lib types say it never is (docs/reference/runtimes.md).
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (typeof crypto?.getRandomValues !== 'function') {
     throw new Error(
       'remelonDB needs crypto.getRandomValues and this runtime has none. ' +

@@ -61,6 +61,9 @@ function ensureValue(value: unknown): Value {
     typeof value !== 'number' &&
     typeof value !== 'boolean'
   ) {
+    // The value is a non-primitive by the checks above, so this renders
+    // as [object Object]; the message text is kept as it ships today.
+    // eslint-disable-next-line @typescript-eslint/no-base-to-string
     throw new Error(`Q: invalid value ${String(value)} — must be a primitive`);
   }
   return value;
@@ -267,6 +270,9 @@ export function sortBy<C extends string>(
   sortColumn: C,
   sortOrder: SortOrder = asc,
 ): SortBy<C> {
+  // A runtime guard for JavaScript callers, which the types cannot see:
+  // to TypeScript this comparison can never be true.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (sortOrder !== 'asc' && sortOrder !== 'desc') {
     throw new Error(`Q.sortBy: invalid sort order '${String(sortOrder)}'`);
   }
@@ -298,7 +304,8 @@ export function joinTables(tables: readonly string[]): JoinTables {
   }
   return {
     type: 'joinTables',
-    tables: tables.map((table) => ensureName(table, 'table')),
+    // Annotated because Array.isArray above widens `tables` to any[].
+    tables: tables.map((table: string) => ensureName(table, 'table')),
   };
 }
 

@@ -21,7 +21,6 @@ import {
 import type { DynamicModule, FactoryProvider } from '@nestjs/common';
 import { z } from 'zod';
 import type {
-  SyncPullArgs,
   SyncPullResult,
   SyncPushArgs,
   SyncPushResult,
@@ -191,6 +190,9 @@ export class RemelonSyncController {
 }
 
 @Module({})
+// A Nest module is a class with static factories by construction; there is
+// nothing to instantiate.
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class RemelonSyncModule {
   static forRoot<Scope>(options: RemelonSyncOptions<Scope>): DynamicModule {
     return {

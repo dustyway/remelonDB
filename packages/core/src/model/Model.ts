@@ -25,12 +25,7 @@ import type { RawRecord, SyncStatus } from '../rawRecord/index';
 import type { Collection, Unsubscribe } from '../database/Collection';
 import type { BatchOperation } from '../database/encodeBatch';
 import type { Query } from '../database/Query';
-import type {
-  ColumnName,
-  ColumnsSpec,
-  InferRecord,
-  TableSchema,
-} from '../schema/index';
+import type { ColumnName, InferRecord, TableSchema } from '../schema/index';
 import * as Q from '../query/Q';
 
 export type AssociationsMap = {
@@ -43,6 +38,7 @@ export interface ModelClass<M extends Model = Model> {
   // Collection<any>: precise collection typing here creates variance
   // knots between Model subclasses and the binding machinery; the
   // table↔class pairing is checked at runtime by Database.open.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   new (collection: Collection<any>, raw: RawRecord): M;
   readonly table: string;
   readonly associations?: AssociationsMap;
@@ -60,6 +56,8 @@ export type TypedModel<T extends TableSchema> = Model &
   Omit<InferRecord<T>, 'id'>;
 
 export interface TypedModelClass<T extends TableSchema> {
+  // Collection<any> for the same reason as ModelClass above.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   new (collection: Collection<any>, raw: RawRecord): TypedModel<T>;
   readonly table: string;
   readonly schema: T;

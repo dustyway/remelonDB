@@ -14,7 +14,7 @@ const tasks = table('tasks', { name: c.string() });
 const schema = appSchema({ version: 1, tables: [tasks] });
 
 /** A deferred whose settle the test calls. */
-const deferred = <T>() => {
+const deferred = <T = void>() => {
   let settle!: (value: T) => void;
   let fail!: (error: Error) => void;
   const promise = new Promise<T>((resolve, reject) => {
@@ -32,11 +32,11 @@ const settleMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0));
  * control of it, and `close` settles when the test says.
  */
 const fakeDriver = (options: { withWorkSlot?: boolean } = {}) => {
-  const closed = deferred<void>();
+  const closed = deferred();
   const close = vi.fn(() => closed.promise);
   const query = vi.fn(async (): Promise<Row[]> => []);
   const execute = vi.fn(async () => {});
-  const slotGrant = deferred<void>();
+  const slotGrant = deferred();
   const release = vi.fn(async () => {});
   const driver = {
     open: vi.fn(async () => ({ userVersion: schema.version })),
@@ -74,7 +74,7 @@ describe('Database.close drains accepted work', () => {
   it('waits for a running write', async () => {
     const fake = fakeDriver();
     const db = await openDb(fake);
-    const gate = deferred<void>();
+    const gate = deferred();
     const writing = db.write(async () => {
       await gate.promise;
     });
@@ -94,7 +94,7 @@ describe('Database.close drains accepted work', () => {
   it('waits for a running read', async () => {
     const fake = fakeDriver();
     const db = await openDb(fake);
-    const gate = deferred<void>();
+    const gate = deferred();
     const reading = db.read(async () => {
       await gate.promise;
     });
@@ -192,7 +192,7 @@ describe('Database.close drains direct core work', () => {
   it('lets an accepted write finish work it starts after close was requested', async () => {
     const fake = fakeDriver();
     const db = await openDb(fake);
-    const gate = deferred<void>();
+    const gate = deferred();
     // The write is accepted before close. It issues a direct operation
     // afterwards, which must be allowed: close promised to finish this
     // block, and core cannot tell this call from an unrelated one.

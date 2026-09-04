@@ -211,7 +211,8 @@ describe('close() during a pending open', () => {
     let settle!: (failure?: Error) => void;
     const closed = new Promise<void>((resolve, reject) => {
       settle = (failure?: Error) => {
-        failure ? reject(failure) : resolve();
+        if (failure) reject(failure);
+        else resolve();
       };
     });
     const close = vi.fn(() => closed);
