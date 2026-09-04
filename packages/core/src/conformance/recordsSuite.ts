@@ -67,6 +67,7 @@ export function recordsSuite(options: ResolvedOptions): void {
       const rows = await driver.query(sql, args);
       expect(rows).toHaveLength(1);
       expect(rows[0]?.['is_done']).toBe(1); // stored representation
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- the toHaveLength(1) above.
       expect(sanitizedRaw(rows[0]!, tasksTable)).toEqual(raw);
     });
   });

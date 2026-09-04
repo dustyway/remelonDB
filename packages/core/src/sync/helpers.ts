@@ -60,6 +60,7 @@ export async function tombstoneIds(
   const rows = await queryRows(database, table, [
     Q.where('_status', 'deleted'),
   ]);
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- a driver row's values are SqlValue; every table's id column is text.
   return rows.map((row) => row['id'] as string);
 }
 

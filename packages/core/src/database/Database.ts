@@ -231,6 +231,7 @@ export class Database {
     // failed external apply must never take down the driver's listener.
     driver.onExternalChanges?.((changes) => {
       void database
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- a driver reports external changes with table names it cannot type; the comment above covers the unknown-table case.
         .applyExternalChanges(changes as DatabaseChangeSet)
         .catch(() => {});
     });
@@ -439,9 +440,11 @@ export class Database {
     const changesByTable = new Map<string, CollectionChange[]>();
     for (const operation of operations) {
       const collection = this.get(operation.table);
-      const changes =
-        changesByTable.get(operation.table) ??
-        changesByTable.set(operation.table, []).get(operation.table)!;
+      let changes = changesByTable.get(operation.table);
+      if (!changes) {
+        changes = [];
+        changesByTable.set(operation.table, changes);
+      }
       switch (operation.type) {
         case 'create':
           collection.cache.add(operation.raw);
@@ -455,6 +458,7 @@ export class Database {
             collection.cache.add(operation.raw);
           }
           changes.push({
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- both branches above leave this id in the cache: one updates the cached instance, the other adds the raw.
             record: collection.cache.get(operation.raw.id)!,
             type: 'updated',
           });
@@ -513,6 +517,7 @@ export class Database {
                 collection.cache.add(raw);
               }
               applied.push({
+                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- the branches above leave this id in the cache: cached stays, uncached is added.
                 record: collection.cache.get(raw.id)!,
                 type: cached ? 'updated' : 'created',
               });

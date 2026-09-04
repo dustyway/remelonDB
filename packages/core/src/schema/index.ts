@@ -229,6 +229,7 @@ export function table<const Cols extends ColumnsSpec>(
   name: string,
   cols: Cols,
 ): TableSchema<Cols> {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- `buildTableSchema` erases the spec; TableSchema<Cols> re-states the columns this call was given.
   return buildTableSchema(name, columnsFromSpec(cols)) as TableSchema<Cols>;
 }
 

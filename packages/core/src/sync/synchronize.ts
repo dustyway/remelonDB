@@ -237,7 +237,8 @@ async function runSynchronize(
       const result: unknown = await options.pullChanges(args, options.signal);
       return options.validatePullResult
         ? options.validatePullResult(result)
-        : (result as SyncPullResult);
+        : // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the app's transport answers `unknown`; `validatePullResult` is the opt-in check for apps that want one, and the wire spec is the contract otherwise.
+          (result as SyncPullResult);
     };
     let pullResult = await pull({
       cursor: pullCursor,
@@ -316,7 +317,8 @@ async function runSynchronize(
     );
     const pushResult = options.validatePushResult
       ? options.validatePushResult(unvalidatedPushResult)
-      : (unvalidatedPushResult as SyncPushResult);
+      : // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- as with the pull above: `validatePushResult` is the opt-in check, the wire spec is the contract otherwise.
+        (unvalidatedPushResult as SyncPushResult);
     if ('conflict' in pushResult) {
       log(`sync: push conflict (attempt ${attempt}/${retries}) — re-pulling`);
       continue;

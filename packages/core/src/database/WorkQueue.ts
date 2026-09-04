@@ -30,6 +30,7 @@ export class WorkQueue {
       this.queue.push({
         work,
         isWriter,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- one queue holds work of every result type at once, so the entry erases T; `enqueue<T>` re-applies it at the call site.
         resolve: resolve as (value: unknown) => void,
         reject,
       });

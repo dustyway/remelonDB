@@ -106,6 +106,7 @@ export async function applyRemoteChanges(
         ? await queryRows(database, table, [])
         : await queryRowsByIds(database, table, referencedIds);
       for (const row of rows) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- a driver row's values are SqlValue; every table's id column is text, and the cache throws on a row whose id is not a string.
         const id = row['id'] as string;
         if (row['_status'] === 'deleted') {
           localState.set(id, 'tombstone');
@@ -163,6 +164,7 @@ export async function applyRemoteChanges(
             `sync: server created '${table}/${id}' but it exists — treating as update`,
           );
         }
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- 'live' is recorded in the same loop that fills liveRecords, so the two maps agree on this id.
         updateResolved(liveRecords.get(id)!, dirty);
       } else if (state === 'tombstone') {
         if (options.replacement) {
@@ -190,6 +192,7 @@ export async function applyRemoteChanges(
       const id = remoteId(dirty);
       const state = localState.get(id);
       if (state === 'live') {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- 'live' is recorded in the same loop that fills liveRecords, so the two maps agree on this id.
         updateResolved(liveRecords.get(id)!, dirty);
       } else if (state === 'tombstone') {
         // local deletion wins locally; it will be pushed later

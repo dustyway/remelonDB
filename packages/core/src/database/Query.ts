@@ -116,11 +116,13 @@ export class Query<M = RawRecord> {
     };
 
     const differs = (records: readonly RawRecord[]): boolean => {
-      if (previous === null || previous.length !== records.length) {
+      const snapshot = previous;
+      if (snapshot === null || snapshot.length !== records.length) {
         return true;
       }
       return records.some((raw, index) => {
-        const before = previous![index]!;
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- the lengths were just compared equal.
+        const before = snapshot[index]!;
         return (
           before.raw !== raw ||
           columns.some((name) => before.content[name] !== raw[name])
