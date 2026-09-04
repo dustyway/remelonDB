@@ -431,8 +431,17 @@ export function createDrizzleStore<Scope>(
           .onConflictDoUpdate({
             target: p.cfg.id,
             set: set,
-            // never resurrect a tombstone, never touch its rev
-            setWhere: isNull(p.cfg.deletedAt),
+            // never resurrect a tombstone, never touch its rev — and never
+            // touch another scope's row: an id collision across scopes is
+            // a no-op here, the way a tombstone collision is. (`and` of two
+            // defined operands never yields undefined; the ?? satisfies
+            // exactOptionalPropertyTypes without an assertion.)
+            setWhere: p.cfg.scope
+              ? (and(
+                  isNull(p.cfg.deletedAt),
+                  eq(p.cfg.scope, operand(txScope)),
+                ) ?? isNull(p.cfg.deletedAt))
+              : isNull(p.cfg.deletedAt),
           });
       // Fast path: the whole batch in one statement, inside a savepoint so
       // a constraint violation cannot poison the outer push transaction.
@@ -526,15 +535,35 @@ export function createDrizzleStore<Scope>(
         // the persisted floor may already be higher; prune to it, not to
         // the argument, so gc never resurrects served history
         const effective = await floorOf(tx);
-        for (const p of tables.values()) {
-          await tx
-            .delete(p.cfg.table)
-            .where(
-              and(
-                isNotNull(p.cfg.deletedAt),
-                lte(p.cfg.rev, operand(effective)),
-              ),
-            );
+        // Tombstones can reference each other across tables (a tombstoned
+        // child holds its FK, tombstoning is an UPDATE), and config order
+        // knows nothing about dependencies. Each table prunes inside its
+        // own savepoint so an FK refusal skips that table for this pass
+        // instead of rolling back the transaction, and passes repeat until
+        // none makes progress. A tombstone still referenced by a live row
+        // legitimately survives; the floor is already persisted and served
+        // history never shrinks either way.
+        let progressed = true;
+        while (progressed) {
+          progressed = false;
+          for (const p of tables.values()) {
+            try {
+              const pruned = await tx.transaction((sp) =>
+                sp
+                  .delete(p.cfg.table)
+                  .where(
+                    and(
+                      isNotNull(p.cfg.deletedAt),
+                      lte(p.cfg.rev, operand(effective)),
+                    ),
+                  )
+                  .returning({ id: p.cfg.id }),
+              );
+              if (pruned.length > 0) progressed = true;
+            } catch {
+              // an FK still points here; a later pass or a later gc gets it
+            }
+          }
         }
       });
     },
