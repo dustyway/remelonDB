@@ -39,7 +39,7 @@ import type {
   TypedModel,
   TypedModelClass,
 } from '../model/Model';
-import type { RawRecord } from '../rawRecord/index';
+import { sanitizedRaw, type RawRecord } from '../rawRecord/index';
 
 export interface DatabaseOptions {
   readonly driver: SqliteDriver;
@@ -331,10 +331,16 @@ export class Database {
         return await this.queue.enqueue(work, exclusive);
       }
       const release = await acquire.call(this.driver, exclusive);
+      let failed = false;
       try {
         return await this.queue.enqueue(work, exclusive);
+      } catch (error) {
+        failed = true;
+        throw error;
       } finally {
-        await release();
+        // The block's own error is the one the caller needs; a release
+        // that fails on top of it must not take its place.
+        await (failed ? release().catch(() => {}) : release());
       }
     } finally {
       this.acceptedWork -= 1;
@@ -510,15 +516,23 @@ export class Database {
           switch (change.type) {
             case 'created':
             case 'updated': {
-              const cached = collection.cache.get(raw.id);
-              if (cached && cached !== raw) {
-                Object.assign(cached, raw);
-              } else if (!cached) {
-                collection.cache.add(raw);
+              // The broadcast crosses a trust boundary — another context may
+              // run an older schema — so it is sanitized before it can reach
+              // the identity map or overwrite a cached instance. An idless
+              // change names no record: sanitizedRaw would mint an id and
+              // cache a record nobody can ever look up, so it is dropped.
+              if (typeof raw.id !== 'string' || raw.id === '') {
+                break;
+              }
+              const sanitized = sanitizedRaw(raw, collection.schema);
+              const cached = collection.cache.get(sanitized.id);
+              if (cached) {
+                Object.assign(cached, sanitized);
+              } else {
+                collection.cache.add(sanitized);
               }
               applied.push({
-                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- the branches above leave this id in the cache: cached stays, uncached is added.
-                record: collection.cache.get(raw.id)!,
+                record: cached ?? sanitized,
                 type: cached ? 'updated' : 'created',
               });
               break;

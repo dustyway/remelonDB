@@ -135,6 +135,18 @@ describe('Database.close drains accepted work', () => {
     );
   });
 
+  it("a failing slot release does not replace the block's error", async () => {
+    const fake = fakeDriver({ withWorkSlot: true });
+    const db = await openDb(fake);
+    fake.release.mockImplementation(() =>
+      Promise.reject(new Error('slot release failed')),
+    );
+
+    const writing = db.write(() => Promise.reject(new Error('block failed')));
+    fake.grantSlot();
+    await expect(writing).rejects.toThrow('block failed');
+  });
+
   it('refuses new read, write, and external changes once close is requested', async () => {
     const fake = fakeDriver();
     const db = await openDb(fake);

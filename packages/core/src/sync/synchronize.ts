@@ -87,7 +87,11 @@ export interface SynchronizeOptions {
   readonly sendCreatedAsUpdated?: boolean;
   /** Opt into migration pulls; the version before your first synced migration. */
   readonly migrationsEnabledAtVersion?: number;
-  /** Max pull→push rounds when the server reports push conflicts (default 5). */
+  /**
+   * Max pull→push rounds when the server reports push conflicts
+   * (default 5). Values below 1 are treated as 1: every run makes at
+   * least one attempt.
+   */
   readonly conflictRetries?: number;
   /**
    * Cancels the run between protocol phases and is handed to the
@@ -173,15 +177,52 @@ async function migrationInfo(
 const inFlight = new WeakMap<Database, Promise<SynchronizeResult>>();
 
 /**
+ * Settle a joiner on the running sync without giving it control over
+ * that run: its signal ends its wait, the run continues for its owner.
+ */
+function joinRun(
+  run: Promise<SynchronizeResult>,
+  signal?: AbortSignal,
+): Promise<SynchronizeResult> {
+  if (!signal) {
+    return run;
+  }
+  return new Promise<SynchronizeResult>((resolve, reject) => {
+    const onAbort = () => {
+      try {
+        throwIfAborted(signal);
+      } catch (reason) {
+        // A signal's reason is whatever the aborting side passed, and the
+        // run's own abort path rejects with it unchanged; a joiner does
+        // the same. See throwIfAborted.
+        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+        reject(reason);
+      }
+    };
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    signal.addEventListener('abort', onAbort, { once: true });
+    run.then(resolve, reject).finally(() => {
+      signal.removeEventListener('abort', onAbort);
+    });
+  });
+}
+
+/**
  * Run one full sync: pull remote changes, apply them (per-column
  * conflict resolution), push local changes, mark them synced. Wire up
  * `pullChanges`/`pushChanges` to your transport; shapes are the wire
  * protocol's (docs/sync-wire.md).
  *
  * Concurrent calls for the same database coalesce: a call arriving while
- * a sync is running joins it (the runner's options apply). The in-write
- * cursor re-check stays as the guard against out-of-band writers
- * (another tab or process sharing the database).
+ * a sync is running joins it. The runner's transport and conflict options
+ * are the ones that apply — a joiner's `pullChanges`/`pushChanges` are
+ * never called — but a joiner's `signal` aborts its own wait only, and
+ * leaves the run it does not own alone. The in-write cursor re-check
+ * stays as the guard against out-of-band writers (another tab or process
+ * sharing the database).
  *
  * @example
  * ```ts
@@ -198,7 +239,7 @@ export function synchronize(
 ): Promise<SynchronizeResult> {
   const running = inFlight.get(options.database);
   if (running) {
-    return running;
+    return joinRun(running, options.signal);
   }
   const run = runSynchronize(options).finally(() =>
     inFlight.delete(options.database),
@@ -211,7 +252,9 @@ async function runSynchronize(
   options: SynchronizeOptions,
 ): Promise<SynchronizeResult> {
   const { database, log = () => {} } = options;
-  const retries = options.conflictRetries ?? 5;
+  // Floored at one: a run that never contacts the server is not a sync,
+  // so "no retries" means one attempt, not zero.
+  const retries = Math.max(1, options.conflictRetries ?? 5);
   throwIfAborted(options.signal);
 
   // Multi-tab: only the sync-lease holder runs; everyone else's tick is

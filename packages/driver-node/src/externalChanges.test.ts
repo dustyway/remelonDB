@@ -11,6 +11,7 @@ import {
   column as c,
   Database,
   ModelFor,
+  type RawRecord,
   sanitizedRaw,
   table,
 } from '@remelondb/core';
@@ -167,5 +168,50 @@ describe('applyExternalChanges', () => {
       .then(() => log.push('applied'));
     await Promise.all([read, apply]);
     expect(log).toEqual(['read start', 'read end', 'applied']);
+  });
+  it('sanitizes a broadcast raw before it becomes the cached instance', async () => {
+    // A context on an older schema broadcasts a raw missing a column and
+    // carrying one the schema does not know.
+    const untrusted = {
+      id: 'n1',
+      _status: 'synced',
+      _changed: '',
+      stray: 'ignored',
+    } as unknown as RawRecord;
+    await writeToStorageDirectly(driver, { id: 'n1', text: 'hello' });
+    await db.applyExternalChanges({
+      notes: [{ record: untrusted, type: 'created' }],
+    });
+
+    const [note] = await db.get(Note).query().fetch();
+    expect(note?._raw.text).toBe('');
+    expect(note?._raw['stray']).toBeUndefined();
+    expect(note?._raw).not.toBe(untrusted);
+  });
+
+  it('drops a broadcast change whose record has no usable id', async () => {
+    const changed: unknown[] = [];
+    db.get(Note).onChange((batch) => changed.push(...batch));
+
+    await db.applyExternalChanges({
+      notes: [
+        {
+          record: { id: '', _status: 'synced', _changed: '' },
+          type: 'created',
+        },
+        {
+          record: { _status: 'synced', _changed: '' } as unknown as RawRecord,
+          type: 'updated',
+        },
+        {
+          record: raw({ id: 'n1', text: 'ok', _status: 'synced' }),
+          type: 'created',
+        },
+      ],
+    });
+
+    expect(changed).toHaveLength(1);
+    expect(db.get(Note).cache.get('n1')).toBeDefined();
+    expect(db.get(Note).cache.get('')).toBeUndefined();
   });
 });

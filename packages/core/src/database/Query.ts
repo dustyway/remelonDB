@@ -149,22 +149,26 @@ export class Query<M = RawRecord> {
           previous = records.map((raw) => ({ raw, content: { ...raw } }));
           subscriber(records.map((raw) => this.collection._recordFor(raw)));
         },
-        onError || diagnostics
-          ? (cause: unknown) => {
-              if (unsubscribed || current !== generation) {
-                report(started, trigger, 'discarded');
-                return;
-              }
-              const error =
-                cause instanceof Error ? cause : new Error(String(cause));
-              report(started, trigger, 'error', undefined, error);
-              if (onError) {
-                onError(error);
-              } else {
-                throw error;
-              }
-            }
-          : undefined,
+        (cause: unknown) => {
+          if (unsubscribed || current !== generation) {
+            report(started, trigger, 'discarded');
+            return;
+          }
+          const error =
+            cause instanceof Error ? cause : new Error(String(cause));
+          report(started, trigger, 'error', undefined, error);
+          if (onError) {
+            onError(error);
+            return;
+          }
+          // Nowhere to deliver it: rethrow out of band so the runtime's
+          // global handler reports a real failure. The handler is now
+          // attached either way, so a rejection belonging to an
+          // observation already discarded stays quiet.
+          setTimeout(() => {
+            throw error;
+          }, 0);
+        },
       );
     };
 
@@ -233,22 +237,26 @@ export class Query<M = RawRecord> {
           previous = count;
           subscriber(count);
         },
-        onError || diagnostics
-          ? (cause: unknown) => {
-              if (unsubscribed || current !== generation) {
-                report(started, trigger, 'discarded');
-                return;
-              }
-              const error =
-                cause instanceof Error ? cause : new Error(String(cause));
-              report(started, trigger, 'error', undefined, error);
-              if (onError) {
-                onError(error);
-              } else {
-                throw error;
-              }
-            }
-          : undefined,
+        (cause: unknown) => {
+          if (unsubscribed || current !== generation) {
+            report(started, trigger, 'discarded');
+            return;
+          }
+          const error =
+            cause instanceof Error ? cause : new Error(String(cause));
+          report(started, trigger, 'error', undefined, error);
+          if (onError) {
+            onError(error);
+            return;
+          }
+          // Nowhere to deliver it: rethrow out of band so the runtime's
+          // global handler reports a real failure. The handler is now
+          // attached either way, so a rejection belonging to an
+          // observation already discarded stays quiet.
+          setTimeout(() => {
+            throw error;
+          }, 0);
+        },
       );
     };
 
