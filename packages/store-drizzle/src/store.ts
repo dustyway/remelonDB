@@ -314,8 +314,17 @@ export function createDrizzleStore<Scope>(
     const rows = rowsOf(
       await tx.execute(sql.raw(`select nextval('${sequence}') as rev`)),
     );
+    // the sequence is a bigint; narrowing it through Number() past 2^53
+    // would stamp two rows with the same revision and lose changes
+    // between cursors, so refuse rather than round
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- `select nextval(...)` returns exactly one row.
-    return Number(rows[0]!['rev']);
+    const rev = BigInt(String(rows[0]!['rev']));
+    if (rev > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new Error(
+        `store-drizzle: sequence '${sequence}' passed 2^53 (${rev.toString()})`,
+      );
+    }
+    return Number(rev);
   };
 
   const txFor = (tx: DrizzleTx): SyncStoreTx<Scope> => ({

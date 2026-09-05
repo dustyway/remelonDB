@@ -145,3 +145,43 @@ describe('gc under foreign keys', () => {
     expect(left).toEqual({ parents: ['p1'], children: 1 });
   });
 });
+
+describe('revision sequence', () => {
+  const taskStore = (db: DrizzleDb) =>
+    createDrizzleStore<string>({
+      db,
+      tables: {
+        tasks: {
+          table: tasks,
+          id: tasks.id,
+          rev: tasks.rev,
+          deletedAt: tasks.deletedAt,
+          scope: tasks.owner,
+        },
+      },
+    });
+
+  it('refuses a revision past 2^53 instead of rounding it', async () => {
+    const { client, db } = await freshDb();
+    await client.exec(`select setval('remelon_rev', 9007199254740992)`);
+    const store = taskStore(db);
+
+    await expect(
+      store.transaction('u1', 'push', (tx) =>
+        tx.upsert('tasks', 'u1', [{ id: 't1', name: 'a', done: false }]),
+      ),
+    ).rejects.toThrow(/2\^53/);
+  });
+
+  it('stamps the largest safe revision exactly', async () => {
+    const { client, db } = await freshDb();
+    await client.exec(`select setval('remelon_rev', 9007199254740990)`);
+    const store = taskStore(db);
+    await store.transaction('u1', 'push', (tx) =>
+      tx.upsert('tasks', 'u1', [{ id: 't1', name: 'a', done: false }]),
+    );
+
+    const max = await store.transaction('u1', 'pull', (tx) => tx.maxRev('u1'));
+    expect(max).toBe(Number.MAX_SAFE_INTEGER);
+  });
+});
