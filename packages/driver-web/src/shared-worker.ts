@@ -669,8 +669,12 @@ scope.addEventListener('connect', (event) => {
     return;
   }
   port.addEventListener('message', (messageEvent) => {
+    const raw: unknown = messageEvent.data;
+    if (typeof raw !== 'object' || raw === null) {
+      return;
+    }
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- MessageEvent.data is `any` across the port boundary; the protocol module is the contract and the control check below discriminates.
-    const data = messageEvent.data as WorkerRequest | ClientControlMessage;
+    const data = raw as WorkerRequest | ClientControlMessage;
     // A control is never a request: anything carrying the field leaves
     // here, and the handoff branch is entered by name rather than by
     // the field's presence, so a control added later is ignored instead

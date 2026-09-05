@@ -179,3 +179,21 @@ describe('backlog integrity across an epoch reset', () => {
     expect(sqls).toEqual(['select 1', 'select 2']);
   });
 });
+
+describe('hostile messages', () => {
+  it('ignores a non-object message instead of throwing', async () => {
+    const connect = await loadBroker();
+    const a = makePort();
+    connect(a);
+
+    expect(() => {
+      a.send(null);
+      a.send('hello');
+      a.send(42);
+    }).not.toThrow();
+
+    // the port still works
+    a.send({ id: 1, op: 'acquireSlot', exclusive: true });
+    expect(a.out).toEqual([{ id: 1, ok: true, result: { slot: 1 } }]);
+  });
+});
