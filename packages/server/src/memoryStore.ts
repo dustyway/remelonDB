@@ -107,8 +107,24 @@ export function createMemoryStore(): MemoryStore {
     gcFloor: async () => floor,
   });
 
+  // The store contract requires push transactions to serialize per scope,
+  // or the engine's cursors lie; every tx method is async, so the engine's
+  // awaits are real yield points even in one thread. A per-scope promise
+  // chain is the whole lock.
+  const pushChains = new Map<string, Promise<unknown>>();
+
   return {
-    transaction: async (_scope, _mode, work) => work(txFor()),
+    transaction: async (scope, mode, work) => {
+      if (mode !== 'push') return work(txFor());
+      const previous = pushChains.get(scope) ?? Promise.resolve();
+      const run = previous.catch(() => undefined).then(() => work(txFor()));
+      pushChains.set(scope, run);
+      try {
+        return await run;
+      } finally {
+        if (pushChains.get(scope) === run) pushChains.delete(scope);
+      }
+    },
     gc: (newFloor: number) => {
       floor = Math.max(floor, newFloor);
       for (const tables of scopes.values()) {
