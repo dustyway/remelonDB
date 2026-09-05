@@ -13,30 +13,62 @@
 //     the broker fans out the broadcast before it grants the next slot)
 //   - a tab's write block: read the local cache, then write read+1
 //
-// Model simplifications: one storage cell, no compute-worker death or
-// respawn, no refcounted open/close, tab count and write budget fixed.
+// Model simplifications: one storage cell, no refcounted open/close,
+// tab count and write budget fixed. A compute worker is one host tab
+// and a quiet/answering bit; its queries and backlog are not modeled.
 //
 // Check:    quint typecheck docs/multi-tab.qnt
 // Simulate: quint run docs/multi-tab.qnt --invariant=allInvariants \
-//             --max-samples=3000 --max-steps=40
+//             --max-samples=8000 --max-steps=50
 //
 // Flip STRICT_INBOX_FIFO to false to reproduce the lost update the
 // implementation hit (slice 4): consuming a grant ahead of earlier
 // queued broadcasts models "slot acquired inside the local queue" —
 // the block then reads a cache missing a serialized-before commit,
 // and commitReadsFresh fails with a two-tab counterexample.
+//
+// The adversarial review behind the 0.3.0 hardening pass found four
+// more failures this model could not express, so the transitions now
+// exist, each behind a flag whose false setting reproduces the shipped
+// bug (`quint run` with the named invariant finds each in seconds):
+//   - OWNER_CHECKED_RELEASE = false: any tab may release the exclusive
+//     slot (the broker never checked ownership) — oneWriterRunning fails
+//     with a two-tab counterexample, and commitReadsFresh with it.
+//   - DEATH_SWEEP = false: a tab dying inside a write block strands the
+//     slot forever (no port-death detection) — deadHolderSwept fails, the
+//     model's rendering of "every later read, write and close hangs".
+//     tick is urgent under DEATH_SWEEP: time may not pass the sweep
+//     deadline while a dead tab still holds the slot, so the invariant
+//     states a bound the detector has to meet rather than an eventuality.
+//   - RECONFIRM_LEASE = false: a sync run whose lease expired keeps its
+//     destructive mark step (the tombstone race) — markHoldsLease fails
+//     once a second tab legitimately acquires the expired lease.
+//   - RESET_NEEDS_HOST_DEATH = false: an epoch reset fires on compute
+//     silence rather than on the death of the tab hosting it —
+//     resetOnHostDeath fails, which is the state the two epoch-reset P1s
+//     (a memory database restored as opfs, a stranded query replayed
+//     ahead of its restore-open) both start from.
+// The fixed design (all flags true) holds every invariant.
 
 module multi_tab {
   pure val TABS = Set("a", "b", "c")
   pure val MAX_WRITES = 3
   pure val STRICT_INBOX_FIFO = true
+  pure val OWNER_CHECKED_RELEASE = true
+  pure val DEATH_SWEEP = true
+  pure val RECONFIRM_LEASE = true
+  pure val RESET_NEEDS_HOST_DEATH = true
+  pure val NO_TAB = ""
+  pure val LEASE_MS = 3
+  pure val SWEEP_MS = 2
 
   // broker -> tab messages; one FIFO per tab, grants and broadcasts mixed
   type Msg = { kind: str, value: int } // kind: "grant" | "broadcast"
 
   // a tab's participation in one write block
   // "idle" -> "waiting" (slot requested) -> "reading" (granted; the
-  // block's read happens on grant consumption) -> commit -> "idle"
+  // block's read happens on grant consumption) -> commit -> "idle";
+  // "dead" is terminal (the tab navigated away or crashed)
   type Tab = { phase: str, seen: int, writesLeft: int }
 
   var storage: int
@@ -44,10 +76,30 @@ module multi_tab {
   var inbox: str -> List[Msg]
   var tabs: str -> Tab
 
-  // broker state: exclusive holder (at most one), shared holders, FIFO queue
-  var exclusiveHeld: bool
+  // broker state: exclusive holder (at most one, by name — ownership
+  // and death both need to know who), shared holders, FIFO queue
+  var exclusiveHolder: str
   var sharedHolders: Set[str]
   var waiters: List[{ tab: str, exclusive: bool }]
+
+  // the sync lease: one tab may run synchronize at a time, for a bounded
+  // term; a run's destructive final step re-confirms the lease
+  var now: int
+  var leaseHolder: str
+  var leaseExpiry: int
+  // "idle" | "running" per tab; the mark step itself is atomic
+  var syncPhase: str -> str
+  // when the current exclusive holder died (-1: alive or no holder)
+  var holderDeadAt: int
+
+  // the compute worker runs inside one tab and dies with it; it also
+  // falls silent while busy, which is not the same thing
+  var computeHost: str
+  var computeQuiet: bool
+  // witness: an epoch reset fired while the host tab was still alive
+  var badReset: bool
+  // witness: a mark ran without the lease (the tombstone race happened)
+  var badMark: bool
 
   // --- broker: grant from the head of the queue (called after any change)
   // exclusive: only into silence; shared: only when no exclusive holds.
@@ -55,18 +107,47 @@ module multi_tab {
 
   def headGrantable(w: List[{ tab: str, exclusive: bool }]): bool =
     if (length(w) == 0) false
-    else if (w[0].exclusive) (not(exclusiveHeld) and size(sharedHolders) == 0)
-    else not(exclusiveHeld)
+    else if (w[0].exclusive)
+      (exclusiveHolder == NO_TAB and size(sharedHolders) == 0)
+    else exclusiveHolder == NO_TAB
 
   action init = all {
     storage' = 0,
     cache' = TABS.mapBy(t => 0),
     inbox' = TABS.mapBy(t => List()),
     tabs' = TABS.mapBy(t => { phase: "idle", seen: 0, writesLeft: MAX_WRITES }),
-    exclusiveHeld' = false,
+    exclusiveHolder' = NO_TAB,
     sharedHolders' = Set(),
     waiters' = List(),
+    now' = 0,
+    leaseHolder' = NO_TAB,
+    leaseExpiry' = 0,
+    syncPhase' = TABS.mapBy(t => "idle"),
+    holderDeadAt' = -1,
+    badMark' = false,
+    computeHost' = NO_TAB,
+    computeQuiet' = false,
+    badReset' = false,
   }
+
+  // every action leaves the frames it does not touch unchanged. The
+  // three frames are disjoint; an action names the ones it skips.
+  action frameSlots = all {
+    storage' = storage, cache' = cache, inbox' = inbox, tabs' = tabs,
+    exclusiveHolder' = exclusiveHolder, sharedHolders' = sharedHolders,
+    waiters' = waiters, holderDeadAt' = holderDeadAt,
+  }
+  action frameSync = all {
+    now' = now, leaseHolder' = leaseHolder, leaseExpiry' = leaseExpiry,
+    syncPhase' = syncPhase, badMark' = badMark,
+  }
+  action frameCompute = all {
+    computeHost' = computeHost, computeQuiet' = computeQuiet,
+    badReset' = badReset,
+  }
+  action unchangedSync = all { frameSync, frameCompute }
+  action unchangedSlots = all { frameSlots, frameCompute }
+  action unchangedButCompute = all { frameSlots, frameSync }
 
   // --- a tab asks for an exclusive slot (starts a write block)
 
@@ -78,7 +159,9 @@ module multi_tab {
       waiters' = waiters.append({ tab: t, exclusive: true }),
       tabs' = tabs.setBy(t, tb => { ...tb, phase: "waiting" }),
       storage' = storage, cache' = cache, inbox' = inbox,
-      exclusiveHeld' = exclusiveHeld, sharedHolders' = sharedHolders,
+      exclusiveHolder' = exclusiveHolder, sharedHolders' = sharedHolders,
+      holderDeadAt' = holderDeadAt,
+      unchangedSync,
     }
   }
 
@@ -87,13 +170,16 @@ module multi_tab {
 
   action pump = all {
     headGrantable(waiters),
-    exclusiveHeld' = if (waiters[0].exclusive) true else exclusiveHeld,
+    exclusiveHolder' =
+      if (waiters[0].exclusive) waiters[0].tab else exclusiveHolder,
     sharedHolders' =
       if (waiters[0].exclusive) sharedHolders
       else sharedHolders.union(Set(waiters[0].tab)),
     inbox' = inbox.setBy(waiters[0].tab, q => q.append({ kind: "grant", value: 0 })),
     waiters' = waiters.slice(1, length(waiters)),
     storage' = storage, cache' = cache, tabs' = tabs,
+    holderDeadAt' = holderDeadAt,
+    unchangedSync,
   }
 
   // --- tab consumes an inbox message.
@@ -118,7 +204,9 @@ module multi_tab {
       cache' = cache.set(t, q[0].value),
       inbox' = inbox.set(t, q.slice(1, length(q))),
       storage' = storage, tabs' = tabs, waiters' = waiters,
-      exclusiveHeld' = exclusiveHeld, sharedHolders' = sharedHolders,
+      exclusiveHolder' = exclusiveHolder, sharedHolders' = sharedHolders,
+      holderDeadAt' = holderDeadAt,
+      unchangedSync,
     }
   }
 
@@ -137,7 +225,9 @@ module multi_tab {
       inbox' = inbox.set(t, q.indices().fold(List(), (acc, i) =>
         if (i == gi) acc else acc.append(q[i]))),
       storage' = storage, cache' = cache, waiters' = waiters,
-      exclusiveHeld' = exclusiveHeld, sharedHolders' = sharedHolders,
+      exclusiveHolder' = exclusiveHolder, sharedHolders' = sharedHolders,
+      holderDeadAt' = holderDeadAt,
+      unchangedSync,
     }
   }
 
@@ -158,10 +248,182 @@ module multi_tab {
       tabs' = tabs.setBy(t, tb => {
         phase: "idle", seen: 0, writesLeft: tb.writesLeft - 1,
       }),
-      exclusiveHeld' = false,
+      exclusiveHolder' = NO_TAB,
       sharedHolders' = sharedHolders,
       waiters' = waiters,
+      holderDeadAt' = -1,
+      unchangedSync,
     }
+  }
+
+  // --- a tab tries to release the exclusive slot it does not own.
+  // The broker's slot ids are guessable; with the ownership check the
+  // request is a no-op, without it two write blocks run at once.
+
+  action foreignRelease = {
+    nondet t = oneOf(TABS)
+    all {
+      exclusiveHolder != NO_TAB,
+      exclusiveHolder != t,
+      tabs.get(t).phase != "dead",
+      exclusiveHolder' = if (OWNER_CHECKED_RELEASE) exclusiveHolder else NO_TAB,
+      holderDeadAt' = if (OWNER_CHECKED_RELEASE) holderDeadAt else -1,
+      storage' = storage, cache' = cache, inbox' = inbox, tabs' = tabs,
+      sharedHolders' = sharedHolders, waiters' = waiters,
+      unchangedSync,
+    }
+  }
+
+  // --- a tab dies at any moment: navigation, crash, tab close. Its
+  // state stays exactly as it was — that is the point.
+
+  action tabDies = {
+    nondet t = oneOf(TABS)
+    all {
+      tabs.get(t).phase != "dead",
+      tabs' = tabs.setBy(t, tb => { ...tb, phase: "dead" }),
+      holderDeadAt' = if (exclusiveHolder == t) now else holderDeadAt,
+      storage' = storage, cache' = cache, inbox' = inbox,
+      exclusiveHolder' = exclusiveHolder, sharedHolders' = sharedHolders,
+      waiters' = waiters,
+      unchangedSync,
+    }
+  }
+
+  // --- the failure detector: heartbeats lapse and the broker sweeps a
+  // dead tab's state — its slot, its queued requests, its lease. This
+  // is the transition whose absence let a dead tab strand the broker.
+
+  action sweepDead = {
+    nondet t = oneOf(TABS)
+    all {
+      DEATH_SWEEP,
+      tabs.get(t).phase == "dead",
+      or {
+        exclusiveHolder == t,
+        sharedHolders.contains(t),
+        waiters.indices().fold(false, (found, i) =>
+          found or waiters[i].tab == t),
+        leaseHolder == t,
+      },
+      exclusiveHolder' = if (exclusiveHolder == t) NO_TAB else exclusiveHolder,
+      holderDeadAt' = if (exclusiveHolder == t) -1 else holderDeadAt,
+      sharedHolders' = sharedHolders.exclude(Set(t)),
+      waiters' = waiters.indices().fold(List(), (acc, i) =>
+        if (waiters[i].tab == t) acc else acc.append(waiters[i])),
+      leaseHolder' = if (leaseHolder == t) NO_TAB else leaseHolder,
+      leaseExpiry' = leaseExpiry,
+      storage' = storage, cache' = cache, inbox' = inbox, tabs' = tabs,
+      now' = now, syncPhase' = syncPhase, badMark' = badMark,
+      frameCompute,
+    }
+  }
+
+  // --- the sync lease: time passes, a tab acquires (free, expired, or
+  // its own), runs, and finishes with the destructive mark step. The
+  // reviewed race: the run outlives the lease, a second tab acquires
+  // legitimately, and the first run's mark destroys newer state.
+
+  action tick = all {
+    // the watchdog is urgent: with the detector on, time cannot pass the
+    // sweep deadline while a dead tab still holds the exclusive slot
+    not(DEATH_SWEEP and holderDeadAt != -1 and now + 1 > holderDeadAt + SWEEP_MS),
+    now' = now + 1,
+    leaseHolder' = leaseHolder, leaseExpiry' = leaseExpiry,
+    syncPhase' = syncPhase, badMark' = badMark,
+    unchangedSlots,
+  }
+
+  action acquireLease = {
+    nondet t = oneOf(TABS)
+    all {
+      tabs.get(t).phase != "dead",
+      syncPhase.get(t) == "idle",
+      or {
+        leaseHolder == NO_TAB,
+        leaseHolder == t,
+        leaseExpiry <= now,
+      },
+      leaseHolder' = t,
+      leaseExpiry' = now + LEASE_MS,
+      syncPhase' = syncPhase.set(t, "running"),
+      now' = now, badMark' = badMark,
+      unchangedSlots,
+    }
+  }
+
+  // the run ends with the destructive mark-as-synced write. The fix
+  // re-confirms the lease first; a run that lost it may only abort.
+  action mark = {
+    nondet t = oneOf(TABS)
+    all {
+      tabs.get(t).phase != "dead",
+      syncPhase.get(t) == "running",
+      if (RECONFIRM_LEASE) leaseHolder == t else true,
+      badMark' = (badMark or leaseHolder != t),
+      syncPhase' = syncPhase.set(t, "idle"),
+      leaseHolder' = if (leaseHolder == t) NO_TAB else leaseHolder,
+      leaseExpiry' = leaseExpiry,
+      now' = now,
+      unchangedSlots,
+    }
+  }
+
+  action abortRun = {
+    nondet t = oneOf(TABS)
+    all {
+      RECONFIRM_LEASE,
+      syncPhase.get(t) == "running",
+      leaseHolder != t,
+      syncPhase' = syncPhase.set(t, "idle"),
+      now' = now, leaseHolder' = leaseHolder, leaseExpiry' = leaseExpiry,
+      badMark' = badMark,
+      unchangedSlots,
+    }
+  }
+
+  // --- the compute worker: adopted by a tab, silent under load, and
+  // re-hosted by an epoch reset. Silence is not death; resetting on it
+  // is what stranded queries and rewrote a memory database as opfs.
+
+  action adoptCompute = {
+    nondet t = oneOf(TABS)
+    all {
+      computeHost == NO_TAB,
+      tabs.get(t).phase != "dead",
+      computeHost' = t,
+      computeQuiet' = false,
+      badReset' = badReset,
+      unchangedButCompute,
+    }
+  }
+
+  action computeGoesQuiet = all {
+    computeHost != NO_TAB,
+    not(computeQuiet),
+    computeQuiet' = true,
+    computeHost' = computeHost, badReset' = badReset,
+    unchangedButCompute,
+  }
+
+  action computeAnswers = all {
+    computeQuiet,
+    computeHost != NO_TAB,
+    tabs.get(computeHost).phase != "dead",
+    computeQuiet' = false,
+    computeHost' = computeHost, badReset' = badReset,
+    unchangedButCompute,
+  }
+
+  action resetEpoch = all {
+    computeHost != NO_TAB,
+    computeQuiet,
+    // the fix: silence alone is not grounds for a reset
+    if (RESET_NEEDS_HOST_DEATH) tabs.get(computeHost).phase == "dead" else true,
+    badReset' = (badReset or tabs.get(computeHost).phase != "dead"),
+    computeHost' = NO_TAB,
+    computeQuiet' = false,
+    unchangedButCompute,
   }
 
   action step = any {
@@ -170,6 +432,17 @@ module multi_tab {
     consumeBroadcast,
     consumeGrant,
     commitAndRelease,
+    foreignRelease,
+    tabDies,
+    sweepDead,
+    tick,
+    acquireLease,
+    mark,
+    abortRun,
+    adoptCompute,
+    computeGoesQuiet,
+    computeAnswers,
+    resetEpoch,
   }
 
   // ----- invariants
@@ -182,8 +455,11 @@ module multi_tab {
       tabs.get(t).phase == "reading" implies tabs.get(t).seen == storage)
 
   // mutual exclusion: an exclusive hold means silence everywhere else
+  // vacuous as the model stands: requestSlot only ever asks for exclusive
+  // slots, so sharedHolders stays empty. Kept because pump implements the
+  // shared branch; oneWriterRunning is what actually catches a double grant.
   val mutualExclusion =
-    exclusiveHeld implies size(sharedHolders) == 0
+    exclusiveHolder != NO_TAB implies size(sharedHolders) == 0
 
   // at most one tab is ever inside a write block
   val oneWriterRunning =
@@ -194,9 +470,25 @@ module multi_tab {
     storage == TABS.fold(0, (sum, t) => sum + (MAX_WRITES - tabs.get(t).writesLeft))
       or TABS.exists(t => tabs.get(t).phase == "reading")
 
+  // a dead tab's grip on the exclusive slot never outlives the detection
+  // window (fails with DEATH_SWEEP = false: the modeled deadlock)
+  val deadHolderSwept =
+    holderDeadAt != -1 implies now <= holderDeadAt + SWEEP_MS
+
+  // no mark-as-synced ever ran without the lease (fails with
+  // RECONFIRM_LEASE = false: the modeled tombstone race)
+  val markHoldsLease = not(badMark)
+
+  // no epoch reset ever fired under a live host (fails with
+  // RESET_NEEDS_HOST_DEATH = false: the two epoch-reset P1s)
+  val resetOnHostDeath = not(badReset)
+
   val allInvariants = all {
     commitReadsFresh,
     mutualExclusion,
     oneWriterRunning,
+    deadHolderSwept,
+    markHoldsLease,
+    resetOnHostDeath,
   }
 }
