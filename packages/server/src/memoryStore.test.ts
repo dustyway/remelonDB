@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createSyncEngine } from './engine';
 import { createMemoryStore } from './memoryStore';
 import { accepted, pulled } from './conformance/index';
+import { createReferenceServer } from './conformance/referenceServer';
 
 const pullArgs = { cursor: null, schemaVersion: 1, migration: null };
 const push = (cursor: string, name: string) => ({
@@ -132,5 +133,19 @@ describe('cursor parsing', () => {
       pulled(await handlers.pull({ cursor, schemaVersion: 1, migration: null }))
         .cursor,
     ).toBe(cursor);
+  });
+});
+
+describe('gc floor validation', () => {
+  it.each([
+    ['memory store', () => createMemoryStore()],
+    ['reference server', () => createReferenceServer()],
+  ])('rejects values that would poison the %s', (_name, create) => {
+    const store = create();
+    for (const floor of [NaN, Infinity, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(() => {
+        store.gc(floor);
+      }).toThrow('invalid gc floor');
+    }
   });
 });

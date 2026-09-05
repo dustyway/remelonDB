@@ -126,6 +126,9 @@ export function createMemoryStore(): MemoryStore {
       }
     },
     gc: (newFloor: number) => {
+      if (!Number.isSafeInteger(newFloor) || newFloor < 0) {
+        throw new Error(`memoryStore: invalid gc floor '${newFloor}'`);
+      }
       floor = Math.max(floor, newFloor);
       for (const tables of scopes.values()) {
         for (const rows of tables.values()) {

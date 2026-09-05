@@ -206,6 +206,9 @@ export function createReferenceServer(
   return {
     as,
     gc: (floor: number) => {
+      if (!Number.isSafeInteger(floor) || floor < 0) {
+        throw new Error(`reference server: invalid gc floor '${floor}'`);
+      }
       gcFloor = Math.max(gcFloor, floor);
       for (const tables of users.values()) {
         for (const rows of tables.values()) {
