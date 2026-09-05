@@ -265,7 +265,7 @@ export async function applyRemoteChanges(
       }
     }
 
-    for (const id of tableChanges.deleted) {
+    for (const id of deletedIds) {
       if (localState.has(id)) {
         // remote deletion always wins — over local changes and tombstones
         operations.push({

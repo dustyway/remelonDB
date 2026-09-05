@@ -122,6 +122,21 @@ describe('changeset normalization', () => {
     });
     expect(await driver.query('select * from "tasks"', [])).toHaveLength(0);
   });
+
+  it('applies a repeated deleted id once', async () => {
+    await seedSynced('t1', 'v1');
+    const changes: unknown[] = [];
+    db.get('tasks').onChange((batch) => changes.push(...batch));
+
+    await db.write(async () => {
+      await applyRemoteChanges(db, {
+        tasks: { created: [], updated: [], deleted: ['t1', 't1'] },
+      });
+    });
+
+    expect(changes).toHaveLength(1);
+    expect(await driver.query('select * from "tasks"', [])).toHaveLength(0);
+  });
 });
 
 describe('blob wire values', () => {
