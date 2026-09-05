@@ -382,6 +382,14 @@ describe('sync engine', () => {
     ).rejects.toThrow('after 2 attempts');
   });
 
+  it('conflictRetries: 0 still makes one attempt', async () => {
+    server.seed('s1', { name: 'server', position: 1 });
+    const result = await sync({ conflictRetries: 0 });
+
+    expect(server.pullCalls).toBe(1);
+    expect(result.pulled).toBe(1);
+  });
+
   it('rejected records stay dirty', async () => {
     await db.write(async () => {
       await db.get('tasks').create({ id: 'ok', name: 'fine' });

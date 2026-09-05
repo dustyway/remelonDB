@@ -87,7 +87,11 @@ export interface SynchronizeOptions {
   readonly sendCreatedAsUpdated?: boolean;
   /** Opt into migration pulls; the version before your first synced migration. */
   readonly migrationsEnabledAtVersion?: number;
-  /** Max pull→push rounds when the server reports push conflicts (default 5). */
+  /**
+   * Max pull→push rounds when the server reports push conflicts
+   * (default 5). Values below 1 are treated as 1: every run makes at
+   * least one attempt.
+   */
   readonly conflictRetries?: number;
   /**
    * Cancels the run between protocol phases and is handed to the
@@ -234,7 +238,9 @@ async function runSynchronize(
   options: SynchronizeOptions,
 ): Promise<SynchronizeResult> {
   const { database, log = () => {} } = options;
-  const retries = options.conflictRetries ?? 5;
+  // Floored at one: a run that never contacts the server is not a sync,
+  // so "no retries" means one attempt, not zero.
+  const retries = Math.max(1, options.conflictRetries ?? 5);
   throwIfAborted(options.signal);
 
   // Multi-tab: only the sync-lease holder runs; everyone else's tick is
