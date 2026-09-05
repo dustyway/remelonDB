@@ -29,6 +29,7 @@ export * as Q from './query/Q';
 export { appSchema, column, table } from './schema/index';
 export type {
   AppSchema,
+  BlobColumnDef,
   ColumnDef,
   ColumnName,
   ColumnSchema,
@@ -66,6 +67,7 @@ export {
 export type { RawRecord, DirtyRaw, SyncStatus } from './rawRecord/index';
 
 export { randomId, type RandomSource } from './utils/randomId';
+export { decodeBase64, encodeBase64 } from './utils/base64';
 
 export { Database } from './database/Database';
 export { createDatabaseManager } from './database/DatabaseManager';

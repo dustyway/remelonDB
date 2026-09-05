@@ -26,6 +26,7 @@ import {
 import {
   areRecordsEqual,
   changedColumns,
+  decodeWireRaw,
   queryRows,
   queryRowsByIds,
 } from './helpers';
@@ -114,11 +115,13 @@ export async function applyRemoteChanges(
       ...new Map(rows.map((row) => [remoteId(row), row])).values(),
     ];
     const deletedIds = new Set(tableChanges.deleted);
-    const updatedRows = lastById(tableChanges.updated).filter(
-      (row) => !deletedIds.has(remoteId(row)),
-    );
+    const updatedRows = lastById(
+      tableChanges.updated.map((row) => decodeWireRaw(row, schema)),
+    ).filter((row) => !deletedIds.has(remoteId(row)));
     const updatedIds = new Set(updatedRows.map(remoteId));
-    const createdRows = lastById(tableChanges.created).filter((row) => {
+    const createdRows = lastById(
+      tableChanges.created.map((row) => decodeWireRaw(row, schema)),
+    ).filter((row) => {
       const id = remoteId(row);
       return !deletedIds.has(id) && !updatedIds.has(id);
     });

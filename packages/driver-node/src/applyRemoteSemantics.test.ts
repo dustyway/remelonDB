@@ -20,7 +20,11 @@ import { NodeSqliteDriver } from './NodeSqliteDriver';
 
 const tasks = table('tasks', { name: c.string(), position: c.number() });
 const notes = table('notes', { body: c.string() });
-const schema = appSchema({ version: 1, tables: [tasks, notes] });
+const assets = table('assets', {
+  data: c.blob(),
+  preview: c.blob().optional(),
+});
+const schema = appSchema({ version: 1, tables: [tasks, notes, assets] });
 const empty = { created: [], updated: [], deleted: [] };
 const task = (id: string, name: string, position = 1) => ({
   id,
@@ -117,6 +121,39 @@ describe('changeset normalization', () => {
       });
     });
     expect(await driver.query('select * from "tasks"', [])).toHaveLength(0);
+  });
+});
+
+describe('blob wire values', () => {
+  it('decodes base64 before storing a pulled row', async () => {
+    await db.write(async () => {
+      await applyRemoteChanges(db, {
+        assets: {
+          created: [{ id: 'a1', data: 'AH//', preview: null }],
+          updated: [],
+          deleted: [],
+        },
+      });
+    });
+
+    const asset = await db.get('assets').find('a1');
+    expect(asset.data).toEqual(new Uint8Array([0, 127, 255]));
+    expect(asset.preview).toBeNull();
+  });
+
+  it('rejects malformed base64 without writing the row', async () => {
+    await expect(
+      db.write(async () =>
+        applyRemoteChanges(db, {
+          assets: {
+            created: [{ id: 'a1', data: 'not base64', preview: null }],
+            updated: [],
+            deleted: [],
+          },
+        }),
+      ),
+    ).rejects.toThrow('Invalid base64');
+    await expect(db.get('assets').find('a1')).rejects.toThrow('not found');
   });
 });
 

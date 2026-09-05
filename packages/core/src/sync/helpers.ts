@@ -12,6 +12,7 @@ import {
 import type { Database } from '../database/Database';
 import { runDirect } from '../database/directWork';
 import type { SyncChanges } from './types';
+import { decodeBase64, encodeBase64 } from '../utils/base64';
 
 export const changedColumns = (raw: RawRecord): string[] =>
   raw._changed === '' ? [] : raw._changed.split(',');
@@ -39,9 +40,29 @@ export function isChangesEmpty(changes: SyncChanges): boolean {
 export function stripInternal(raw: RawRecord, table: TableSchema): DirtyRaw {
   const result: { [key: string]: unknown } = { id: raw.id };
   for (const column of table.columnArray) {
-    result[column.name] = raw[column.name] ?? null;
+    const value = raw[column.name] ?? null;
+    result[column.name] =
+      column.type === 'blob' && value instanceof Uint8Array
+        ? encodeBase64(value)
+        : value;
   }
   return result;
+}
+
+export function decodeWireRaw(dirty: DirtyRaw, table: TableSchema): DirtyRaw {
+  const decoded: { [key: string]: unknown } = { ...dirty };
+  for (const column of table.columnArray) {
+    if (column.type !== 'blob') continue;
+    const value = dirty[column.name];
+    if (typeof value === 'string') {
+      decoded[column.name] = decodeBase64(value);
+    } else if (!(value instanceof Uint8Array) && value !== null) {
+      throw new Error(
+        `Invalid base64 blob value for '${table.name}.${column.name}'`,
+      );
+    }
+  }
+  return decoded;
 }
 
 /** Raw rows straight from the driver, bypassing cache and deleted filter. */
