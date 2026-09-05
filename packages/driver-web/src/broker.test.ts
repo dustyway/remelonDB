@@ -113,10 +113,8 @@ describe('storage discipline', () => {
     expect(b.out).toEqual([
       {
         id: 1,
-        ok: true,
-        result: {
-          error: "database 'db' is open with storage 'memory', not 'opfs'",
-        },
+        ok: false,
+        error: "database 'db' is open with storage 'memory', not 'opfs'",
       },
     ]);
   });

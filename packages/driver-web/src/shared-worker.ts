@@ -600,11 +600,13 @@ const handle = (port: PortLike, request: WorkerRequest): void => {
       if (existing && existing.size > 0 && heldStorage !== request.storage) {
         // a silent join across storage kinds either persists what the
         // caller declined or loses what it expected to keep
-        answer(port, request.id, {
+        port.postMessage({
+          id: request.id,
+          ok: false,
           error:
             `database '${request.name}' is open with storage ` +
             `'${heldStorage ?? 'opfs'}', not '${request.storage}'`,
-        });
+        } satisfies WorkerResponse);
         return;
       }
       const undoHolder = () => {
