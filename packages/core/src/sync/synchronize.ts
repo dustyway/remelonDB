@@ -182,6 +182,10 @@ function joinRun(
       try {
         throwIfAborted(signal);
       } catch (reason) {
+        // A signal's reason is whatever the aborting side passed, and the
+        // run's own abort path rejects with it unchanged; a joiner does
+        // the same. See throwIfAborted.
+        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
         reject(reason);
       }
     };

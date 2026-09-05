@@ -140,6 +140,13 @@ export async function applyRemoteChanges(
     ];
     const localState = new Map<string, 'live' | 'tombstone'>();
     const liveRecords = new Map<string, RawRecord>();
+    // A replacement reads the whole table, and every live row it reads
+    // ends up in the identity map. That is not churn worth avoiding: a
+    // row the snapshot carries needs its record for conflict resolution,
+    // and a synced row the snapshot omits needs one to be destroyed and
+    // announced. Only locally dirty rows outside the snapshot are
+    // materialized for nothing, and that set is the unpushed changes,
+    // not the table.
     if (referencedIds.length > 0 || options.replacement) {
       const rows = options.replacement
         ? await queryRows(database, table, [])
