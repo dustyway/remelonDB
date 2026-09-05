@@ -19,6 +19,7 @@ import { NodeSqliteDriver } from './NodeSqliteDriver';
 
 const notesTable = table('notes', {
   text: c.string(),
+  priority: c.number(),
 });
 
 const schema = appSchema({ version: 1, tables: [notesTable] });
@@ -84,7 +85,7 @@ describe('applyExternalChanges', () => {
 
   it('external update mutates the cached instance in place', async () => {
     const note = await db.write(() =>
-      db.get(Note).create({ id: 'n1', text: 'old' }),
+      db.get(Note).create({ id: 'n1', text: 'old', priority: 0 }),
     );
 
     // another context updated storage; our cached instance is stale
@@ -107,8 +108,29 @@ describe('applyExternalChanges', () => {
     expect(note.text).toBe('new');
   });
 
+  it('preserves cached columns missing from an older-schema update', async () => {
+    const note = await db.write(() =>
+      db.get(Note).create({ id: 'n1', text: 'old', priority: 5 }),
+    );
+    const olderRaw = {
+      id: 'n1',
+      text: 'new',
+      _status: 'synced',
+      _changed: '',
+    } as RawRecord;
+
+    await db.applyExternalChanges({
+      notes: [{ record: olderRaw, type: 'updated' }],
+    });
+
+    expect(note.text).toBe('new');
+    expect(note._raw.priority).toBe(5);
+  });
+
   it('external destroy removes the record and notifies', async () => {
-    await db.write(() => db.get(Note).create({ id: 'n1', text: 'doomed' }));
+    await db.write(() =>
+      db.get(Note).create({ id: 'n1', text: 'doomed', priority: 0 }),
+    );
     const emissions: Note[][] = [];
     const unsubscribe = db
       .get(Note)
@@ -128,7 +150,7 @@ describe('applyExternalChanges', () => {
 
   it('is idempotent: re-broadcast create degrades to update, unknown destroy is a no-op', async () => {
     const note = await db.write(() =>
-      db.get(Note).create({ id: 'n1', text: 'old' }),
+      db.get(Note).create({ id: 'n1', text: 'old', priority: 0 }),
     );
 
     await db.applyExternalChanges({

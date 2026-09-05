@@ -527,7 +527,11 @@ export class Database {
               const sanitized = sanitizedRaw(raw, collection.schema);
               const cached = collection.cache.get(sanitized.id);
               if (cached) {
-                Object.assign(cached, sanitized);
+                for (const [key, value] of Object.entries(sanitized)) {
+                  if (key in raw) {
+                    cached[key] = value;
+                  }
+                }
               } else {
                 collection.cache.add(sanitized);
               }
