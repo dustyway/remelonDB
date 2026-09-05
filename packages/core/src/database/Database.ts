@@ -331,10 +331,16 @@ export class Database {
         return await this.queue.enqueue(work, exclusive);
       }
       const release = await acquire.call(this.driver, exclusive);
+      let failed = false;
       try {
         return await this.queue.enqueue(work, exclusive);
+      } catch (error) {
+        failed = true;
+        throw error;
       } finally {
-        await release();
+        // The block's own error is the one the caller needs; a release
+        // that fails on top of it must not take its place.
+        await (failed ? release().catch(() => {}) : release());
       }
     } finally {
       this.acceptedWork -= 1;
