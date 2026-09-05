@@ -2,6 +2,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
 import { bigint, boolean, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 import type { DrizzleDb } from './store';
+import { bytea } from './bytea';
 
 // Shared by the pglite test suites: the four machinery columns plus two
 // user columns. Not published (see package.json files).
@@ -33,6 +34,15 @@ export const events = pgTable('events', {
   note: text('note').notNull(),
 });
 
+export const assets = pgTable('assets', {
+  id: text('id').primaryKey(),
+  rev: bigint('rev', { mode: 'number' }).notNull(),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  owner: text('owner').notNull(),
+  data: bytea('data').notNull(),
+  preview: bytea('preview'),
+});
+
 export const freshDb = async (): Promise<{ client: PGlite; db: DrizzleDb }> => {
   const client = new PGlite();
   await client.exec(`
@@ -59,6 +69,14 @@ export const freshDb = async (): Promise<{ client: PGlite; db: DrizzleDb }> => {
       deleted_at timestamptz,
       owner text not null,
       handle text unique
+    );
+    create table assets (
+      id text primary key,
+      rev bigint not null,
+      deleted_at timestamptz,
+      owner text not null,
+      data bytea not null,
+      preview bytea
     );
   `);
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- pglite's drizzle instance carries its own query-result HKT; DrizzleDb is the erased form the store accepts.

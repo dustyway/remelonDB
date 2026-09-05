@@ -185,6 +185,9 @@ importers:
       '@remelondb/core':
         specifier: workspace:*
         version: link:../core
+      '@remelondb/server':
+        specifier: workspace:*
+        version: link:../server
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
