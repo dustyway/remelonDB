@@ -78,6 +78,12 @@ export function recordsSuite(options: ResolvedOptions): void {
         'insert into tasks ("id", "_changed", "_status", "name", "position", "is_done", "project_id", "payload", "preview") values (?, ?, ?, ?, ?, ?, ?, ?, ?)',
         ['t1', '', 'synced', 'asset', 1, false, null, new Uint8Array(), null],
       );
+      expect(
+        await driver.query(
+          'select "payload", "preview" from tasks where "id" = ?',
+          ['t1'],
+        ),
+      ).toEqual([{ payload: new Uint8Array(), preview: null }]);
       await driver.execute(
         'update tasks set "payload" = ?, "preview" = ? where "id" = ?',
         [new Uint8Array([0, 127, 255]), new Uint8Array([3, 2, 1]), 't1'],
@@ -94,6 +100,13 @@ export function recordsSuite(options: ResolvedOptions): void {
         },
       ]);
       expect(rows[0]?.['payload']?.constructor).toBe(Uint8Array);
+
+      await driver.execute('delete from tasks where "id" = ?', ['t1']);
+      expect(
+        await driver.query('select "payload" from tasks where "id" = ?', [
+          't1',
+        ]),
+      ).toEqual([]);
     });
   });
 }

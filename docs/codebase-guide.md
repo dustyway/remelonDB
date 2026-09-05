@@ -437,7 +437,7 @@ _Recall._ (1) Why does `markAsDeleted` leave the row in place instead of deletin
 
 # Schema: one declaration, several consequences
 
-Chapter 2 claimed that a single declaration produces the SQL table, the record type, the model class, and the wire validators. This chapter shows how, because the mechanism explains several things that would otherwise look arbitrary: why only three column types exist, why some names are refused, why the generated SQL declares no types at all, and why the whole thing is built to be _impossible to declare inconsistently_.
+Chapter 2 showed that one declaration produces the SQL table, record type, model class, and wire validators. This chapter covers the four column types, reserved names, generated SQL, and inferred types.
 
 The code is in `packages/core/src/schema/` (the builders, the DDL compiler, and migrations) and `packages/core/src/zod/` (the Zod adapter, exposed as `@remelondb/core/zod`).
 
@@ -452,10 +452,11 @@ const tasks = table('tasks', {
   name: c.string(),
   position: c.number().indexed(),
   project_id: c.string().optional(),
+  attachment: c.blob().optional(),
 });
 ```
 
-`column.string()`, `column.number()`, and `column.boolean()` are the entire column vocabulary. Each returns a small _frozen_ object carrying its type and two flags, and each has two modifiers: `.optional()` means the column may hold SQL `NULL`, which appears in your records as `null`; `.indexed()` asks SQLite to maintain an index on it. The modifiers return _new_ objects rather than mutating the one they were called on:
+`column.string()`, `column.number()`, and `column.boolean()` support `.optional()` and `.indexed()`. `column.blob()` stores `Uint8Array` and supports only `.optional()`. The modifiers return new frozen definitions rather than mutating the original:
 
 ```ts
 optional(): ColumnDef<T, true> { return columnDef(type, true, isIndexed) }
@@ -465,11 +466,11 @@ That immutable-builder style means you can hold on to `c.string()` and derive se
 
 The Zod route (`zodTable`) walks a `z.ZodObject`'s shape, maps each field to a column, and calls the _same_ `table()` underneath. This is not a claim to take on faith: a test pins it (the equivalence test in `packages/core/src/zod/index.test.ts`). `zodTable('tasks', Task, { indexed: ['position'] })` is `.toEqual()` to the hand-written `table('tasks', {...})`, and the table object inside the resulting `appSchema` is the _same object reference_. `zodTable` is sugar over `table`, not a parallel implementation — so anything true of one is true of the other, and this chapter can speak of "the table definition" without qualification.
 
-## Why exactly three column types
+## Why four column types
 
-`ColumnType` is `'string' | 'number' | 'boolean'`, and the reason for the short list is at the top of the file: **columns are typeless in SQL.** SQLite has dynamic typing, so declaring a column `TEXT` does not stop you storing a number in it. Since the declared type cannot be enforced by the database, remelonDB uses it for the two things it _can_ enforce: sanitizing values on the JavaScript side (Chapter 4), and choosing a default when a migration adds a column to existing rows (Chapter 12). A vocabulary of three keeps that logic small and keeps the set of value types crossing the driver seam small — which in turn keeps every driver simple. Anything richer than string/number/boolean must be encoded as one of the three: a timestamp is a `number`, an enum is a `string` your code interprets.
+`ColumnType` is `'string' | 'number' | 'boolean' | 'blob'`. Scalar columns rely on JavaScript sanitization and use no SQL type declaration. Blob columns declare `BLOB` affinity so SQLite retains binary storage. A timestamp remains a `number`, and an enum remains a `string` interpreted by application code.
 
-> **Background: dynamic typing in SQLite.** Most SQL databases enforce column types: put a string in an integer column and the insert fails. SQLite instead has _type affinity_ — a column has a preferred type but will store whatever you give it. This is unusual and occasionally surprising, but remelonDB turns it into a simplification: since the engine will not police types anyway, there is no point declaring them, and the DDL you will see below declares none. Type discipline is enforced one layer up, in JavaScript, where remelonDB controls every value that goes in.
+> **Background: dynamic typing in SQLite.** SQLite type affinity does not prevent a column from storing another storage class. remelonDB sanitizes values in JavaScript. It declares `BLOB` affinity only where SQLite must preserve binary values.
 
 ## What every table gets for free
 
@@ -531,7 +532,7 @@ export function appSchema(spec: {
 
 ## What it compiles to
 
-The DDL compiler turns a schema (and, later, migration steps) into a list of single SQL statements. Table creation declares columns with **no SQL type at all**:
+The DDL compiler turns a schema and migration steps into SQL statements. Scalar columns have no declared SQL type. Blob columns declare `BLOB`:
 
 ```ts
 function encodeCreateTable(table: TableSchema): string {
@@ -539,7 +540,9 @@ function encodeCreateTable(table: TableSchema): string {
     '"id" primary key',
     '"_changed"',
     '"_status"',
-    ...table.columnArray.map((column) => `"${column.name}"`),
+    ...table.columnArray.map(
+      (column) => `"${column.name}"${column.type === 'blob' ? ' BLOB' : ''}`,
+    ),
   ].join(', ');
   return `create table "${table.name}" (${columns})`;
 }
@@ -548,10 +551,10 @@ function encodeCreateTable(table: TableSchema): string {
 So `table('tasks', {...})` becomes:
 
 ```sql
-create table "tasks" ("id" primary key, "_changed", "_status", "name", "position", "project_id")
+create table "tasks" ("id" primary key, "_changed", "_status", "name", "position", "project_id", "attachment" BLOB)
 ```
 
-— confirming the point above: the declared `ColumnType` never appears in the DDL, because SQLite would not honour it anyway. Indexes are emitted next: every `.indexed()` column gets a `create index if not exists`, and `_status` is **always** indexed on every table, regardless of what you declared, because every query filters on it (the soft-delete check `_status is not 'deleted'`) and so does sync:
+Only blob columns emit a type name. Every scalar `.indexed()` column gets a `create index if not exists`; blob definitions have no `.indexed()` method. `_status` is always indexed because queries and sync filter on it:
 
 ```ts
 function encodeTableIndices(table: TableSchema): string[] {
@@ -571,18 +574,20 @@ The whole statement list is prefixed with the DDL for `local_storage` — `creat
 Everything so far has been runtime data. The same `table(...)` call also produces the compile-time record type. `TableSchema<Cols>` carries a **phantom field** `$cols?: Cols`, always `undefined` at runtime, so downstream types can recover the original column specification by inference. `InferRecord` uses it here:
 
 ```ts
-export type InferRecord<T extends TableSchema<ColumnsSpec>> =
+export type InferRecord<T extends TableSchema> =
   T extends TableSchema<infer Cols>
     ? { readonly id: string } & {
         [K in keyof Cols & string]:
-          | (Cols[K] extends ColumnDef<infer CT, boolean>
+          | (Cols[K] extends ColumnDef<infer CT>
               ? CT extends 'string'
                 ? string
                 : CT extends 'number'
                   ? number
                   : boolean
-              : never)
-          | (Cols[K] extends ColumnDef<ColumnType, true> ? null : never);
+              : Cols[K] extends BlobColumnDef
+                ? Uint8Array
+                : never)
+          | (Cols[K] extends { readonly isOptional: true } ? null : never);
       }
     : never;
 ```
@@ -595,7 +600,7 @@ export type InferRecord<T extends TableSchema<ColumnsSpec>> =
 
 The Zod adapter has two halves, and its file header frames them: `zodTable` derives a _client_ table definition, while `syncSchemas` builds _wire_ validators for pull and push — deliberately in "pure Zod, so a server can use them without depending on remelonDB."
 
-**Mapping.** `z.string()` → `column.string()`, `z.number()` → `.number()`, `z.boolean()` → `.boolean()`. `.nullable()` on any of them becomes `.optional()` (SQL `NULL`). Zod's own `.optional()` — which means `undefined` — is a _loud build-time error_:
+**Mapping.** `z.string()` maps to `column.string()`, `z.number()` to `.number()`, `z.boolean()` to `.boolean()`, and `z.instanceof(Uint8Array)` to `.blob()`. `.nullable()` becomes `.optional()`. Zod's `.optional()` is rejected because records use `null`, not `undefined`:
 
 ```ts
 if (inner instanceof z.ZodOptional) {
@@ -609,7 +614,7 @@ Anything the adapter does not understand — enums, dates, nested objects, defau
 
 **`syncSchemas`** takes a map of table name → `ZodObject` and builds the validators the sync protocol needs:
 
-- `rows[name]` is a `z.strictObject({ ...schema.shape, id })` — a wire record is your columns plus `id` and _nothing else_. Because it is `strictObject`, an extra key is rejected, so the internal `_status`/`_changed` can never be smuggled onto the wire; if some bug tried, the parse would fail loudly.
+- `rows[name]` is a strict wire schema for user columns plus `id`. Blob fields decode padded base64 to `Uint8Array`; encoding performs the reverse conversion. Extra keys, including `_status` and `_changed`, are rejected.
 - `changeSets[name]` is `{ created: row[], updated: row[], deleted: id[] }`.
 - From these it assembles `pullArgs`, `pullResult` (`{ changes, cursor } | { resyncRequired: true }`), `pushArgs`, and `pushResult`, the last with a refinement enforcing that "cursor and changes are a package: both or neither."
 
@@ -625,7 +630,7 @@ The server engine supports _append-only tables_ (Chapter 11) — tables where wr
 
 _Trace it yourself._ Write a `zodTable` for a `notes` table with a nullable `body`. Predict the exact `create table` SQL it will compile to (remember the three free columns and the always-indexed `_status`), then find `encodeCreateTable` and check. Now predict what happens if you name a column `rowid`, or make `created_at` optional.
 
-_Recall._ (1) Why does the generated DDL declare no column types? (2) `_status` is indexed on every table even if you never asked — why? (3) How does one table declaration provide both runtime schema information and a compile-time record type? (4) The Zod adapter rejects `z.string().optional()` but accepts `z.string().nullable()`. What rule is it enforcing, and where does that same rule show up in the inferred record type?
+_Recall._ (1) Why do scalar columns omit a declared SQL type while blob columns use `BLOB`? (2) `_status` is indexed on every table even if you never asked — why? (3) How does one table declaration provide both runtime schema information and a compile-time record type? (4) The Zod adapter rejects `z.string().optional()` but accepts `z.string().nullable()`. What rule is it enforcing, and where does that same rule show up in the inferred record type?
 
 # Records and models: two representations of a row
 
@@ -635,11 +640,11 @@ The code is in `packages/core/src/rawRecord/` and `packages/core/src/model/Model
 
 ## The raw record
 
-A `RawRecord` is the low-level shape (`rawRecord/index.ts`): an `id`, the bookkeeping columns `_status` and `_changed`, and the schema columns. Each value is a `SqlValue`: `string | number | boolean | null`. Booleans are real booleans in a raw record even though drivers store them as `0`/`1`; conversion at the edge keeps that storage detail out of core.
+A `RawRecord` is the low-level shape (`rawRecord/index.ts`): an `id`, the bookkeeping columns `_status` and `_changed`, and the schema columns. Each value is a `SqlValue`: `string | number | boolean | Uint8Array | null`. Drivers store booleans as `0`/`1` and blobs as SQLite BLOB values; core exposes booleans and bytes consistently across drivers.
 
 ## The trust boundary
 
-Every record that enters the system passes through `sanitizedRaw(dirty, table)` (`rawRecord/index.ts`). This includes rows read from SQLite, sync payloads, and values supplied to `create`, so a `RawRecord` in memory is "valid by construction." The gate coerces the `id` (generating one with `randomId()` if absent), validates `_status` and `_changed`, and runs `sanitizeValue` for each declared column. `randomId()` draws from `crypto.getRandomValues` and has no fallback: a runtime without it cannot create records, so `Database.open` probes the source with one byte before touching the driver and fails there, with a message naming the fix, rather than at the first save. Browsers, workers and Node have it; React Native does not, and supplies one through `expo-crypto` in Expo Go or `react-native-get-random-values` in a development build (`docs/reference/runtimes.md`). Anything outside the table's column list is not copied. **Unknown keys are dropped** because the loop iterates over the schema, not the input.
+Every record that enters the system passes through `sanitizedRaw(dirty, table)` (`rawRecord/index.ts`). This includes rows read from SQLite, sync payloads, and values supplied to `create`, so a `RawRecord` in memory is "valid by construction." The gate coerces the `id` (generating one with `randomId()` if absent), validates `_status` and `_changed`, and runs `sanitizeValue` for each declared column. `randomId()` draws from `crypto.getRandomValues` and has no fallback: a runtime without it cannot create records, so `Database.open` probes the source with one byte before touching the driver and fails there, with a message naming the fix, rather than at the first save. Browsers, workers and Node have it. On React Native, pass `expo-crypto` as `randomSource` or install `react-native-get-random-values` (`docs/reference/runtimes.md`). Anything outside the table's column list is not copied. **Unknown keys are dropped** because the loop iterates over the schema, not the input.
 
 ```ts
 const cached = this.map.get(id); // (identity map, see Chapter 5)
@@ -1002,12 +1007,12 @@ interface SqliteDriver {
 Everything crossing the seam is drawn from a tiny set:
 
 ```ts
-type SqlValue = string | number | boolean | null;
+type SqlValue = string | number | boolean | Uint8Array | null;
 type SqlArgs = readonly SqlValue[];
 type Row = Record<string, SqlValue>;
 ```
 
-This is SQLite's storage-class vocabulary plus a bind-time convenience for booleans. A `boolean` may be written by binding `true`, but SQLite has no boolean storage class, so a value read back is `0` or `1`. Core converts it because core has the schema; the driver cannot know which columns represent booleans.
+Strings, numbers, bytes, and null map to SQLite storage classes. Boolean is a bind-time convenience: SQLite stores it as `0` or `1`, and core converts it on reads because only core has the schema.
 
 ## Batch statements: prepare once, run many
 
@@ -1080,11 +1085,11 @@ Node is the driver the conformance and integration tests run against, which make
 
 ## React Native, by default: expo-sqlite
 
-`packages/driver-rn/src/RnSqliteDriver.ts` is the default React Native driver, a thin adapter over expo-sqlite's async API (`openDatabaseAsync`, `getAllAsync`, `runAsync`, `withTransactionAsync`, and prepare/execute/finalize for batches). It is the default for a practical reason: expo-sqlite owns the native SQLite build and ships _inside Expo Go_, so an app can use remelonDB with no custom native build at all. `executeBatch` prepares each statement inside a transaction and finalizes in a `finally`; `setUserVersion` validates a non-negative integer. Its class is named `RnSqliteDriver` — deliberately the same name as the C++ variant, so switching between the two RN drivers is a one-line change of import.
+`packages/driver-rn/src/RnSqliteDriver.ts` is the default React Native driver, a thin adapter over `expo-sqlite`'s async API (`openDatabaseAsync`, `getAllAsync`, `runAsync`, `withTransactionAsync`, and prepare/execute/finalize for batches). `expo-sqlite` owns the native SQLite implementation. `executeBatch` prepares each statement inside a transaction and finalizes in a `finally`; `setUserVersion` validates a non-negative integer. Its class is named `RnSqliteDriver`, the same name as the C++ variant, so switching between the two drivers requires changing the import.
 
 ## React Native with the C++ TurboModule
 
-`packages/driver-rn-cpp` exists for apps that want SQLite with **no expo dependency** and are willing to make a native dev build. Its JavaScript side is again a `RnSqliteDriver` that delegates to a codegen TurboModule spec, `NativeRemelonDriver.ts`, whose methods are all **synchronous** — SQLite runs in-process on the JS thread, JSI-style — and name-keyed: `openDatabase(name)`, `query(name, sql, args)`, `executeBatch(name, statements)`, and so on. Values that exceed React Native codegen's type system cross as `UnsafeMixed` and are validated on the C++ side.
+`packages/driver-rn-cpp` exists for apps that want SQLite with **no Expo dependency** and can include a native module in their build. Its JavaScript side is again a `RnSqliteDriver` that delegates to a codegen TurboModule spec, `NativeRemelonDriver.ts`, whose methods are all **synchronous** — SQLite runs in-process on the JS thread, JSI-style — and name-keyed: `openDatabase(name)`, `query(name, sql, args)`, `executeBatch(name, statements)`, and so on. Values that exceed React Native codegen's type system cross as `UnsafeMixed` and are validated on the C++ side.
 
 The repository commits a pinned SQLite amalgamation (3.50.2) in `cpp/vendor/sqlite3.c`, with a script to refresh it deliberately. Both the iOS CocoaPods build and the Android CMake build compile that file with the same flags (`SQLITE_THREADSAFE=1`, `SQLITE_ENABLE_FTS5`, `SQLITE_DQS=0`, and a few `OMIT`s). The two platforms therefore use the same SQLite version and configuration. The driver is a bridgeless C++ TurboModule with no manual `global.*` install, avoiding the class of New Architecture breakage described in Chapter 1.
 
@@ -2249,7 +2254,7 @@ Terms are listed as they were introduced in the Background asides, so you can se
 
 **Discriminated union** — a type that is one of several shapes, each carrying a literal tag, so code can narrow by the tag. Query clauses and migration steps are discriminated unions (Orientation, Ch. 6, 12).
 
-**Dynamic typing (SQLite)** — SQLite stores whatever value you give a column regardless of its declared type, so remelonDB declares no column types and enforces types in JavaScript instead (Ch. 3).
+**Dynamic typing (SQLite)** — SQLite may store a value with a different storage class from a column's declared affinity. remelonDB enforces values in JavaScript and declares `BLOB` only for blob columns (Ch. 3).
 
 **Forward-only migration** — schema changes that only move a database _up_ to the current version, with no reverse. The right constraint for a fleet of user devices (Ch. 12).
 
@@ -2311,7 +2316,7 @@ The public surface in the current source tree, grouped by subpath. This appendix
 
 ## `@remelondb/core`
 
-- **Schema:** `table(name, cols)`, `column` / `c` (`.string()`, `.number()`, `.boolean()`, each with `.optional()`, `.indexed()`), `appSchema({ version, tables })`.
+- **Schema:** `table(name, cols)`, `column` / `c` (`.string()`, `.number()`, `.boolean()`, `.blob()`), `appSchema({ version, tables })`. Scalar columns support `.indexed()`; all columns support `.optional()`.
 - **Model:** `ModelFor(table)` (extend it), the generated per-column accessors, `create`, `update(builder)`, `prepareUpdate(builder)`, `markAsDeleted`, `destroyPermanently`, `prepareMarkAsDeleted`, `prepareDestroyPermanently`, `children(table)`, `related(table)`, `observe`.
 - **Database:** `Database.open({ driver, schema, modelClasses?, associations?, name, onObservation? })` (the last a passive per-refetch diagnostics hook, `ObservationDiagnostic`), `db.write(fn)`, `db.read(fn)`, `db.get(ModelOrTable)`, `db.onChange`, `db.close()` (refuses new work, drains what was accepted, then closes the driver).
 - **Manager:** `createDatabaseManager({ open })` → `{ state, database, init(), close(), subscribe() }`.

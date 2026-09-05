@@ -28,9 +28,10 @@ transport that delivers these values conforms.
   cursors. Servers encode whatever they need (a revision number, a
   watermark, a composite) — it is theirs alone to interpret.
 - **Record** — JSON object: the row's user columns plus `id`. Values
-  are `string | number | boolean | null`. `_status` and `_changed` MUST
-  NOT appear on the wire in either direction; unknown keys are dropped
-  by the client's sanitizer, not errors.
+  are `string | number | boolean | null`. For a `blob` column, the JSON
+  value is padded canonical base64. Validators decode it to `Uint8Array`.
+  `_status` and `_changed` MUST NOT appear on the wire in either direction;
+  unknown keys are dropped by the client's sanitizer, not errors.
 - **ChangeSet** — `{ created: Record[], updated: Record[], deleted:
 RecordId[] }`. `deleted` carries ids only.
 - **Changes** — `{ [tableName]: ChangeSet }`. Tables absent from the

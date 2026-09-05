@@ -48,7 +48,7 @@ Dumb by design. Target: ~7 methods, all parameterized, no callbacks
 (Promises), no per-driver semantics.
 
 ```ts
-type SqlValue = string | number | boolean | null;
+type SqlValue = string | number | boolean | Uint8Array | null;
 type SqlArgs = SqlValue[];
 
 interface SqliteDriver {
@@ -161,10 +161,10 @@ behavior and document it as SQLite semantics. Deleted-record filtering
 becomes a compiler flag, not a description-tree rewrite.
 
 **4. Two React Native drivers, one seam.** `@remelondb/driver-rn` is the
-default: a thin adapter over expo-sqlite, which owns the native build and
-ships inside Expo Go, so an app needs no custom native build.
+default: a thin adapter over `expo-sqlite`, which owns the SQLite native
+implementation.
 `@remelondb/driver-rn-cpp` is the alternative for apps wanting a pinned,
-bundled SQLite and no expo dependency, at the cost of a development build.
+bundled SQLite and no Expo dependency, at the cost of a native build.
 Same class name, same conformance suite; switching is one import.
 
 The C++ driver is a **pure C++ TurboModule**, bridgeless-compatible by

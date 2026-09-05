@@ -24,6 +24,19 @@ columns of existing rows.
 All other columns pass through as the wire row. When column names match wire
 names, the default mapping is identity and a table needs no mapper code.
 
+Use this package's `bytea` builder for blob columns. It maps PostgreSQL
+`bytea` to `Uint8Array`:
+
+```ts
+import { bytea } from '@remelondb/store-drizzle';
+
+const assets = pgTable('assets', {
+  // id, rev, deletedAt and scope columns omitted here
+  data: bytea('data').notNull(),
+  preview: bytea('preview'),
+});
+```
+
 ## Usage
 
 ```ts

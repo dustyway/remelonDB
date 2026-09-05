@@ -18,7 +18,7 @@ describe('base64', () => {
   });
 
   it('rejects malformed and non-canonical input', () => {
-    for (const value of ['A', 'Zg', 'Z===', 'Zm=v', 'Zm9v\n']) {
+    for (const value of ['A', 'Zg', 'Z===', 'Zm=v', 'Zm9v\n', 'AB==', 'AAB=']) {
       expect(() => decodeBase64(value)).toThrow('Invalid base64');
     }
   });

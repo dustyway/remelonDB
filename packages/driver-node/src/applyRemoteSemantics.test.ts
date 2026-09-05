@@ -155,6 +155,39 @@ describe('blob wire values', () => {
     ).rejects.toThrow('Invalid base64');
     await expect(db.get('assets').find('a1')).rejects.toThrow('not found');
   });
+
+  it('rejects a sparse row before schema defaults can replace a missing blob', async () => {
+    await expect(
+      db.write(async () =>
+        applyRemoteChanges(db, {
+          assets: {
+            created: [{ id: 'a1', preview: null }],
+            updated: [],
+            deleted: [],
+          },
+        }),
+      ),
+    ).rejects.toThrow("missing column 'data'");
+  });
+
+  it('does not write or notify when pulled bytes are unchanged', async () => {
+    const row = { id: 'a1', data: 'AH//', preview: null };
+    await db.write(async () => {
+      await applyRemoteChanges(db, {
+        assets: { created: [row], updated: [], deleted: [] },
+      });
+    });
+    let notifications = 0;
+    db.get('assets').onChange(() => notifications++);
+
+    await db.write(async () => {
+      await applyRemoteChanges(db, {
+        assets: { created: [], updated: [row], deleted: [] },
+      });
+    });
+
+    expect(notifications).toBe(0);
+  });
 });
 
 describe('replacement covers the whole schema', () => {

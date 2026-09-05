@@ -37,6 +37,7 @@ type's default (`nullValue`), which is `null` for optional columns:
 | `string`  | `string`                                            | `''` (or `null` if optional)                   |
 | `number`  | finite `number`                                     | `0` (or `null`) — `NaN`/`Infinity` are invalid |
 | `boolean` | `boolean`, or `1`/`0` (converted to `true`/`false`) | `false` (or `null`)                            |
+| `blob`    | `Uint8Array`                                        | empty `Uint8Array` (or `null`)                 |
 
 Note the deliberate asymmetries: numbers are **not** parsed from strings,
 booleans are **not** derived from truthiness — only the exact storage
@@ -46,6 +47,10 @@ safe default", never "guess what was meant".
 `nullValue(column)` is exported and intentionally identical to the DDL
 backfill defaults used by `addColumns` migrations — a migrated column and a
 sanitized field always agree.
+
+Blob input is copied during sanitization, so mutating the caller's original
+array cannot change a cached record. Reads return the stored array; treat it
+as immutable and use `update` with a new `Uint8Array` to change it.
 
 ## The boolean convention
 

@@ -6,18 +6,15 @@
  * sync wire protocol (docs/sync-wire.md) from the same objects — pure
  * Zod, so a server can use them without depending on remelonDB.
  *
- * Supported column vocabulary: `z.string()`, `z.number()`,
- * `z.boolean()`, each optionally `.nullable()` (maps to `.optional()`
- * columns — SQL NULL). Zod's `.optional()` (undefined) is rejected:
- * the value vocabulary has null and no undefined, and conflating them
- * silently is exactly what this package exists to prevent. Refinements
+ * Supported column vocabulary: `z.string()`, `z.number()`, `z.boolean()`,
+ * and `z.instanceof(Uint8Array)`, each optionally `.nullable()` (maps to
+ * `.optional()` columns — SQL NULL). Zod's `.optional()` is rejected
+ * because stored values use null, not undefined. Refinements
  * (`.min`, `.max`, formats) keep their column type and still validate
  * on the wire. Everything else is a loud error at build time.
  */
 import {
   column,
-  decodeBase64,
-  encodeBase64,
   table,
   type BlobColumnDef,
   type ColumnDef,
@@ -27,6 +24,7 @@ import {
   type SyncPushResult,
   type TableSchema,
 } from '../index';
+import { decodeBase64, encodeBase64, isCanonicalBase64 } from '../utils/base64';
 import { z } from 'zod';
 
 // ---- zodTable ----
@@ -67,15 +65,13 @@ export type ColumnsFor<Shape extends z.ZodRawShape> = {
 };
 
 const isBlobSchema = (schema: z.ZodType): boolean => {
-  if (!(schema instanceof z.ZodCustom)) return false;
-  const accepts = schema.def.fn;
-  const acceptsValue = (value: unknown): boolean => accepts(value) === true;
-  return (
-    acceptsValue(new Uint8Array()) &&
-    !acceptsValue('') &&
-    !acceptsValue(0) &&
-    !acceptsValue(false)
-  );
+  let current: z.core.$ZodType | undefined = schema;
+  while (current) {
+    // Refinements clone schemas; instanceof metadata remains on a parent.
+    if (current._zod.bag['Class'] === Uint8Array) return true;
+    current = current._zod.parent;
+  }
+  return false;
 };
 
 const columnFor = (
@@ -149,10 +145,14 @@ export function zodTable<Shape extends z.ZodRawShape>(
   for (const [key, field] of Object.entries(schema.shape)) {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- a ZodRawShape's values are ZodTypes; Object.entries loses that.
     const def = columnFor(key, field as z.ZodType);
-    if (indexed.has(key) && !('indexed' in def)) {
+    if (!indexed.has(key)) {
+      spec[key] = def;
+      continue;
+    }
+    if (!('indexed' in def)) {
       throw new Error(`zodTable: cannot index blob column '${key}'`);
     }
-    spec[key] = indexed.has(key) && 'indexed' in def ? def.indexed() : def;
+    spec[key] = def.indexed();
   }
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- ColumnsFor<Shape> re-states, at the type level, the mapping the loop above just performed.
   return table(name, spec as ColumnsSpec) as TableSchema<ColumnsFor<Shape>>;
@@ -200,14 +200,9 @@ export function syncSchemas<
       return wireField(field.unwrap() as z.ZodType).nullable();
     }
     if (!isBlobSchema(field)) return field;
-    const base64 = z.string().refine((value) => {
-      try {
-        decodeBase64(value);
-        return true;
-      } catch {
-        return false;
-      }
-    }, 'Invalid base64 blob value');
+    const base64 = z
+      .string()
+      .refine(isCanonicalBase64, 'Invalid base64 blob value');
     return z.codec(base64, field, {
       decode: decodeBase64,
       encode: (value) => {
@@ -272,8 +267,8 @@ export function syncSchemas<
     schemaVersion: z.number().int().positive(),
     migration: migration.nullable(),
   });
-  // The codecs change representation, not the protocol shape: both input
-  // and output remain SyncPullResult because row values are intentionally unknown.
+  // Codecs change row representation, but SyncPullResult models row values
+  // as unknown in both directions.
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
   const pullResult = z.union([
     z.strictObject({ changes, cursor }),

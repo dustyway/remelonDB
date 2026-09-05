@@ -65,6 +65,7 @@ Mapping rules (the supported vocabulary, v1):
 | `z.string()` (incl. refinements: `.min`, `.email`, …) | `string`                       |
 | `z.number()` (incl. `.int()`, refinements)            | `number`                       |
 | `z.boolean()`                                         | `boolean`                      |
+| `z.instanceof(Uint8Array)` (including refinements)    | `blob`                         |
 | `.nullable()` of the above                            | the same column, `.optional()` |
 
 Everything else is a loud error at `zodTable` call time, naming the key
@@ -81,7 +82,8 @@ and the unsupported construct. Two deliberate rejections:
 
 Reserved keys (`id`, `_status`, `_changed`, rowid aliases) are rejected
 exactly as `table()` rejects them; `indexed` in the options names
-columns to index, since Zod has no such concept.
+columns to index, since Zod has no such concept. Blob columns cannot be
+indexed or used in queries.
 
 ### 2. Wire schemas: validate both sync directions
 
@@ -103,6 +105,11 @@ Wire records are the table object extended with `id: z.string()`
 `_changed` never cross — the schema enforces that by rejecting unknown
 keys). Deleted entries are id arrays. The cursor stays `z.string()`,
 opaque as the protocol requires.
+
+Blob columns use padded canonical base64 in JSON. The schemas decode them to
+`Uint8Array` while parsing and encode them for JSON responses. Refinements run
+after decoding, so `value.byteLength <= limit` enforces a byte limit rather
+than a base64-character limit.
 
 Integration needs no core hook, because validation slots into functions
 the app already writes:

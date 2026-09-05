@@ -11,7 +11,7 @@
  */
 import type { Clause, Where } from '../query/ast';
 import * as Q from '../query/Q';
-import type { TableSchema } from '../schema/index';
+import type { AppSchema, TableSchema } from '../schema/index';
 import {
   areValuesEqual,
   markAsChanged,
@@ -36,15 +36,31 @@ const assertQueryableColumn = (table: TableSchema, name: string): void => {
   }
 };
 
-const assertQueryableWhere = (table: TableSchema, where: Where): void => {
-  if (where.type === 'where') {
-    assertQueryableColumn(table, where.left);
-    if ('column' in where.comparison.right) {
-      assertQueryableColumn(table, where.comparison.right.column);
-    }
-  } else if (where.type === 'and' || where.type === 'or') {
-    for (const condition of where.conditions) {
-      assertQueryableWhere(table, condition);
+const assertQueryableWhere = (
+  tables: AppSchema['tables'],
+  table: TableSchema,
+  where: Where,
+): void => {
+  switch (where.type) {
+    case 'where':
+      assertQueryableColumn(table, where.left);
+      if ('column' in where.comparison.right) {
+        assertQueryableColumn(table, where.comparison.right.column);
+      }
+      break;
+    case 'and':
+    case 'or':
+      for (const condition of where.conditions) {
+        assertQueryableWhere(tables, table, condition);
+      }
+      break;
+    case 'on': {
+      const joined = tables[where.table];
+      if (!joined) break;
+      for (const condition of where.conditions) {
+        assertQueryableWhere(tables, joined, condition);
+      }
+      break;
     }
   }
 };
@@ -118,9 +134,10 @@ export class Collection<M = RawRecord, C extends string = string> {
       } else if (
         clause.type === 'where' ||
         clause.type === 'and' ||
-        clause.type === 'or'
+        clause.type === 'or' ||
+        clause.type === 'on'
       ) {
-        assertQueryableWhere(this.schema, clause);
+        assertQueryableWhere(this.database.schema.tables, this.schema, clause);
       }
     }
     return new Query(this, Q.buildQueryDescription(clauses));

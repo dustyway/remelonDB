@@ -50,19 +50,24 @@ export function stripInternal(raw: RawRecord, table: TableSchema): DirtyRaw {
 }
 
 export function decodeWireRaw(dirty: DirtyRaw, table: TableSchema): DirtyRaw {
-  const decoded: { [key: string]: unknown } = { ...dirty };
+  let decoded: { [key: string]: unknown } | undefined;
   for (const column of table.columnArray) {
     if (column.type !== 'blob') continue;
     const value = dirty[column.name];
     if (typeof value === 'string') {
+      decoded ??= { ...dirty };
       decoded[column.name] = decodeBase64(value);
-    } else if (!(value instanceof Uint8Array) && value !== null) {
+    } else if (
+      value !== undefined &&
+      value !== null &&
+      !(value instanceof Uint8Array)
+    ) {
       throw new Error(
         `Invalid base64 blob value for '${table.name}.${column.name}'`,
       );
     }
   }
-  return decoded;
+  return decoded ?? dirty;
 }
 
 /** Raw rows straight from the driver, bypassing cache and deleted filter. */

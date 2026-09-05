@@ -118,6 +118,19 @@ describe('zodTable', () => {
     });
   });
 
+  it('does not execute arbitrary custom predicates to identify blobs', () => {
+    let calls = 0;
+    const custom = z.custom<Uint8Array>(() => {
+      calls++;
+      return true;
+    });
+
+    expect(() => zodTable('assets', z.object({ data: custom }))).toThrow(
+      /supported:.*Uint8Array/,
+    );
+    expect(calls).toBe(0);
+  });
+
   it('rejects the unsupported, loudly and by name', () => {
     expect(() => zodTable('t', z.object({ a: z.string().optional() }))).toThrow(
       /'a' uses \.optional\(\)/,

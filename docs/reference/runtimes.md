@@ -57,11 +57,10 @@ function is free-standing; a browser's or Node's is a method and must be
 bound if passed (`crypto.getRandomValues.bind(crypto)`), though on those
 runtimes the ambient default already works and the option is unnecessary.
 
-The older way still works: define the global before opening. In Expo Go,
-`expo-crypto` can back it; in a development build or a bare app,
-`react-native-get-random-values` does the same as a native module, which
-makes installing it a build change: rebuild Android or run `pod install`,
-then import it first. Adding the import without rebuilding fails with
+The older way still works: define the global before opening.
+`react-native-get-random-values` provides it as a native module, so installing
+it is a build change: rebuild Android or run `pod install`, then import it
+first. Adding the import without rebuilding fails with
 `TurboModuleRegistry.getEnforcing(...): 'RNGetRandomValues' could not be
 found`, the JS half arriving without the native half.
 

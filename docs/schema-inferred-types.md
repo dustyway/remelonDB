@@ -72,17 +72,18 @@ export const tasks = table('tasks', {
   position: c.number().indexed(),
   is_done: c.boolean(),
   project_id: c.string().optional(),
+  attachment: c.blob().optional(),
 });
 
 export const schema = appSchema({ version: 1, tables: [tasks] });
 ```
 
-Builders are tiny: three constructors (`string`, `number`, `boolean`)
-and two modifiers (`optional()`, `indexed()`). Each produces a plain
-`ColumnSchema` object at runtime; `table()` produces a `TableSchema`
-plus the type information described next. Reserved-name and
-`created_at`/`updated_at` validation live in `table()`. This is the one
-way to write a schema — there is no alternative syntax to keep in sync.
+The `string`, `number`, and `boolean` builders support `optional()` and
+`indexed()`. The `blob` builder maps to `Uint8Array` and supports only
+`optional()`. Blob columns cannot be indexed or queried. Each builder
+produces a `ColumnSchema`; `table()` retains its type information.
+Reserved-name and `created_at`/`updated_at` validation remain in `table()`,
+so both builder and Zod schemas use the same checks.
 
 ### 2. Record types are inferred
 
@@ -94,12 +95,13 @@ type TaskRecord = InferRecord<typeof tasks>;
 //   position: number
 //   is_done: boolean
 //   project_id: string | null
+//   attachment: Uint8Array | null
 // }
 ```
 
-Mapping rules: `string`/`number`/`boolean` map to themselves;
-`.optional()` adds `| null`; `id` is always present and readonly;
-`_status`/`_changed` do not appear (they are core-internal, and code
+Mapping rules: `string`/`number`/`boolean` map to themselves, and `blob`
+maps to `Uint8Array`. `.optional()` adds `| null`; `id` is always present and
+readonly. `_status`/`_changed` do not appear (they are core-internal, and code
 that needs them works with `RawRecord`).
 
 ### 3. Tables are values; collections are typed by them

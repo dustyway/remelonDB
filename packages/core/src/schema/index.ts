@@ -1,7 +1,8 @@
 /**
- * Schema definitions (docs/schema-inferred-types.md). Columns are typeless
- * in SQL (SQLite dynamic typing, matching upstream); the declared
- * ColumnType drives JS-side sanitization and migration backfill defaults.
+ * Schema definitions (docs/schema-inferred-types.md). Scalar columns are
+ * typeless in SQL (SQLite dynamic typing, matching upstream); blobs declare
+ * BLOB affinity so SQLite preserves their storage class. ColumnType drives
+ * JS-side sanitization and migration backfill defaults.
  * Every table implicitly gets the standard columns `id` (primary key),
  * `_status` and `_changed` (sync dirty tracking) — user schemas cannot
  * redeclare them.
@@ -26,8 +27,8 @@ export interface ColumnSchema {
 /**
  * A column under construction: what `column.string()` etc. return, before
  * `table()` attaches the name. Carries its type and optionality in the
- * type system for inference; `optional()`/`indexed()` return new frozen
- * values (builders are immutable).
+ * type system for inference. Scalar definitions support `optional()` and
+ * `indexed()`; blobs support only `optional()`. Builders are immutable.
  */
 export interface ColumnDef<
   T extends Exclude<ColumnType, 'blob'> = Exclude<ColumnType, 'blob'>,
@@ -78,8 +79,9 @@ function blobColumnDef<Optional extends boolean>(
 }
 
 /**
- * The column builders: `column.string()`, `column.number()`,
- * `column.boolean()`, each with `.optional()` and `.indexed()` modifiers.
+ * The column builders: `column.string()`, `column.number()`, and
+ * `column.boolean()` support `.optional()` and `.indexed()`;
+ * `column.blob()` supports `.optional()` but cannot be queried or indexed.
  *
  * @example
  * ```ts
@@ -134,7 +136,8 @@ export interface AppSchema {
 /**
  * The record type a table's rows have in app code, derived from the
  * `table()` definition: `string`/`number`/`boolean` map to themselves,
- * `.optional()` adds `| null`, and `id` is always present and readonly.
+ * `blob` maps to `Uint8Array`, `.optional()` adds `| null`, and `id` is
+ * always present and readonly.
  *
  * @example
  * ```ts

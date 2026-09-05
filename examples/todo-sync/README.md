@@ -51,8 +51,7 @@ DATABASE_URL=postgres://postgres:pg@localhost:5433/postgres \
   pnpm --filter example-todo-sync server
 ```
 
-For the mobile client (a development build, not Expo Go — the SQLite
-driver is native code):
+For the mobile client, build and launch the native app:
 
 ```sh
 pnpm --filter example-todo-sync-native android   # build + launch on an emulator or device
