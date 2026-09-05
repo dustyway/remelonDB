@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { registerServerConformance } from './conformance/index';
-import {
-  createMemoryStore,
-  createSyncEngine,
-  SyncProtocolError,
-  type SyncStore,
-} from './index';
+import { createMemoryStore, createSyncEngine, type SyncStore } from './index';
 
 // The engine over the memory store must pass the full backend contract;
 // a real adapter proves itself the same way, engine included.
@@ -303,10 +298,7 @@ describe('push pipeline guards', () => {
     }).as('scope-a');
 
     await expect(handlers.push({ changes, cursor: '0' })).rejects.toMatchObject(
-      {
-        name: 'SyncProtocolError',
-        code: 'invalid-rejection',
-      } satisfies Partial<SyncProtocolError>,
+      { name: 'Error' },
     );
   });
 

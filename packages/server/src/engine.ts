@@ -25,7 +25,7 @@ export interface SyncHandlers {
  */
 export class SyncProtocolError extends Error {
   constructor(
-    readonly code: 'unusable-id' | 'invalid-rejection',
+    readonly code: 'unusable-id',
     message: string,
   ) {
     super(message);
@@ -280,15 +280,13 @@ export function createSyncEngine<Scope>(options: SyncEngineOptions<Scope>): {
             if (ids.length === 0) continue;
             const requested = requestedByTable.get(table);
             if (!requested) {
-              throw new SyncProtocolError(
-                'invalid-rejection',
+              throw new Error(
                 `sync push: hook rejected ids for unknown table '${table}'`,
               );
             }
             for (const id of ids) {
               if (!requested.has(id)) {
-                throw new SyncProtocolError(
-                  'invalid-rejection',
+                throw new Error(
                   `sync push: hook rejected '${table}/${id}', not in the request`,
                 );
               }
