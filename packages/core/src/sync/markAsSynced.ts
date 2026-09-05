@@ -4,12 +4,19 @@
  * modified since the push snapshot (the areRecordsEqual gate): those stay
  * dirty and go out with the next push.
  *
+ * Tombstones have no snapshot, so their gate is the stored state: a
+ * pushed tombstone is destroyed only while the row is STILL a tombstone.
+ * Another context may have destroyed it and re-created the id as live
+ * during the push (a pull applying the server's re-creation); destroying
+ * that live row would erase newer knowledge, and skipping is idempotent —
+ * a delete the server already applied is a no-op to re-push.
+ *
  * Must be called inside a database.write block. One atomic batch.
  */
 import type { Database } from '../database/Database';
 import type { BatchOperation } from '../database/encodeBatch';
 import type { RawRecord } from '../rawRecord/index';
-import { areRecordsEqual } from './helpers';
+import { areRecordsEqual, queryRowsByIds } from './helpers';
 import type { LocalChanges } from './fetchLocal';
 
 export async function markLocalChangesAsSynced(
@@ -35,9 +42,18 @@ export async function markLocalChangesAsSynced(
 
   for (const [table, tableChanges] of Object.entries(localChanges.changes)) {
     const rejectedIds = new Set(rejected?.[table] ?? []);
-    for (const id of tableChanges.deleted) {
-      if (rejectedIds.has(id)) {
-        continue;
+    const pushedIds = tableChanges.deleted.filter((id) => !rejectedIds.has(id));
+    if (pushedIds.length === 0) {
+      continue;
+    }
+    const stillTombstoned = new Set(
+      (await queryRowsByIds(database, table, pushedIds))
+        .filter((row) => row['_status'] === 'deleted')
+        .map((row) => row['id']),
+    );
+    for (const id of pushedIds) {
+      if (!stillTombstoned.has(id)) {
+        continue; // destroyed or re-created mid-push — newer knowledge wins
       }
       operations.push({
         type: 'destroyPermanently',
