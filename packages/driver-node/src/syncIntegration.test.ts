@@ -656,6 +656,28 @@ describe('sync engine', () => {
       expect(await db.localStorage.get(CURSOR_KEY)).toBeNull();
       expect((await db.get('tasks').find('l1'))._status).toBe('created');
     });
+
+    it("a joiner's abort ends its own wait and leaves the run alone", async () => {
+      server.seed('s1', { name: 'server', position: 1 });
+      let releasePull = () => {};
+      const held = new Promise<void>((resolve) => {
+        releasePull = resolve;
+      });
+      const owner = sync({
+        pullChanges: async (args) => {
+          await held;
+          return server.pull(args);
+        },
+      });
+
+      const controller = new AbortController();
+      const joiner = sync({ signal: controller.signal });
+      controller.abort();
+      await expect(joiner).rejects.toThrow();
+
+      releasePull();
+      expect((await owner).pulled).toBe(1);
+    });
   });
 
   // #9: synchronize() reports what happened instead of resolving void;

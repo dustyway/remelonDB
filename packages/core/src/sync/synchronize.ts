@@ -163,15 +163,48 @@ async function migrationInfo(
 const inFlight = new WeakMap<Database, Promise<SynchronizeResult>>();
 
 /**
+ * Settle a joiner on the running sync without giving it control over
+ * that run: its signal ends its wait, the run continues for its owner.
+ */
+function joinRun(
+  run: Promise<SynchronizeResult>,
+  signal?: AbortSignal,
+): Promise<SynchronizeResult> {
+  if (!signal) {
+    return run;
+  }
+  return new Promise<SynchronizeResult>((resolve, reject) => {
+    const onAbort = () => {
+      try {
+        throwIfAborted(signal);
+      } catch (reason) {
+        reject(reason);
+      }
+    };
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    signal.addEventListener('abort', onAbort, { once: true });
+    run.then(resolve, reject).finally(() => {
+      signal.removeEventListener('abort', onAbort);
+    });
+  });
+}
+
+/**
  * Run one full sync: pull remote changes, apply them (per-column
  * conflict resolution), push local changes, mark them synced. Wire up
  * `pullChanges`/`pushChanges` to your transport; shapes are the wire
  * protocol's (docs/sync-wire.md).
  *
  * Concurrent calls for the same database coalesce: a call arriving while
- * a sync is running joins it (the runner's options apply). The in-write
- * cursor re-check stays as the guard against out-of-band writers
- * (another tab or process sharing the database).
+ * a sync is running joins it. The runner's transport and conflict options
+ * are the ones that apply — a joiner's `pullChanges`/`pushChanges` are
+ * never called — but a joiner's `signal` aborts its own wait only, and
+ * leaves the run it does not own alone. The in-write cursor re-check
+ * stays as the guard against out-of-band writers (another tab or process
+ * sharing the database).
  *
  * @example
  * ```ts
@@ -188,7 +221,7 @@ export function synchronize(
 ): Promise<SynchronizeResult> {
   const running = inFlight.get(options.database);
   if (running) {
-    return running;
+    return joinRun(running, options.signal);
   }
   const run = runSynchronize(options).finally(() =>
     inFlight.delete(options.database),
