@@ -75,9 +75,15 @@ export interface SyncEngineOptions<Scope> {
   ) => Promise<{ readonly [table: string]: readonly string[] }>;
 }
 
+// A cursor is an opaque echo of a `String(rev)` this engine issued, so
+// it is matched, not coerced: `Number('')` is 0 (a silent full replay)
+// and `Number('0x10')` is 16 (a revision nobody was served).
+const CURSOR = /^(?:0|[1-9][0-9]*)$/;
+
 const decodeCursor = (cursor: string): number | null => {
+  if (!CURSOR.test(cursor)) return null;
   const rev = Number(cursor);
-  return Number.isInteger(rev) && rev >= 0 ? rev : null;
+  return Number.isSafeInteger(rev) ? rev : null;
 };
 
 const toChanges = (

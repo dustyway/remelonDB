@@ -409,6 +409,20 @@ export function registerServerConformance(
       });
       expect(unknown).toEqual({ resyncRequired: true });
 
+      // a cursor is an opaque echo, not a number: a respelling of one
+      // the server issued is still a cursor it never issued, and a
+      // server that coerces it serves history from a revision nobody
+      // was given
+      for (const respelled of [` ${start.cursor}`, `0${start.cursor}`]) {
+        expect(
+          await handlers.pull({
+            cursor: respelled,
+            schemaVersion: 1,
+            migration: null,
+          }),
+        ).toEqual({ resyncRequired: true });
+      }
+
       const full = pulled(await pullNull(handlers));
       expect(liveIds(full.changes, table)).toContain(row.id);
     });

@@ -75,9 +75,12 @@ export function createReferenceServer(
     return created;
   };
 
+  // matched, not coerced: a cursor is the opaque echo of a `String(rev)`
+  // this server issued, and `Number()` would accept respellings of it
   const decodeCursor = (cursor: string): number | null => {
+    if (!/^(?:0|[1-9][0-9]*)$/.test(cursor)) return null;
     const since = Number(cursor);
-    return Number.isInteger(since) && since >= 0 && since <= rev ? since : null;
+    return Number.isSafeInteger(since) && since <= rev ? since : null;
   };
 
   const changesSince = (
