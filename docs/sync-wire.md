@@ -202,6 +202,16 @@ malformed JSON, 5xx) are outside the protocol; adapters surface them as
 thrown errors, which `synchronize()` reports as a failed sync with
 local state untouched.
 
+Blob columns make request size a design concern. Base64 grows bytes by
+4/3, and one push carries every dirty row, so a batch of blobs can exceed
+the host's body-parser limit (Express and NestJS default to 100 KB) even
+when each value is small. The server then answers 413 or 400, the client
+reports a transport error, the rows stay dirty, and the next sync pushes
+the same batch again. No per-column cap can rule this out because the
+request is the sum of the batch. Raise the body limit to what the app's
+media needs, and validate byte size in the app before a record is
+created, so an oversized value never becomes a dirty row.
+
 ## 7. Conformance checklist
 
 For a server test suite; each item is one scenario or property test.
