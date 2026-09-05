@@ -30,12 +30,9 @@ WatermelonDB on modern RN).
 
 ## Requirements
 
-- React Native **≥ 0.80**. The package ships its codegen output, and
-  that generated glue uses CMake helpers React Native introduced in
-  0.80 (`target_compile_reactnative_options`); CI compiles the packed
-  package against 0.80 to keep this floor honest. Older New
-  Architecture versions (0.76–0.79) can support pure C++ TurboModules
-  in principle, but not with this package's shipped glue.
+- React Native **≥ 0.86**. Blob binding uses the typed-array API exposed
+  by React Native 0.86's JSI runtime. CI builds and runs the packed
+  package against 0.86.
 - New Architecture enabled (bridgeless supported)
 
 ## Setup
@@ -51,7 +48,7 @@ cd ios && pod install
 
 ```ts
 import { Database } from '@remelondb/core';
-import { RnSqliteDriver } from '@remelondb/driver-rn';
+import { RnSqliteDriver } from '@remelondb/driver-rn-cpp';
 
 const db = await Database.open({
   driver: new RnSqliteDriver(),
@@ -79,8 +76,8 @@ bootstrap as web, with the takeover callback simply unused on native.
 | `codegenConfig.ios.modulesProvider` + `ios/RemelonDriverProvider.mm`    | iOS module registration                                                                                                          |
 | `scripts/fetch-sqlite.mjs`                                              | pins one SQLite version for both platforms (FTS5 on, `SQLITE_DQS=0`, no load-extension)                                          |
 
-Booleans bind as 0/1 (the seam-wide convention), rows come back
-column-keyed with `null | number | string` values, batches run in one
+Booleans bind as 0/1 (the seam-wide convention), blobs bind and return as
+`Uint8Array`, rows come back column-keyed, batches run in one
 `BEGIN`/`COMMIT` with rollback on any failure — the same contract the
 Node driver passes conformance with.
 
