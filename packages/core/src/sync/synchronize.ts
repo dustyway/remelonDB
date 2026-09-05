@@ -138,14 +138,24 @@ async function migrationInfo(
   }
   const tables: string[] = [];
   const columnsByTable = new Map<string, Set<string>>();
+  const isLocalOnly = (table: string): boolean =>
+    database.schema.tables[table]?.localOnly ?? false;
   for (const step of steps) {
     if (step.type === 'create_table') {
+      if (isLocalOnly(step.schema.name)) continue;
       tables.push(step.schema.name);
-    } else if (step.type === 'add_columns' && !tables.includes(step.table)) {
+    } else if (
+      step.type === 'add_columns' &&
+      !tables.includes(step.table) &&
+      !isLocalOnly(step.table)
+    ) {
       const set = columnsByTable.get(step.table) ?? new Set();
       step.columns.forEach((column) => set.add(column.name));
       columnsByTable.set(step.table, set);
     }
+  }
+  if (tables.length === 0 && columnsByTable.size === 0) {
+    return { migration: null, shouldSaveVersion: true };
   }
   return {
     migration: {

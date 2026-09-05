@@ -8,13 +8,17 @@ import {
   appSchema,
   addColumns,
   column as c,
+  createTable,
   Database,
   fetchLocalChanges,
   hasUnsyncedChanges,
+  LAST_SCHEMA_VERSION_KEY,
   schemaMigrations,
   synchronize,
   table,
+  type MigrationStep,
   type SyncChanges,
+  type SyncPullArgs,
   type SyncPullResult,
   type SyncPushResult,
 } from '@remelondb/core';
@@ -74,6 +78,16 @@ describe('local-only tables and the push', () => {
     const rows = await driver.query('select * from "media_cache"', []);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ id: 'm1', _status: 'created' });
+  });
+
+  it('markAsDeleted removes the row instead of leaving a tombstone', async () => {
+    await db.write(async () => {
+      await db.get('media_cache').create(cacheRow('m1'));
+      await db.get('media_cache').markAsDeleted('m1');
+    });
+
+    expect(await driver.query('select * from "media_cache"', [])).toEqual([]);
+    expect(await hasUnsyncedChanges(db)).toBe(false);
   });
 });
 
@@ -177,6 +191,98 @@ describe('local-only tables and migrations', () => {
       file_id: 'f-m1',
       fetched_at: 0,
     });
+    await second.destroy();
+  });
+});
+
+describe('local-only tables and the migration descriptor', () => {
+  const filePath = `${import.meta.dirname}/.tmp-local-only-migration.db`;
+
+  afterEach(async () => {
+    const cleanup = new NodeSqliteDriver();
+    await cleanup.open(filePath).catch(() => null);
+    await cleanup.destroy().catch(() => {});
+  });
+
+  const syncOnce = async (
+    database: Database,
+  ): Promise<(SyncPullArgs['migration'] | undefined)[]> => {
+    const seen: (SyncPullArgs['migration'] | undefined)[] = [];
+    await synchronize({
+      database,
+      migrationsEnabledAtVersion: 1,
+      pullChanges: async (args): Promise<SyncPullResult> => {
+        seen.push(args.migration);
+        return { changes: {}, cursor: '1' };
+      },
+      pushChanges: async (): Promise<SyncPushResult> => ({
+        cursor: null,
+        changes: null,
+      }),
+    });
+    return seen;
+  };
+
+  const openV2 = async (
+    driverV2: NodeSqliteDriver,
+    tablesV2: readonly ReturnType<typeof table>[],
+    steps: MigrationStep[],
+  ): Promise<Database> =>
+    Database.open({
+      driver: driverV2,
+      schema: appSchema({ version: 2, tables: [tasks, ...tablesV2] }),
+      migrations: schemaMigrations({ migrations: [{ toVersion: 2, steps }] }),
+      name: filePath,
+    });
+
+  beforeEach(async () => {
+    const first = new NodeSqliteDriver();
+    const dbV1 = await Database.open({
+      driver: first,
+      schema: appSchema({ version: 1, tables: [tasks] }),
+      name: filePath,
+    });
+    await syncOnce(dbV1);
+    expect(await dbV1.localStorage.get(LAST_SCHEMA_VERSION_KEY)).toBe('1');
+    await first.close();
+  });
+
+  it('a migration creating only a local-only table reports none', async () => {
+    const second = new NodeSqliteDriver();
+    const dbV2 = await openV2(
+      second,
+      [cache],
+      [
+        createTable({
+          name: 'media_cache',
+          columns: { file_id: c.string().indexed(), bytes: c.blob() },
+        }),
+      ],
+    );
+
+    expect(await syncOnce(dbV2)).toEqual([null]);
+    expect(await dbV2.localStorage.get(LAST_SCHEMA_VERSION_KEY)).toBe('2');
+    await second.destroy();
+  });
+
+  it('a mixed migration reports only the synced table', async () => {
+    const notes = table('notes', { body: c.string() });
+    const second = new NodeSqliteDriver();
+    const dbV2 = await openV2(
+      second,
+      [cache, notes],
+      [
+        createTable({
+          name: 'media_cache',
+          columns: { file_id: c.string().indexed(), bytes: c.blob() },
+        }),
+        createTable({ name: 'notes', columns: { body: c.string() } }),
+      ],
+    );
+
+    expect(await syncOnce(dbV2)).toEqual([
+      { from: 1, tables: ['notes'], columns: [] },
+    ]);
     await second.destroy();
   });
 });

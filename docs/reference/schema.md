@@ -106,6 +106,10 @@ replacement (resync) pull leaves them alone, and a server response naming
 the table is rejected. Records still carry `_status` and `_changed`; sync
 just never reads them. `zodTable` takes the same option.
 
+`localOnly` is fixed for a table name for the life of the app. Flipping a
+table between synced and local-only is not supported; introduce a new
+table instead.
+
 ## What the DDL looks like
 
 `encodeSchema(schema)` returns an array of single statements:

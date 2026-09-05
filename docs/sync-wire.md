@@ -87,6 +87,10 @@ Semantics:
   full current records for the listed tables and for all rows' listed
   columns' tables, regardless of the cursor — the client just gained
   schema it has never synced.
+- The client bumps `schemaVersion` for local-only tables too (they are
+  ordinary tables to migrations), and such a migration produces
+  `migration: null`. A server MUST key its full-pull decision on the
+  migration descriptor, not on schema-version equality.
 - `resyncRequired` is the only lawful answer for a cursor the server
   can no longer serve completely (pruned tombstones or change log).
   Answering such a cursor with partial data is a silent lost delete.
