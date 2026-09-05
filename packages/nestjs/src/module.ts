@@ -43,7 +43,8 @@ export interface RemelonSyncOptions<Scope> {
   };
   /**
    * The authenticated principal for a request (e.g. the session's user
-   * id); null/undefined answers 401. Auth itself stays the app's.
+   * id); null, undefined or an empty scope answers 401. Auth itself
+   * stays the app's.
    */
   readonly scopeFrom: (
     request: unknown,
@@ -67,7 +68,13 @@ export interface RemelonSyncAsyncOptions<Scope> {
  * @category Transport
  */
 export interface SyncRuntime {
-  scopeFrom(request: unknown): unknown;
+  /**
+   * The request's principal with the 401 gate applied: an unusable
+   * scope throws instead of resolving. `pull` and `push` re-check the
+   * scope they are handed, so a caller that skips this cannot sync
+   * anonymously.
+   */
+  scopeFrom(request: unknown): Promise<unknown>;
   pull(scope: unknown, body: unknown): Promise<SyncPullResult>;
   push(scope: unknown, body: unknown): Promise<SyncPushResult>;
 }
@@ -109,6 +116,15 @@ export function syncEngineFromOptions<Scope>(
   });
 }
 
+// An unusable scope must never reach the store: memoryStore buckets
+// `undefined` into one shared scope, so an anonymous pull would serve
+// the previous anonymous push. `== null` alone would admit `''`.
+const gate = (scope: unknown): void => {
+  if (scope === null || scope === undefined || scope === '') {
+    throw new UnauthorizedException();
+  }
+};
+
 const prepare = <Scope>(options: RemelonSyncOptions<Scope>): SyncRuntime => {
   const wire = syncSchemas(options.tables);
   const engine = syncEngineFromOptions(options);
@@ -134,8 +150,13 @@ const prepare = <Scope>(options: RemelonSyncOptions<Scope>): SyncRuntime => {
     cursor: z.string().min(1),
   });
   return {
-    scopeFrom: (request) => options.scopeFrom(request),
+    scopeFrom: async (request) => {
+      const scope = await options.scopeFrom(request);
+      gate(scope);
+      return scope;
+    },
     pull: async (scope, body) => {
+      gate(scope);
       const parsed = wire.pullArgs.safeParse(body);
       if (!parsed.success)
         throw new BadRequestException('malformed pull request');
@@ -144,6 +165,7 @@ const prepare = <Scope>(options: RemelonSyncOptions<Scope>): SyncRuntime => {
       return wire.pullResult.encode(await scoped.pull(parsed.data));
     },
     push: async (scope, body) => {
+      gate(scope);
       const parsed = pushEnvelope.safeParse(body);
       if (!parsed.success)
         throw new BadRequestException('malformed push request');
@@ -188,9 +210,7 @@ export class RemelonSyncController {
     @Req() request: unknown,
     @Body() body: unknown,
   ): Promise<SyncPullResult> {
-    const scope = await this.sync.scopeFrom(request);
-    if (scope == null) throw new UnauthorizedException();
-    return this.sync.pull(scope, body);
+    return this.sync.pull(await this.sync.scopeFrom(request), body);
   }
 
   @Post('push')
@@ -199,9 +219,7 @@ export class RemelonSyncController {
     @Req() request: unknown,
     @Body() body: unknown,
   ): Promise<SyncPushResult> {
-    const scope = await this.sync.scopeFrom(request);
-    if (scope == null) throw new UnauthorizedException();
-    return this.sync.push(scope, body);
+    return this.sync.push(await this.sync.scopeFrom(request), body);
   }
 }
 

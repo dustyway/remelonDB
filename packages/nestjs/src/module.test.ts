@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { UnauthorizedException } from '@nestjs/common';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { z } from 'zod';
@@ -14,7 +15,12 @@ import type {
 import { createMemoryStore } from '@remelondb/server';
 import { registerServerConformance } from '@remelondb/server/conformance';
 import type { SyncHandlers } from '@remelondb/server/conformance';
-import { RemelonSyncModule, syncEngineFromOptions } from './module';
+import type { RemelonSyncOptions, SyncRuntime } from './module';
+import {
+  REMELON_SYNC,
+  RemelonSyncModule,
+  syncEngineFromOptions,
+} from './module';
 
 // The full backend contract, exercised through real HTTP: NestJS app,
 // fetch as the client, MemoryStore underneath. What the suite passes
@@ -195,6 +201,55 @@ describe('http binding', () => {
     expect(await response.json()).toMatchObject({
       rejected: { assets: ['bad-base64', 'too-large'] },
     });
+  });
+});
+
+// The runtime is documented as injectable without the bundled
+// controller, so the gate has to hold there — not only on the HTTP path.
+describe('SyncRuntime auth gate', () => {
+  const runtimeFor = async (
+    scopeFrom: RemelonSyncOptions<string>['scopeFrom'],
+  ): Promise<SyncRuntime> => {
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        RemelonSyncModule.forRoot<string>({
+          store: createMemoryStore(),
+          tables: { tasks: Task },
+          scopeFrom,
+        }),
+      ],
+    }).compile();
+    return moduleRef.get<SyncRuntime>(REMELON_SYNC);
+  };
+
+  const pullBody = { cursor: null, schemaVersion: 1, migration: null };
+  const pushBody = { cursor: '0', changes: {} };
+
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['the empty string', ''],
+  ])('refuses %s as a scope', async (_name, scope) => {
+    const runtime = await runtimeFor(() => scope);
+    await expect(runtime.scopeFrom({})).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    await expect(runtime.pull(scope, pullBody)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    await expect(runtime.push(scope, pushBody)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+  });
+
+  it('awaits an async scopeFrom instead of scoping by the promise', async () => {
+    const resolved = await (
+      await runtimeFor(() => Promise.resolve('scope-a'))
+    ).scopeFrom({});
+    expect(resolved).toBe('scope-a');
+    await expect(
+      (await runtimeFor(() => Promise.resolve(null))).scopeFrom({}),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });
 
