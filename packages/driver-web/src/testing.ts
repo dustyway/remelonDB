@@ -13,9 +13,12 @@ export function createChannel(): [Endpoint, Endpoint] {
   const aListeners: Array<(m: unknown) => void> = [];
   const bListeners: Array<(m: unknown) => void> = [];
   const post = (peers: Array<(m: unknown) => void>) => (message: unknown) => {
+    // clone at the send, like postMessage: a test must fail here on
+    // anything a real structured clone would reject or flatten
+    const cloned = structuredClone(message);
     queueMicrotask(() => {
       peers.forEach((listener) => {
-        listener(message);
+        listener(cloned);
       });
     });
   };

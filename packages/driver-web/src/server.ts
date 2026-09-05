@@ -40,6 +40,16 @@ const bind = (
 
 const fromColumn = (value: unknown): SqlValue => {
   if (typeof value === 'bigint') {
+    if (
+      value > BigInt(Number.MAX_SAFE_INTEGER) ||
+      value < BigInt(Number.MIN_SAFE_INTEGER)
+    ) {
+      throw new Error(
+        `SqliteWorkerServer: the INTEGER ${value.toString()} is outside ` +
+          `JavaScript's safe integer range and would read back wrong as a ` +
+          `number — store values this large as TEXT`,
+      );
+    }
     return Number(value);
   }
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- wasm sqlite types column values as `unknown`; SqlValue is the vocabulary the seam defines for them, bigint having been handled above.

@@ -102,6 +102,9 @@ const driver = new WebSqliteDriver({
   so the retry always converges).
 - Environments without the Web Locks API (Node tests, non-secure
   contexts) skip coordination entirely and behave as before.
+- With shared mode active, `takeover` and `onTakenOver` are unused:
+  every tab joins one owner, so there is nothing to take over. They
+  apply where the driver falls back to single-tab mode.
 
 Only one tab is active at a time, but the handoff is explicit and
 nothing can race.

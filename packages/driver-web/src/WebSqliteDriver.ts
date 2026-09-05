@@ -109,10 +109,13 @@ export interface WebSqliteDriverOptions {
    * fails with a clear error. With `takeover: true`, this driver takes
    * the database instead — the other tab's driver shuts down and its
    * `onTakenOver` callback fires (in-flight statements there are
-   * abandoned; committed data is safe on disk).
+   * abandoned; committed data is safe on disk). Unused while shared mode
+   * is active, where every tab joins one owner and there is nothing to
+   * take over; it applies to the single-tab fallback.
    */
   readonly takeover?: boolean;
-  /** Called when another tab takes this database over (see `takeover`). */
+  /** Called when another tab takes this database over (see `takeover`).
+   * Unused while shared mode is active, for the same reason. */
   readonly onTakenOver?: () => void;
   /**
    * Opt in to the SharedWorker owner (docs/multi-tab.md): all tabs route
@@ -157,6 +160,7 @@ export class WebSqliteDriver implements SqliteDriver {
   >();
   private releaseTabLock: (() => void) | null = null;
   private takenOver = false;
+  private destroyedElsewhere = false;
   /**
    * @internal The compute worker this tab spawned for the broker, when it
    * was the one asked to host it. It lives and dies with the tab — except
@@ -209,6 +213,13 @@ export class WebSqliteDriver implements SqliteDriver {
                 case 'externalChanges':
                   if (data.name === this.name) {
                     this.externalChangesHandler?.(data.changes);
+                  }
+                  return;
+                case 'databaseDestroyed':
+                  if (data.name === this.name) {
+                    this.name = null;
+                    this.destroyedElsewhere = true;
+                    this.failAllPending(this.notOpenError());
                   }
                   return;
                 case 'discardWorker':
@@ -354,7 +365,9 @@ export class WebSqliteDriver implements SqliteDriver {
     return new Error(
       this.takenOver
         ? 'WebSqliteDriver: the database was taken over by another tab'
-        : 'WebSqliteDriver: database is not open',
+        : this.destroyedElsewhere
+          ? 'WebSqliteDriver: the database was destroyed by another tab'
+          : 'WebSqliteDriver: database is not open',
     );
   }
 
@@ -416,6 +429,7 @@ export class WebSqliteDriver implements SqliteDriver {
         ? await this.acquireTabLock(name)
         : false;
     this.takenOver = false;
+    this.destroyedElsewhere = false;
     if (!this.endpoint) {
       this.endpoint = this.createEndpoint();
       this.endpoint.addMessageListener((message) => {
