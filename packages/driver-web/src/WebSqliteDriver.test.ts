@@ -28,6 +28,18 @@ describe('web driver specifics', () => {
       /OPFS storage is unavailable/,
     );
   });
+
+  it('refuses an INTEGER past the safe range instead of narrowing it', async () => {
+    const driver = createInProcessDriver();
+    await driver.open('big.db');
+    await expect(
+      driver.query('select 9007199254740993 as big', []),
+    ).rejects.toThrow(/9007199254740993/);
+    await expect(
+      driver.query('select 9007199254740991 as ok', []),
+    ).resolves.toEqual([{ ok: 9007199254740991 }]);
+    await driver.destroy();
+  });
 });
 
 describe('full stack on the web driver', () => {
