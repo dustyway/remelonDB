@@ -10,7 +10,7 @@
  */
 import { encodeQuery } from '../query/encodeQuery';
 import type { QueryDescription } from '../query/ast';
-import type { RawRecord } from '../rawRecord/index';
+import { areValuesEqual, type RawRecord } from '../rawRecord/index';
 import { runDirect } from './directWork';
 import type { Collection, Unsubscribe } from './Collection';
 
@@ -125,7 +125,10 @@ export class Query<M = RawRecord> {
         const before = snapshot[index]!;
         return (
           before.raw !== raw ||
-          columns.some((name) => before.content[name] !== raw[name])
+          columns.some(
+            (name) =>
+              !areValuesEqual(before.content[name] ?? null, raw[name] ?? null),
+          )
         );
       });
     };

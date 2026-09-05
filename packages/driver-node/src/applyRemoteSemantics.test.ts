@@ -203,6 +203,41 @@ describe('blob wire values', () => {
 
     expect(notifications).toBe(0);
   });
+
+  it('does not re-emit a query for equal bytes from another context', async () => {
+    await db.write(() =>
+      db.get('assets').create({
+        id: 'a1',
+        data: new Uint8Array([1, 2]),
+        preview: null,
+      }),
+    );
+    const emissions: unknown[][] = [];
+    const unsubscribe = db
+      .get('assets')
+      .query()
+      .observe((records) => emissions.push(records));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    await db.applyExternalChanges({
+      assets: [
+        {
+          type: 'updated',
+          record: {
+            id: 'a1',
+            data: new Uint8Array([1, 2]),
+            preview: null,
+            _status: 'synced',
+            _changed: '',
+          },
+        },
+      ],
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(emissions).toHaveLength(1);
+    unsubscribe();
+  });
 });
 
 describe('replacement covers the whole schema', () => {
