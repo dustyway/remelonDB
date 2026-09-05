@@ -1337,8 +1337,8 @@ the protocol does not stream, chunk, or resume a blob transfer.
 Synced blobs therefore fit bounded payloads that need the row's normal sync
 and conflict behavior. Large media belongs in object storage; sync a stable
 key, content type, byte size, and content hash, then cache downloaded bytes in
-a local-only table. The practical limits and oversized-request behavior are in
-the [sync reference](reference/sync.md#binary-payloads).
+a local-only table. The "Binary payloads" section in
+`docs/reference/sync.md` covers practical limits and oversized-request behavior.
 
 ## The cursor
 

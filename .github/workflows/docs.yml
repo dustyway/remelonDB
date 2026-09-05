@@ -27,6 +27,24 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Build codebase-guide EPUB
+        uses: docker://pandoc/core:3.10
+        with:
+          args: >-
+            docs/codebase-guide.md
+            -o remelondb-guide.epub
+            --toc --toc-depth=2 -N
+            --resource-path=docs
+            --css docs/codebase-guide.epub.css
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Validate codebase-guide EPUB
+        run: |
+          curl -fsSLO https://github.com/w3c/epubcheck/releases/download/v5.3.0/epubcheck-5.3.0.zip
+          unzip -q epubcheck-5.3.0.zip
+          java -jar epubcheck-5.3.0/epubcheck.jar remelondb-guide.epub
       - run: npx typedoc
       - uses: actions/upload-pages-artifact@v5
         with:
