@@ -61,6 +61,14 @@ table) belong in the same migration; the
 [store README](../../packages/store-drizzle/README.md) has the SQL and
 the [tutorial](../backend-tutorial.md) runs it.
 
+One sequence stamps every scope, so a cursor is a deployment-wide write
+counter. A client that compares the cursors it is issued over time can
+estimate how much the whole deployment writes — not what, by whom, or in
+which table, but the volume. Nothing else crosses: rows, ids and
+tombstones stay scoped. Where the volume is itself sensitive, stamp
+revisions from a per-scope counter in a `SyncStore` of your own; the
+engine only needs revisions to increase in commit order within a scope.
+
 Column names should match the Zod keys; then the store needs no mapping
 code, and any drift between Postgres and the shared schema fails loudly
 in the client's strict wire validation instead of corrupting silently.
