@@ -168,14 +168,14 @@ describe('Database core', () => {
       expect(queried).toBe(created);
     });
 
-    it('updates in place; created records stay created and untracked', async () => {
+    it('updates in place and tracks edits while records stay created', async () => {
       const created = await db.write(() =>
         db.get('tasks').create({ id: 't1', name: 'a', position: 1 }),
       );
       await db.write(() => db.get('tasks').update('t1', { name: 'b' }));
       expect(created['name']).toBe('b'); // same instance, updated in place
       expect(created._status).toBe('created');
-      expect(created._changed).toBe('');
+      expect(created._changed).toBe('name');
 
       const rows = await driver.query(
         'select "name", "_status" from tasks',
