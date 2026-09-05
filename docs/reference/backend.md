@@ -89,8 +89,8 @@ the store enforces this at construction.
 Tombstones accumulate until `store.gc(floor)`: prune everything dead at
 or below the floor, persist the floor (never lowered), and cursors below
 it degrade to `resyncRequired` — the client rebuilds from a full pull.
-The caller picks the floor; retention policy stays the app's (for "keep
-90 days", record the current max rev periodically and pass the one from
+The caller picks the floor — a non-negative safe integer — and retention
+policy stays the app's (for "keep 90 days", record the current max rev periodically and pass the one from
 90 days ago). Until the first `gc` call the floor is 0 and every cursor
 is served.
 
@@ -105,7 +105,9 @@ still syncs as an id.
 ([sync-wire.md](../sync-wire.md) §6) as a module: protocol outcomes are
 HTTP 200 with the variant in the body, 400 is a malformed request, 401
 an unauthenticated one. Auth stays the app's — `scopeFrom` maps a
-request to its scope (a session lookup, a JWT claim); null answers 401.
+request to its scope (a session lookup, a JWT claim); null, undefined or
+an empty scope answers 401, and the gate sits in the runtime, so
+injecting `REMELON_SYNC` without the controller keeps it.
 An invalid record is rejected **by id** while the rest of the push
 applies; the push envelope only checks shape and usable ids. Engine
 table config beyond validation goes through `tableOptions` (e.g.

@@ -1475,11 +1475,11 @@ The same seam discipline as the client: the engine is the thick, once-written br
 `Scope` is a **type parameter** on the engine — a user id, a tenant key, whatever partitions the data. The engine threads it through every operation; the store filters on it. `engine.as(scope)` binds a scope to a pair of handlers. The request-to-scope mapping lives in the transport:
 
 ```ts
-const scope = await this.sync.scopeFrom(request);
-if (scope == null) throw new UnauthorizedException(); // null/undefined → 401
+// scopeFrom applies the gate: null, undefined or an empty scope throws 401
+return this.sync.pull(await this.sync.scopeFrom(request), body);
 ```
 
-The division of labor is deliberate: **authentication stays the application's.** `scopeFrom(request)` returns the authenticated principal — a session user id, a tenant key extracted from a JWT — and `null` answers 401. remelonDB does not own your auth; it owns what happens _after_ auth, which is partitioning. Isolation is then enforced in the store by scope-filtered queries, plus a `foreignIds` method that reports ids which exist but belong to _another_ scope, so the engine can reject a client trying to write across the tenant boundary.
+The division of labor is deliberate: **authentication stays the application's.** `scopeFrom(request)` returns the authenticated principal — a session user id, a tenant key extracted from a JWT — and an absent or empty one answers 401. The gate lives in the runtime, not the controller, so an application that injects `REMELON_SYNC` without the bundled controller keeps it: `pull` and `push` re-check the scope they are handed. remelonDB does not own your auth; it owns what happens _after_ auth, which is partitioning. Isolation is then enforced in the store by scope-filtered queries, plus a `foreignIds` method that reports ids which exist but belong to _another_ scope, so the engine can reject a client trying to write across the tenant boundary.
 
 > **Background: multi-tenancy.** A _multi-tenant_ server holds many independent customers' data in one database and must guarantee that no query ever leaks one tenant's rows to another. The naive failure is an endpoint that filters by id but forgets to filter by tenant, so a guessed id returns someone else's row. remelonDB structures this so the scope is not optional: it is a type parameter the engine cannot forget to thread, a filter the store applies on every read, and a `foreignIds` check that turns a cross-tenant write into a rejection rather than a silent success. Isolation is built into the shape of the seam, not left to each query's discipline.
 
@@ -2534,7 +2534,7 @@ Row         = { id: string, …user columns }        // strict: no _status / _ch
 
 ## HTTP binding
 
-`POST /sync/pull` and `POST /sync/push`, both **HTTP 200** for every _protocol_ outcome — `conflict` and `resyncRequired` are 200 with the variant in the body. Status codes are reserved for _transport_ failures: **400** for a malformed envelope or a `SyncProtocolError` (e.g. an unusable id), **401** when `scopeFrom` returns null. The push envelope is validated _loosely_ at the transport (shape and usable ids); strict per-record value validation happens in the engine, which rejects a bad record _by id_ while the rest of the batch applies — so one typo never 400s forty good writes.
+`POST /sync/pull` and `POST /sync/push`, both **HTTP 200** for every _protocol_ outcome — `conflict` and `resyncRequired` are 200 with the variant in the body. Status codes are reserved for _transport_ failures: **400** for a malformed envelope or a `SyncProtocolError` (e.g. an unusable id), **401** when `scopeFrom` yields no usable scope. The push envelope is validated _loosely_ at the transport (shape and usable ids); strict per-record value validation happens in the engine, which rejects a bad record _by id_ while the rest of the batch applies — so one typo never 400s forty good writes.
 
 ## A concrete exchange
 
