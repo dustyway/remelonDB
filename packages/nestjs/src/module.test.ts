@@ -21,6 +21,10 @@ import { RemelonSyncModule, syncEngineFromOptions } from './module';
 // in-process must survive the transport unchanged.
 const Task = z.object({ name: z.string().min(1), done: z.boolean() });
 const Event = z.object({ note: z.string() });
+const Asset = z.object({
+  data: z.instanceof(Uint8Array).refine((value) => value.byteLength <= 3),
+  preview: z.instanceof(Uint8Array).nullable(),
+});
 
 const apps: INestApplication[] = [];
 afterAll(async () => {
@@ -32,7 +36,7 @@ const makeBase = async (): Promise<string> => {
     imports: [
       RemelonSyncModule.forRoot<string>({
         store: createMemoryStore(),
-        tables: { tasks: Task, events: Event },
+        tables: { tasks: Task, events: Event, assets: Asset },
         tableOptions: { events: { appendOnly: true } },
         scopeFrom: (request) =>
           (request as { headers: Record<string, string | undefined> }).headers[
@@ -136,6 +140,61 @@ describe('http binding', () => {
     expect((await call(base, '/sync/push', 'scope-a', unusable)).status).toBe(
       400,
     );
+  });
+
+  it('round-trips blobs as base64 around the native engine value', async () => {
+    const base = await makeBase();
+    const startResponse = await call(base, '/sync/pull', 'scope-a', pullArgs);
+    const start = z
+      .looseObject({ cursor: z.string() })
+      .parse(await startResponse.json());
+    const pushResponse = await call(base, '/sync/push', 'scope-a', {
+      cursor: start.cursor,
+      changes: {
+        assets: {
+          created: [{ id: 'a1', data: 'AH//', preview: null }],
+          updated: [],
+          deleted: [],
+        },
+      },
+    });
+
+    expect(pushResponse.status).toBe(200);
+    expect(await pushResponse.json()).not.toHaveProperty('rejected');
+    const pullResponse = await call(base, '/sync/pull', 'scope-a', pullArgs);
+    expect(await pullResponse.json()).toMatchObject({
+      changes: {
+        assets: {
+          updated: [{ id: 'a1', data: 'AH//', preview: null }],
+        },
+      },
+    });
+  });
+
+  it('rejects malformed and oversized blobs by record id', async () => {
+    const base = await makeBase();
+    const startResponse = await call(base, '/sync/pull', 'scope-a', pullArgs);
+    const start = z
+      .looseObject({ cursor: z.string() })
+      .parse(await startResponse.json());
+    const response = await call(base, '/sync/push', 'scope-a', {
+      cursor: start.cursor,
+      changes: {
+        assets: {
+          created: [
+            { id: 'bad-base64', data: 'not base64', preview: null },
+            { id: 'too-large', data: 'AQIDBA==', preview: null },
+          ],
+          updated: [],
+          deleted: [],
+        },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      rejected: { assets: ['bad-base64', 'too-large'] },
+    });
   });
 });
 

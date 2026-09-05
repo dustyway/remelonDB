@@ -19,6 +19,14 @@ const Task = z.object({
   note: z.string().nullable(),
 });
 
+const Asset = z.object({
+  data: z.instanceof(Uint8Array),
+  preview: z.instanceof(Uint8Array).nullable(),
+  capped: z
+    .instanceof(Uint8Array)
+    .refine((value) => value.byteLength <= 2, 'blob exceeds 2 bytes'),
+});
+
 type Equal<A, B> =
   // The two single-use type parameters are the identity trick itself: the
   // conditional types have to be deferred to compare A and B exactly.
@@ -72,6 +80,23 @@ describe('zodTable', () => {
     // eslint-disable-next-line @typescript-eslint/no-deprecated
     const derived = zodTable('users', z.object({ mail: z.string().email() }));
     expect(derived.columns['mail']).toMatchObject({ type: 'string' });
+  });
+
+  it('maps Uint8Array schemas to blob columns', () => {
+    const derived = zodTable('assets', Asset);
+    const manual = table('assets', {
+      data: c.blob(),
+      preview: c.blob().optional(),
+      capped: c.blob(),
+    });
+    type Derived = InferRecord<typeof derived>;
+
+    expect(derived).toEqual(manual);
+    assertType<Equal<Derived['data'], Uint8Array>>();
+    assertType<Equal<Derived['preview'], Uint8Array | null>>();
+    expect(() => zodTable('assets', Asset, { indexed: ['data'] })).toThrow(
+      /cannot index blob/,
+    );
   });
 
   it('rejects the unsupported, loudly and by name', () => {
@@ -178,5 +203,44 @@ describe('syncSchemas', () => {
     expect(
       () => uuidWire.rows['tasks']!.parse(row), // 'r1' is not a uuid
     ).toThrow();
+  });
+
+  it('decodes and encodes blob fields while preserving refinements', () => {
+    const assetWire = syncSchemas({ assets: Asset }).rows['assets']!;
+    const decoded = assetWire.parse({
+      id: 'a1',
+      data: 'AH//',
+      preview: null,
+      capped: 'AQI=',
+    });
+
+    expect(decoded).toEqual({
+      id: 'a1',
+      data: new Uint8Array([0, 127, 255]),
+      preview: null,
+      capped: new Uint8Array([1, 2]),
+    });
+    expect(assetWire.encode(decoded)).toEqual({
+      id: 'a1',
+      data: 'AH//',
+      preview: null,
+      capped: 'AQI=',
+    });
+    expect(() =>
+      assetWire.parse({
+        id: 'a1',
+        data: 'not base64',
+        preview: null,
+        capped: 'AQI=',
+      }),
+    ).toThrow();
+    expect(() =>
+      assetWire.parse({
+        id: 'a1',
+        data: 'AH//',
+        preview: null,
+        capped: 'AQID',
+      }),
+    ).toThrow('blob exceeds 2 bytes');
   });
 });

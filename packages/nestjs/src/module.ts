@@ -20,11 +20,7 @@ import {
 } from '@nestjs/common';
 import type { DynamicModule, FactoryProvider } from '@nestjs/common';
 import { z } from 'zod';
-import type {
-  SyncPullResult,
-  SyncPushArgs,
-  SyncPushResult,
-} from '@remelondb/core';
+import type { DirtyRaw, SyncPullResult, SyncPushResult } from '@remelondb/core';
 import { syncSchemas } from '@remelondb/core/zod';
 import { createSyncEngine, SyncProtocolError } from '@remelondb/server';
 import type {
@@ -101,8 +97,8 @@ export function syncEngineFromOptions<Scope>(
         name,
         {
           ...options.tableOptions?.[name],
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- `name` iterates the keys of `options.tables`, and `wire.rows` is keyed by those same tables.
-          validate: (row: unknown) => wire.rows[name]!.safeParse(row).success,
+          validate: (row: unknown) =>
+            wire.localRows[name]?.safeParse(row).success === true,
         },
       ]),
     ),
@@ -139,23 +135,39 @@ const prepare = <Scope>(options: RemelonSyncOptions<Scope>): SyncRuntime => {
   });
   return {
     scopeFrom: (request) => options.scopeFrom(request),
-    pull: (scope, body) => {
+    pull: async (scope, body) => {
       const parsed = wire.pullArgs.safeParse(body);
       if (!parsed.success)
         throw new BadRequestException('malformed pull request');
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- SyncRuntime is deliberately non-generic; the scope reaching it came from this closure's own `scopeFrom`.
-      return engine.as(scope as Scope).pull(parsed.data);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- SyncRuntime erases Scope; this value came from this closure's scopeFrom.
+      const scoped = engine.as(scope as Scope);
+      return wire.pullResult.encode(await scoped.pull(parsed.data));
     },
     push: async (scope, body) => {
       const parsed = pushEnvelope.safeParse(body);
       if (!parsed.success)
         throw new BadRequestException('malformed push request');
       try {
-        return await engine
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- as above: SyncRuntime erases Scope, the value came from this closure's own `scopeFrom`.
-          .as(scope as Scope)
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the envelope validates shape and ids only, on purpose (see above); the engine re-checks every row's values per table.
-          .push(parsed.data as SyncPushArgs);
+        const changes: Record<
+          string,
+          { created: DirtyRaw[]; updated: DirtyRaw[]; deleted: string[] }
+        > = {};
+        for (const [table, change] of Object.entries(parsed.data.changes)) {
+          if (!change) continue;
+          const decode = (row: DirtyRaw): DirtyRaw => {
+            const result = wire.rows[table]?.safeParse(row);
+            return result?.success ? result.data : row;
+          };
+          changes[table] = {
+            created: change.created.map(decode),
+            updated: change.updated.map(decode),
+            deleted: change.deleted,
+          };
+        }
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- as above: SyncRuntime erases Scope, the value came from this closure's scopeFrom.
+        const scoped = engine.as(scope as Scope);
+        const result = await scoped.push({ ...parsed.data, changes });
+        return wire.pushResult.encode(result);
       } catch (error) {
         if (error instanceof SyncProtocolError) {
           throw new BadRequestException(error.message);

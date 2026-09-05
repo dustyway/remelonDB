@@ -16,10 +16,14 @@
  */
 import {
   column,
+  decodeBase64,
+  encodeBase64,
   table,
+  type BlobColumnDef,
   type ColumnDef,
   type ColumnsSpec,
   type SyncChanges,
+  type SyncPullResult,
   type SyncPushResult,
   type TableSchema,
 } from '../index';
@@ -33,23 +37,45 @@ type ColumnForInner<T> = T extends z.ZodString
     ? 'number'
     : T extends z.ZodBoolean
       ? 'boolean'
-      : never;
+      : T extends z.ZodType<infer Output>
+        ? Output extends Uint8Array
+          ? 'blob'
+          : never
+        : never;
+
+type DefFor<
+  T extends 'string' | 'number' | 'boolean' | 'blob',
+  Optional extends boolean,
+> = T extends 'blob'
+  ? BlobColumnDef<Optional>
+  : T extends 'string' | 'number' | 'boolean'
+    ? ColumnDef<T, Optional>
+    : never;
 
 type ColumnFor<T> =
   T extends z.ZodNullable<infer Inner>
     ? ColumnForInner<Inner> extends never
       ? never
-      : ColumnDef<ColumnForInner<Inner>, true>
+      : DefFor<ColumnForInner<Inner>, true>
     : ColumnForInner<T> extends never
       ? never
-      : ColumnDef<ColumnForInner<T>, false>;
+      : DefFor<ColumnForInner<T>, false>;
 
 /** @category Adapter */
 export type ColumnsFor<Shape extends z.ZodRawShape> = {
   [K in keyof Shape & string]: ColumnFor<Shape[K]>;
 };
 
-const columnFor = (key: string, field: z.ZodType): ColumnDef => {
+const isBlobSchema = (schema: z.ZodType): boolean =>
+  schema.safeParse(new Uint8Array()).success &&
+  !schema.safeParse('').success &&
+  !schema.safeParse(0).success &&
+  !schema.safeParse(false).success;
+
+const columnFor = (
+  key: string,
+  field: z.ZodType,
+): ColumnDef | BlobColumnDef => {
   let inner = field;
   let nullable = false;
   if (inner instanceof z.ZodNullable) {
@@ -69,10 +95,12 @@ const columnFor = (key: string, field: z.ZodType): ColumnDef => {
         ? column.number()
         : inner instanceof z.ZodBoolean
           ? column.boolean()
-          : null;
+          : isBlobSchema(inner)
+            ? column.blob()
+            : null;
   if (base === null) {
     throw new Error(
-      `zodTable: column '${key}' is ${inner.constructor.name} — supported: z.string(), z.number(), z.boolean(), optionally .nullable()`,
+      `zodTable: column '${key}' is ${inner.constructor.name} — supported: z.string(), z.number(), z.boolean(), z.instanceof(Uint8Array), optionally .nullable()`,
     );
   }
   return nullable ? base.optional() : base;
@@ -111,11 +139,14 @@ export function zodTable<Shape extends z.ZodRawShape>(
       );
     }
   }
-  const spec: Record<string, ColumnDef> = {};
+  const spec: Record<string, ColumnDef | BlobColumnDef> = {};
   for (const [key, field] of Object.entries(schema.shape)) {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- a ZodRawShape's values are ZodTypes; Object.entries loses that.
     const def = columnFor(key, field as z.ZodType);
-    spec[key] = indexed.has(key) ? def.indexed() : def;
+    if (indexed.has(key) && !('indexed' in def)) {
+      throw new Error(`zodTable: cannot index blob column '${key}'`);
+    }
+    spec[key] = indexed.has(key) && 'indexed' in def ? def.indexed() : def;
   }
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- ColumnsFor<Shape> re-states, at the type level, the mapping the loop above just performed.
   return table(name, spec as ColumnsSpec) as TableSchema<ColumnsFor<Shape>>;
@@ -157,7 +188,47 @@ export function syncSchemas<
   const id = options.id ?? z.string().min(1);
   const cursor = z.string().min(1);
 
+  const wireField = (field: z.ZodType): z.ZodType => {
+    if (field instanceof z.ZodNullable) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the instanceof check proves unwrap returns a ZodType.
+      return wireField(field.unwrap() as z.ZodType).nullable();
+    }
+    if (!isBlobSchema(field)) return field;
+    const base64 = z.string().refine((value) => {
+      try {
+        decodeBase64(value);
+        return true;
+      } catch {
+        return false;
+      }
+    }, 'Invalid base64 blob value');
+    return z.codec(base64, field, {
+      decode: decodeBase64,
+      encode: (value) => {
+        if (!(value instanceof Uint8Array)) {
+          throw new Error('Expected Uint8Array blob value');
+        }
+        return encodeBase64(value);
+      },
+    });
+  };
+
   const rows = Object.fromEntries(
+    Object.entries(tables).map(([name, schema]) => [
+      name,
+      z.strictObject({
+        ...Object.fromEntries(
+          Object.entries(schema.shape).map(([key, field]) => [
+            key,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- ZodRawShape values are ZodTypes; Object.entries erases that.
+            wireField(field as z.ZodType),
+          ]),
+        ),
+        id,
+      }),
+    ]),
+  );
+  const localRows = Object.fromEntries(
     Object.entries(tables).map(([name, schema]) => [
       name,
       z.strictObject({ ...schema.shape, id }),
@@ -195,10 +266,13 @@ export function syncSchemas<
     schemaVersion: z.number().int().positive(),
     migration: migration.nullable(),
   });
+  // The codecs change representation, not the protocol shape: both input
+  // and output remain SyncPullResult because row values are intentionally unknown.
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
   const pullResult = z.union([
     z.strictObject({ changes, cursor }),
     z.strictObject({ resyncRequired: z.literal(true) }),
-  ]);
+  ]) as unknown as z.ZodType<SyncPullResult, SyncPullResult>;
   const pushArgs = z.strictObject({ changes, cursor });
   // Same story as `changes` for `rejected`: `.optional()` infers
   // `| undefined`, which JSON input can never produce, so the core
@@ -215,7 +289,15 @@ export function syncSchemas<
         message: 'cursor and changes are a package: both or neither',
       }),
     z.strictObject({ conflict: z.literal(true) }),
-  ]) as unknown as z.ZodType<SyncPushResult>;
+  ]) as unknown as z.ZodType<SyncPushResult, SyncPushResult>;
 
-  return { rows, changes, pullArgs, pullResult, pushArgs, pushResult };
+  return {
+    rows,
+    localRows,
+    changes,
+    pullArgs,
+    pullResult,
+    pushArgs,
+    pushResult,
+  };
 }
