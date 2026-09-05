@@ -257,7 +257,11 @@ export class Collection<M = RawRecord, C extends string = string> {
    * one atomic transaction.
    */
   prepareMarkAsDeleted(record: RawRecord): BatchOperation {
-    return { type: 'markAsDeleted', table: this.table, raw: record };
+    // Sync never pushes a local-only table, so nothing would ever reap
+    // its tombstones — delete for real instead.
+    return this.schema.localOnly
+      ? this.prepareDestroyPermanently(record)
+      : { type: 'markAsDeleted', table: this.table, raw: record };
   }
 
   /** Build a permanent-delete operation without committing it (for Database.batch). */

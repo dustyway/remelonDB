@@ -119,6 +119,8 @@ export interface TableSchema<Cols extends ColumnsSpec = ColumnsSpec> {
   readonly name: string;
   readonly columns: { readonly [name: string]: ColumnSchema };
   readonly columnArray: readonly ColumnSchema[];
+  /** The sync layer never pushes, pulls or replaces this table's rows. */
+  readonly localOnly: boolean;
   /** Type-only inference carrier; always undefined at runtime. */
   readonly $cols?: Cols;
 }
@@ -215,6 +217,7 @@ export function validateColumnSchema(column: ColumnSchema): ColumnSchema {
 export function buildTableSchema(
   name: string,
   columnArray: readonly ColumnSchema[],
+  localOnly = false,
 ): TableSchema {
   ensureName(name, 'table');
   if (name === 'local_storage' || name.startsWith('sqlite_')) {
@@ -230,7 +233,12 @@ export function buildTableSchema(
     }
     columns[column.name] = column;
   }
-  return deepFreeze({ name, columns, columnArray: [...columnArray] });
+  return deepFreeze({
+    name,
+    columns,
+    columnArray: [...columnArray],
+    localOnly,
+  });
 }
 
 /** @internal Convert a builders map to plain ColumnSchema data. */
@@ -241,6 +249,19 @@ export function columnsFromSpec(spec: ColumnsSpec): ColumnSchema[] {
     isOptional: def.isOptional,
     isIndexed: def.isIndexed,
   }));
+}
+
+/**
+ * Options a `table()` definition takes.
+ * @category Schema
+ */
+export interface TableOptions {
+  /**
+   * Keep this table out of sync entirely: its rows never enter a push,
+   * never count as unsynced work, and a replacement pull leaves them
+   * alone. A server response naming the table is rejected.
+   */
+  readonly localOnly?: boolean;
 }
 
 /**
@@ -261,9 +282,14 @@ export function columnsFromSpec(spec: ColumnsSpec): ColumnSchema[] {
 export function table<const Cols extends ColumnsSpec>(
   name: string,
   cols: Cols,
+  options: TableOptions = {},
 ): TableSchema<Cols> {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- `buildTableSchema` erases the spec; TableSchema<Cols> re-states the columns this call was given.
-  return buildTableSchema(name, columnsFromSpec(cols)) as TableSchema<Cols>;
+  return buildTableSchema(
+    name,
+    columnsFromSpec(cols),
+    options.localOnly ?? false,
+  ) as TableSchema<Cols>;
 }
 
 /**

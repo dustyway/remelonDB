@@ -98,6 +98,13 @@ describe('schema construction', () => {
       ]),
     ).toEqual([`alter table "tasks" add "attachment" BLOB default X''`]);
   });
+
+  it('tables are syncing unless localOnly is set', () => {
+    expect(tasksTable.localOnly).toBe(false);
+    expect(
+      table('cache', { key: c.string() }, { localOnly: true }).localOnly,
+    ).toBe(true);
+  });
 });
 
 describe('migrations', () => {

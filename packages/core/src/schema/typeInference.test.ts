@@ -37,7 +37,21 @@ type Equal<A, B> =
 const assertType = <_T extends true>(): void => undefined;
 /* eslint-enable @typescript-eslint/no-unnecessary-type-parameters, @typescript-eslint/no-unused-vars */
 
+const cache = table(
+  'media_cache',
+  { file_id: c.string().indexed(), bytes: c.blob() },
+  { localOnly: true },
+);
+type CacheRecord = InferRecord<typeof cache>;
+
 describe('schema-inferred types', () => {
+  it('infers a local-only table exactly as any other', () => {
+    assertType<Equal<CacheRecord['file_id'], string>>();
+    assertType<Equal<CacheRecord['bytes'], Uint8Array>>();
+    assertType<Equal<CacheRecord['id'], string>>();
+    expect(cache.localOnly).toBe(true);
+  });
+
   it('infers exact field types from the table definition', () => {
     assertType<Equal<TaskRecord['name'], string>>();
     assertType<Equal<TaskRecord['position'], number>>();

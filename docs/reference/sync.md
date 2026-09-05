@@ -110,7 +110,8 @@ back on the next pull (and are absorbed).
    clobbering local values with defaults, and local-state lookups are
    chunked, so arbitrarily large pulls don't hit SQLite parameter limits.
 2. **Push** (if configured and there are local changes): snapshot dirty
-   records → `pushChanges` → mark records synced, destroy pushed
+   records (tables declared `{ localOnly: true }` are skipped, so their
+   rows never leave the device) → `pushChanges` → mark records synced, destroy pushed
    tombstones, adopt the push cursor and apply interleaved changes.
 3. **Conflict loop**: a `{ conflict: true }` push response loops back to
    step 1 (the pull merges the server's version), bounded by
