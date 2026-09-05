@@ -11,6 +11,7 @@ import {
   column as c,
   Database,
   ModelFor,
+  type RawRecord,
   sanitizedRaw,
   table,
 } from '@remelondb/core';
@@ -167,5 +168,24 @@ describe('applyExternalChanges', () => {
       .then(() => log.push('applied'));
     await Promise.all([read, apply]);
     expect(log).toEqual(['read start', 'read end', 'applied']);
+  });
+  it('sanitizes a broadcast raw before it becomes the cached instance', async () => {
+    // A context on an older schema broadcasts a raw missing a column and
+    // carrying one the schema does not know.
+    const untrusted = {
+      id: 'n1',
+      _status: 'synced',
+      _changed: '',
+      stray: 'ignored',
+    } as unknown as RawRecord;
+    await writeToStorageDirectly(driver, { id: 'n1', text: 'hello' });
+    await db.applyExternalChanges({
+      notes: [{ record: untrusted, type: 'created' }],
+    });
+
+    const [note] = await db.get(Note).query().fetch();
+    expect(note?._raw.text).toBe('');
+    expect(note?._raw['stray']).toBeUndefined();
+    expect(note?._raw).not.toBe(untrusted);
   });
 });

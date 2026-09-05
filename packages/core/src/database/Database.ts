@@ -39,7 +39,7 @@ import type {
   TypedModel,
   TypedModelClass,
 } from '../model/Model';
-import type { RawRecord } from '../rawRecord/index';
+import { sanitizedRaw, type RawRecord } from '../rawRecord/index';
 
 export interface DatabaseOptions {
   readonly driver: SqliteDriver;
@@ -510,11 +510,15 @@ export class Database {
           switch (change.type) {
             case 'created':
             case 'updated': {
+              // The broadcast crosses a trust boundary — another context may
+              // run an older schema — so it is sanitized before it can reach
+              // the identity map or overwrite a cached instance.
+              const sanitized = sanitizedRaw(raw, collection.schema);
               const cached = collection.cache.get(raw.id);
-              if (cached && cached !== raw) {
-                Object.assign(cached, raw);
-              } else if (!cached) {
-                collection.cache.add(raw);
+              if (cached) {
+                Object.assign(cached, sanitized);
+              } else {
+                collection.cache.add(sanitized);
               }
               applied.push({
                 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- the branches above leave this id in the cache: cached stays, uncached is added.
