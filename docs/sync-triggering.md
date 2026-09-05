@@ -75,17 +75,17 @@ const controller = createSyncController({
   runSync: createRunSync({ database: db, pullChanges, pushChanges }),
   triggers: (fire) => {
     const onVisible = () => {
-      if (document.visibilityState === 'visible') fire()
-    }
-    addEventListener('visibilitychange', onVisible)
-    addEventListener('online', fire)
+      if (document.visibilityState === 'visible') fire();
+    };
+    addEventListener('visibilitychange', onVisible);
+    addEventListener('online', fire);
     return () => {
-      removeEventListener('visibilitychange', onVisible)
-      removeEventListener('online', fire)
-    }
+      removeEventListener('visibilitychange', onVisible);
+      removeEventListener('online', fire);
+    };
   },
-})
-controller.start()
+});
+controller.start();
 ```
 
 Runs are single flight and concurrent `synchronize` calls for the same
@@ -121,9 +121,9 @@ unchanged.
 The server knows a commit happened when a push returns without a conflict:
 
 ```ts
-const result = await handlers.push(wire.pushArgs.parse(body))
-if (!('conflict' in result)) notifyScope(scope)
-return respond(200, result)
+const result = await handlers.push(wire.pushArgs.parse(body));
+if (!('conflict' in result)) notifyScope(scope);
+return respond(200, result);
 ```
 
 Fan-out is in-process. With several server processes behind a load

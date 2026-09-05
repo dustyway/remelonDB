@@ -14,9 +14,9 @@ hand-declared model fields — nothing checks that the two agree:
 ```ts
 // with a hand-duplicated schema
 class Task extends Model {
-  static override readonly table = 'tasks'
-  declare name: string      // hand-written duplicate of the schema
-  declare position: number  // typo here = silent undefined at runtime
+  static override readonly table = 'tasks';
+  declare name: string; // hand-written duplicate of the schema
+  declare position: number; // typo here = silent undefined at runtime
 }
 ```
 
@@ -65,16 +65,16 @@ system stands on:
 ### 1. Column builders, object-map syntax
 
 ```ts
-import { column as c, table } from '@remelondb/core'
+import { column as c, table } from '@remelondb/core';
 
 export const tasks = table('tasks', {
   name: c.string(),
   position: c.number().indexed(),
   is_done: c.boolean(),
   project_id: c.string().optional(),
-})
+});
 
-export const schema = appSchema({ version: 1, tables: [tasks] })
+export const schema = appSchema({ version: 1, tables: [tasks] });
 ```
 
 Builders are tiny: three constructors (`string`, `number`, `boolean`)
@@ -87,7 +87,7 @@ way to write a schema — there is no alternative syntax to keep in sync.
 ### 2. Record types are inferred
 
 ```ts
-type TaskRecord = InferRecord<typeof tasks>
+type TaskRecord = InferRecord<typeof tasks>;
 // {
 //   readonly id: string
 //   name: string
@@ -105,13 +105,13 @@ that needs them works with `RawRecord`).
 ### 3. Tables are values; collections are typed by them
 
 ```ts
-const collection = db.get(tasks)  // typed records, checked Q columns
+const collection = db.get(tasks); // typed records, checked Q columns
 ```
 
 `db.get` takes the table object (or a model class: `db.get(Task)`), so
 the unchecked cast from failure mode 3 is never necessary. Two honest
 limits: the string overload exists for dynamic and internal access, so
-that cast remains *expressible*; and `Database` is not generic
+that cast remains _expressible_; and `Database` is not generic
 over its schema, so a table object outside this database's schema fails
 at runtime (with a clear error), not at compile time. Both close with
 the schema-generic `Database` under open questions. Bound vs unbound

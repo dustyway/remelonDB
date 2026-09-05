@@ -41,14 +41,14 @@ Adding that import without rebuilding fails at `Database.open` with
 ## Usage
 
 ```ts
-import { Database } from '@remelondb/core'
-import { RnSqliteDriver } from '@remelondb/driver-rn'
+import { Database } from '@remelondb/core';
+import { RnSqliteDriver } from '@remelondb/driver-rn';
 
 const db = await Database.open({
   driver: new RnSqliteDriver(),
   schema,
-  name: 'app.db',   // or ':memory:'
-})
+  name: 'app.db', // or ':memory:'
+});
 ```
 
 Apps should wrap the open in `createDatabaseManager` (core) and drive

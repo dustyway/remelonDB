@@ -191,7 +191,7 @@ in Postgres instead — as a compose pair:
 services:
   todo-sync:
     image: todo-sync
-    ports: ["8787:8787"]
+    ports: ['8787:8787']
     environment:
       DATABASE_URL: postgres://postgres:${DB_PASSWORD}@todo-db:5432/postgres
     depends_on: [todo-db]

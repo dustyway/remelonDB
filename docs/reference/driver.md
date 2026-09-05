@@ -23,7 +23,7 @@ interface SqliteDriver {
 
 The web driver must live in a Worker: OPFS `FileSystemSyncAccessHandle` —
 the only fast persistent file API SQLite-WASM can build on — is exposed
-*only* in dedicated workers, and the main thread can reach a worker only
+_only_ in dedicated workers, and the main thread can reach a worker only
 asynchronously (`postMessage`; `Atomics.wait` is forbidden on the main
 thread). A seam that assumed synchronous results would make web a
 second-class platform permanently.
@@ -34,7 +34,7 @@ Consequences for implementers and for core:
   C++ drivers do). Core must never depend on same-tick
   resolution for correctness.
 - If profiling ever shows microtask latency hurting native hot paths, a
-  synchronous fast path can be added as an optional driver *capability* —
+  synchronous fast path can be added as an optional driver _capability_ —
   an optimization, never a semantic requirement.
 
 ## Method obligations
@@ -65,7 +65,7 @@ successful setup or migration.
 
 **`close()`** — release the handle; subsequent calls must fail loudly.
 
-**`destroy()`** — delete the database *and its sidecar files* (`-wal`,
+**`destroy()`** — delete the database _and its sidecar files_ (`-wal`,
 `-shm`). Used by database reset; must leave nothing that would resurrect
 state on the next `open`.
 
@@ -126,7 +126,7 @@ implements both members or neither.
      name: 'my driver',
      createDriver: () => new MyDriver(),
      persistence: { databaseName: () => uniqueName() }, // or false
-   })
+   });
    ```
 
 The suite is the real contract: driver method obligations (lifecycle,
@@ -137,12 +137,12 @@ drivers run it verbatim.
 
 ## Existing drivers
 
-| Driver | Package | Notes |
-| --- | --- | --- |
-| Node | `@remelondb/driver-node` | better-sqlite3; synchronous underneath; WAL for file DBs; `:memory:` supported. Powers all tests. |
-| React Native | `@remelondb/driver-rn` | Thin adapter over `expo-sqlite`; the default, and runs in Expo Go with no native build of its own. |
-| React Native (no expo) | `@remelondb/driver-rn-cpp` | Pure C++ TurboModule, bundled sqlite3 amalgamation, prefab JSI linkage. Requires a development build; see its README for when to choose it. |
-| Web | `@remelondb/driver-web` | SQLite-WASM + OPFS SAH pool in a dedicated Worker. Full contract verified against real sqlite-wasm in-process, and OPFS suites run in CI on real Chromium, Firefox, and WebKit. |
+| Driver                 | Package                    | Notes                                                                                                                                                                           |
+| ---------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Node                   | `@remelondb/driver-node`   | better-sqlite3; synchronous underneath; WAL for file DBs; `:memory:` supported. Powers all tests.                                                                               |
+| React Native           | `@remelondb/driver-rn`     | Thin adapter over `expo-sqlite`; the default, and runs in Expo Go with no native build of its own.                                                                              |
+| React Native (no expo) | `@remelondb/driver-rn-cpp` | Pure C++ TurboModule, bundled sqlite3 amalgamation, prefab JSI linkage. Requires a development build; see its README for when to choose it.                                     |
+| Web                    | `@remelondb/driver-web`    | SQLite-WASM + OPFS SAH pool in a dedicated Worker. Full contract verified against real sqlite-wasm in-process, and OPFS suites run in CI on real Chromium, Firefox, and WebKit. |
 
 ## Runtime coverage
 

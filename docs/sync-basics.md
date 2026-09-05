@@ -27,12 +27,12 @@ The default resolution is per column:
 
 - Devices edited **different columns** → both edits survive. The
   merged record has each device's column.
-- Devices edited the **same column** → the device that *pushes later*
+- Devices edited the **same column** → the device that _pushes later_
   wins that column.
 - **Deletions**: a remote delete beats local edits (the record goes);
   a local delete beats remote edits (the tombstone is pushed next).
 
-Note what is absent: wall-clock time. When each edit was *made* plays
+Note what is absent: wall-clock time. When each edit was _made_ plays
 no role — only the order in which devices reach the server. Device
 clocks can be wrong, skewed, or lying, so the protocol never consults
 them.
@@ -72,14 +72,14 @@ What happens on Friday: A cannot just push — its cursor is from
 Monday, and the server rejects pushes based on stale history
 (`conflict: true`; what that exchange looks like on the wire is
 [sync-tour.md §5](sync-tour.md#5-push-with-a-stale-cursor)). A must
-pull first, so A *sees* B's "Buy oat milk"
+pull first, so A _sees_ B's "Buy oat milk"
 before anything is overwritten. A then merges: the name column is
 locally changed on A, so A's value goes on top. A pushes, and both
-devices converge on **"Buy milk"** — the edit that was made *first*
-wins, because it was pushed *last*.
+devices converge on **"Buy milk"** — the edit that was made _first_
+wins, because it was pushed _last_.
 
 Two guarantees hold even in this awkward case: nothing was lost
-*silently* (A was forced to download B's version before overwriting
+_silently_ (A was forced to download B's version before overwriting
 it), and both devices end up identical. Whether "Buy milk" is the
 answer your app wants is a policy question, and the default policy is
 simply: last pusher wins, per column.
@@ -100,22 +100,22 @@ top); return it unchanged to keep the default. Two useful policies:
 
 **Newest edit wins, by app-recorded time.** Give the table an
 `edited_at` column that your app sets on every user edit. Clocks are
-back in play, but now it is *your* choice for *this* table, and only
+back in play, but now it is _your_ choice for _this_ table, and only
 relative order between two edits of one record matters:
 
 ```ts
 conflictResolver: (table, local, remote, resolved) => {
-  if (table !== 'tasks') return resolved
+  if (table !== 'tasks') return resolved;
   if ((remote['edited_at'] as number) > (local['edited_at'] as number)) {
     // remote edit is newer — discard the stale local edit entirely
-    return { ...resolved, ...remote, _status: 'synced', _changed: '' }
+    return { ...resolved, ...remote, _status: 'synced', _changed: '' };
   }
-  return resolved
-}
+  return resolved;
+};
 ```
 
 Returning the remote values with `_status: 'synced'` and an empty
-`_changed` is what *drops* the local edit: the record is written as
+`_changed` is what _drops_ the local edit: the record is written as
 clean, so the push that follows sends nothing for it. Without that,
 the record stays dirty and the local values still push.
 
@@ -148,12 +148,12 @@ A sync run ends in one of four caller-visible ways, and a status
 indicator that collapses them into "synced or failed" will lie to the
 user in exactly one case:
 
-| Outcome | What happened | What to show |
-| --- | --- | --- |
-| Thrown error | The run did not complete: a transport failure (the offline case), exhausted conflict retries, an abort signal, a response failing validation or a protocol invariant, or a local database failure | classify the error: "offline" only for transport failures, a real failure state for the rest |
-| Lease denied (`lease: 'unavailable'`) | Another context (tab, process) holds the sync lease; nothing ran here | keep the prior state, another context is syncing |
-| Result with `rejected > 0` | The push **completed** but the server refused specific records | attention required |
-| Clean result | Everything pushed and pulled | synced |
+| Outcome                               | What happened                                                                                                                                                                                     | What to show                                                                                 |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Thrown error                          | The run did not complete: a transport failure (the offline case), exhausted conflict retries, an abort signal, a response failing validation or a protocol invariant, or a local database failure | classify the error: "offline" only for transport failures, a real failure state for the rest |
+| Lease denied (`lease: 'unavailable'`) | Another context (tab, process) holds the sync lease; nothing ran here                                                                                                                             | keep the prior state, another context is syncing                                             |
+| Result with `rejected > 0`            | The push **completed** but the server refused specific records                                                                                                                                    | attention required                                                                           |
+| Clean result                          | Everything pushed and pulled                                                                                                                                                                      | synced                                                                                       |
 
 Conflicts are deliberately absent from this table: a push conflict is
 an internal transition, not an outcome. Resolved within the retry
@@ -161,27 +161,27 @@ bound (`conflictRetries`, default 5) it ends as one of the two
 completion rows; beyond the bound it surfaces as a thrown error.
 
 The rejection row is the one applications get wrong. A push response
-naming rejections is a *successful* sync at the protocol level, so a
+naming rejections is a _successful_ sync at the protocol level, so a
 controller that maps every non-throwing run to "synced" reports a
 clean sync while a record silently fails to leave the device. The
 result carries what honesty needs:
 
 ```ts
-const result = await synchronize(options)
+const result = await synchronize(options);
 
 if (result.lease === 'unavailable') {
   // nothing ran here: another tab or process holds the sync lease;
   // labeling this "synced" would launder a run that never happened
-  return { status: 'deferred' }
+  return { status: 'deferred' };
 }
 if (result.rejected > 0) {
   return {
     status: 'attention-required',
-    rejected: result.rejected,               // how many
+    rejected: result.rejected, // how many
     rejectedRecords: result.rejectedRecords, // which ones, per table
-  }
+  };
 }
-return { status: 'synced' }
+return { status: 'synced' };
 ```
 
 With `createSyncController` the same branch lives in the subscriber:
@@ -197,9 +197,9 @@ If your setup ever syncs pull-only, gate the label on
 alone.
 
 Rejected records stay dirty and are retried on every later push. That
-design is correct for *transient* refusals: a row that fails
+design is correct for _transient_ refusals: a row that fails
 validation until a related record arrives will eventually go through.
-A *deterministic* refusal (a unique-constraint duplicate, a
+A _deterministic_ refusal (a unique-constraint duplicate, a
 permanently invalid value) retries forever and will never resolve
 itself; the retry loop is not the fix, the user is. Two consequences:
 

@@ -7,16 +7,16 @@ storage seam — the server-side repetition of the client's core move
 (see [reference/backend.md](../../docs/reference/backend.md)).
 
 ```ts
-import { createMemoryStore, createSyncEngine } from '@remelondb/server'
+import { createMemoryStore, createSyncEngine } from '@remelondb/server';
 
 const engine = createSyncEngine({
   store: createMemoryStore(), // or your adapter
   tables: {
     tasks: { validate: (row) => row.name !== '' },
   },
-})
+});
 
-const handlers = engine.as(userId) // { pull(args), push(args) }
+const handlers = engine.as(userId); // { pull(args), push(args) }
 // wire them to routes: every protocol outcome is a returned value,
 // so a route handler is res.json(await handlers.push(req.body))
 ```

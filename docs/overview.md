@@ -3,8 +3,8 @@
 Orientation for people working on the library. It covers the shape of the
 system, where each concern lives, and what happens end to end on a write, a
 read, and a sync. It states structure and points elsewhere for detail: the
-design decisions explain *why* each boundary is where it is, the reference
-guides explain *what* each layer does, and the conformance suites are the
+design decisions explain _why_ each boundary is where it is, the reference
+guides explain _what_ each layer does, and the conformance suites are the
 contract when prose and tests disagree.
 
 Using remelonDB requires none of this. Start at [tutorial.md](tutorial.md)
@@ -58,18 +58,18 @@ part which is easy to get wrong is written once.
 
 ## Where each concern lives
 
-| Concern | Code | Reference |
-| --- | --- | --- |
-| Table and column definitions, migrations | `core/src/schema/` | [reference/schema.md](reference/schema.md) |
-| Zod-derived tables and wire validators | `core/src/zod/` | [zod-adapter.md](zod-adapter.md) |
-| Row representation, sanitization, dirty tracking | `core/src/rawRecord/` | [reference/records.md](reference/records.md) |
-| Model classes and generated accessors | `core/src/model/` | [reference/models.md](reference/models.md) |
-| Query AST, builders, SQL compiler | `core/src/query/` | [reference/queries.md](reference/queries.md) |
-| Database, collections, work queue, cache, observation | `core/src/database/` | [reference/database.md](reference/database.md) |
-| React bindings: provider, query hooks | `core/src/react/` | [reference/react.md](reference/react.md) |
-| Client sync engine | `core/src/sync/` | [reference/sync.md](reference/sync.md) |
-| The driver contract | `core/src/driver/`, `core/src/conformance/` | [reference/driver.md](reference/driver.md) |
-| Server protocol engine and storage seam | `server/src/` | [reference/backend.md](reference/backend.md) |
+| Concern                                               | Code                                        | Reference                                      |
+| ----------------------------------------------------- | ------------------------------------------- | ---------------------------------------------- |
+| Table and column definitions, migrations              | `core/src/schema/`                          | [reference/schema.md](reference/schema.md)     |
+| Zod-derived tables and wire validators                | `core/src/zod/`                             | [zod-adapter.md](zod-adapter.md)               |
+| Row representation, sanitization, dirty tracking      | `core/src/rawRecord/`                       | [reference/records.md](reference/records.md)   |
+| Model classes and generated accessors                 | `core/src/model/`                           | [reference/models.md](reference/models.md)     |
+| Query AST, builders, SQL compiler                     | `core/src/query/`                           | [reference/queries.md](reference/queries.md)   |
+| Database, collections, work queue, cache, observation | `core/src/database/`                        | [reference/database.md](reference/database.md) |
+| React bindings: provider, query hooks                 | `core/src/react/`                           | [reference/react.md](reference/react.md)       |
+| Client sync engine                                    | `core/src/sync/`                            | [reference/sync.md](reference/sync.md)         |
+| The driver contract                                   | `core/src/driver/`, `core/src/conformance/` | [reference/driver.md](reference/driver.md)     |
+| Server protocol engine and storage seam               | `server/src/`                               | [reference/backend.md](reference/backend.md)   |
 
 Three things that look like they should be driver or store features are
 deliberately not: tombstones are rows with `_status = 'deleted'`, local
@@ -144,7 +144,7 @@ other clients committed in between, excluding the pushing client's own
 records. That is what stops a client re-downloading its own writes forever.
 The cursor and the changes travel together or not at all.
 
-Nothing in the library decides *when* a sync runs; the application calls
+Nothing in the library decides _when_ a sync runs; the application calls
 `synchronize` on the moments that matter to it.
 [sync-triggering.md](sync-triggering.md) covers which moments those are and
 why polling is rarely the right answer.
@@ -163,13 +163,13 @@ prose review missed.
 
 ## The two seams
 
-|  | `SqliteDriver` | `SyncStore` |
-| --- | --- | --- |
-| Sits between | core and a platform's SQLite | the protocol engine and a database |
-| Knows about | SQL strings, arguments, rows | rows, revisions, scopes |
-| Does not know about | queries, records, schemas, sync | cursors, conflicts, the wire |
-| Methods | 7 | 8 |
-| Proven by | `@remelondb/core/conformance` | `@remelondb/server/conformance` |
+|                     | `SqliteDriver`                  | `SyncStore`                        |
+| ------------------- | ------------------------------- | ---------------------------------- |
+| Sits between        | core and a platform's SQLite    | the protocol engine and a database |
+| Knows about         | SQL strings, arguments, rows    | rows, revisions, scopes            |
+| Does not know about | queries, records, schemas, sync | cursors, conflicts, the wire       |
+| Methods             | 7                               | 8                                  |
+| Proven by           | `@remelondb/core/conformance`   | `@remelondb/server/conformance`    |
 
 Both are asynchronous throughout. For the driver that is forced by the web
 platform, where SQLite runs in a Worker because the storage API requires it,

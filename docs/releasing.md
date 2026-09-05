@@ -36,13 +36,13 @@ OIDC claims without it are rejected by npm.
 On npmjs.com: package → Settings → Trusted Publisher → GitHub Actions,
 with exactly:
 
-| Field | Value |
-| --- | --- |
-| Organization or user | `dustyway` |
-| Repository | `remelonDB` |
-| Workflow filename | `release.yml` |
-| Environment name | `npm-publish` |
-| Allowed actions | `npm publish` |
+| Field                | Value         |
+| -------------------- | ------------- |
+| Organization or user | `dustyway`    |
+| Repository           | `remelonDB`   |
+| Workflow filename    | `release.yml` |
+| Environment name     | `npm-publish` |
+| Allowed actions      | `npm publish` |
 
 Requirements baked into the workflow: npm ≥ 11.5.1 (upgraded in-job),
 `permissions: id-token: write`.

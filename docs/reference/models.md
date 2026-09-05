@@ -1,6 +1,6 @@
 # Models reference
 
-The Model layer gives records a typed, ergonomic class API. It is a *view*
+The Model layer gives records a typed, ergonomic class API. It is a _view_
 over the raw-record engine ([database.md](database.md)): the cache,
 batching, notifications, and sync all keep operating on RawRecords; models
 wrap the cached raws one-to-one.
@@ -47,16 +47,16 @@ as `T | null` — whatever `sanitizedRaw` guarantees
 ## Reading and writing
 
 ```ts
-const task = await db.get(Task).find('t1')
-task.name            // read anywhere
-task.name = 'x'      // ❌ throws — records are read-only outside update()
+const task = await db.get(Task).find('t1');
+task.name; // read anywhere
+task.name = 'x'; // ❌ throws — records are read-only outside update()
 
 await db.write(() =>
   task.update(() => {
-    task.name = 'renamed'     // staged; visible inside the builder
-    task.is_done = true
+    task.name = 'renamed'; // staged; visible inside the builder
+    task.is_done = true;
   }),
-)
+);
 ```
 
 Builder writes use the same pipeline as `collection.update`. It sanitizes
@@ -73,10 +73,10 @@ await db.write(() =>
   db.batch([
     auditEvents.prepareCreate({ task_id: task.id, action: 'completed' }),
     task.prepareUpdate(() => {
-      task.is_done = true
+      task.is_done = true;
     }),
   ]),
-)
+);
 ```
 
 The builder can read its pending values, but the cached model remains
@@ -97,23 +97,23 @@ a model in UI state and observing it is therefore safe and cheap.
 
 ```ts
 // 1. Q.on joins in queries (compiler reads associations from the class)
-db.get(Task).query(Q.on('projects', 'is_archived', false))
+db.get(Task).query(Q.on('projects', 'is_archived', false));
 
 // 2. belongs_to navigation
-const project = await task.related<Project>('projects')   // Model | null
+const project = await task.related<Project>('projects'); // Model | null
 
 // 3. has_many navigation — returns a Query: fetch it or observe it
-const open = await project.children<Task>('tasks').fetch()
-project.children<Task>('tasks').observe(renderTaskList)
+const open = await project.children<Task>('tasks').fetch();
+project.children<Task>('tasks').observe(renderTaskList);
 ```
 
 ## Observing one record
 
 ```ts
 const unsub = task.observe((record) => {
-  if (record === null) return closeDetailView()   // deleted
-  render(record)                                  // created/updated
-})
+  if (record === null) return closeDetailView(); // deleted
+  render(record); // created/updated
+});
 ```
 
 `observe` emits the record immediately, after every committed update

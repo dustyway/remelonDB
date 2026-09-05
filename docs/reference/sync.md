@@ -1,21 +1,21 @@
 # Sync reference
 
-How to *use* the sync engine. The protocol's design and rationale (the
+How to _use_ the sync engine. The protocol's design and rationale (the
 opaque commit-ordered cursor, why push responds like a pull, the backend
 MUSTs) live in [../sync-design.md](../sync-design.md). The backend itself
 ships as [`@remelondb/server`](../../packages/server); read the design doc
 first if you're backing it with your own `SyncStore` adapter or building
-a backend from scratch. *When* to call it (the trigger set,
+a backend from scratch. _When_ to call it (the trigger set,
 server-signalled sync, battery, background sync per platform) is
 [../sync-triggering.md](../sync-triggering.md).
 
 ## Calling synchronize
 
 ```ts
-import { synchronize } from '@remelondb/core'
-import { syncSchemas } from '@remelondb/core/zod'
+import { synchronize } from '@remelondb/core';
+import { syncSchemas } from '@remelondb/core/zod';
 
-const wire = syncSchemas({ tasks: TaskRow })
+const wire = syncSchemas({ tasks: TaskRow });
 
 await synchronize({
   database: db,
@@ -24,24 +24,24 @@ await synchronize({
     const response = await fetch(`/sync/pull`, {
       method: 'POST',
       body: JSON.stringify({ cursor, schemaVersion, migration }),
-    })
-    if (!response.ok) throw new Error(`pull: HTTP ${response.status}`)
-    return response.json() // { changes, cursor } | { resyncRequired: true }
+    });
+    if (!response.ok) throw new Error(`pull: HTTP ${response.status}`);
+    return response.json(); // { changes, cursor } | { resyncRequired: true }
   },
 
   pushChanges: async ({ changes, cursor }) => {
     const response = await fetch(`/sync/push`, {
       method: 'POST',
       body: JSON.stringify({ changes, cursor }),
-    })
-    if (!response.ok) throw new Error(`push: HTTP ${response.status}`)
-    return response.json() // { cursor, changes, rejected? } | { conflict: true }
+    });
+    if (!response.ok) throw new Error(`push: HTTP ${response.status}`);
+    return response.json(); // { cursor, changes, rejected? } | { conflict: true }
   },
 
   // Optional but recommended at an untrusted network boundary:
   validatePullResult: (value) => wire.pullResult.parse(value),
   validatePushResult: (value) => wire.pushResult.parse(value),
-})
+});
 ```
 
 Transport is entirely yours; the engine only sees the two functions. In
@@ -125,7 +125,9 @@ apply/mark commits hold the writer queue briefly.
 rather than parsing logs:
 
 ```ts
-{ lease, resynced, pulled, pushed, rejected, rejectedRecords, retryCount }
+{
+  (lease, resynced, pulled, pushed, rejected, rejectedRecords, retryCount);
+}
 ```
 
 The rejection fields matter most for UI honesty. `rejected` is the
@@ -149,10 +151,13 @@ server. For the common case, the backend half mounted over HTTP the way
 them:
 
 ```ts
-import { createSyncTransport, readSyncResponse } from '@remelondb/core/transport'
-import { syncSchemas } from '@remelondb/core/zod'
+import {
+  createSyncTransport,
+  readSyncResponse,
+} from '@remelondb/core/transport';
+import { syncSchemas } from '@remelondb/core/zod';
 
-const wire = syncSchemas({ tasks: TaskRow })
+const wire = syncSchemas({ tasks: TaskRow });
 
 const post = (path: 'pull' | 'push', body: unknown, signal?: AbortSignal) =>
   readSyncResponse(path, () =>
@@ -163,13 +168,13 @@ const post = (path: 'pull' | 'push', body: unknown, signal?: AbortSignal) =>
       body: JSON.stringify(body),
       signal,
     }),
-  )
+  );
 
 const { pullChanges, pushChanges } = createSyncTransport({
   post,
   validatePullResult: (raw) => wire.pullResult.parse(raw),
   validatePushResult: (raw) => wire.pushResult.parse(raw),
-})
+});
 ```
 
 The transport enforces the protocol/transport split. `conflict`,
@@ -178,12 +183,12 @@ acts on, so they arrive as HTTP 200 and pass through as values. A
 response the engine cannot act on becomes a `SyncTransportError`, the
 run fails, and local dirty state stays untouched:
 
-| response | becomes |
-|---|---|
-| fetch rejects (no network) | `SyncTransportError`, `status` undefined |
-| non-2xx | `SyncTransportError` carrying the status |
-| body is not JSON | `SyncTransportError` |
-| JSON fails the validator | `SyncTransportError` ("invalid wire shape") |
+| response                   | becomes                                     |
+| -------------------------- | ------------------------------------------- |
+| fetch rejects (no network) | `SyncTransportError`, `status` undefined    |
+| non-2xx                    | `SyncTransportError` carrying the status    |
+| body is not JSON           | `SyncTransportError`                        |
+| JSON fails the validator   | `SyncTransportError` ("invalid wire shape") |
 
 `post` is the platform seam. It owns the URL and the authentication,
 nothing else. The browser version above lets the cookie jar attach the
@@ -193,7 +198,7 @@ request (logins and logouts change it) and attaches it itself:
 
 ```ts
 const post = (path: 'pull' | 'push', body: unknown, signal?: AbortSignal) => {
-  const cookie = authClient.getCookie()
+  const cookie = authClient.getCookie();
   return readSyncResponse(path, () =>
     fetch(`${apiURL}/sync/${path}`, {
       method: 'POST',
@@ -204,8 +209,8 @@ const post = (path: 'pull' | 'push', body: unknown, signal?: AbortSignal) => {
       body: JSON.stringify(body),
       signal,
     }),
-  )
-}
+  );
+};
 ```
 
 For the canonical URL shape the `post` above does not need writing
@@ -215,11 +220,12 @@ of every request so credentials that change (a native session cookie)
 are always current:
 
 ```ts
-const post = createHttpPost({ baseUrl: '', credentials: 'include' })          // web
+const post = createHttpPost({ baseUrl: '', credentials: 'include' }); // web
 const post = createHttpPost({
   baseUrl: apiURL,
-  headers: () => (authClient.getCookie() ? { cookie: authClient.getCookie() } : {}),
-})                                                                            // native
+  headers: () =>
+    authClient.getCookie() ? { cookie: authClient.getCookie() } : {},
+}); // native
 ```
 
 Anything it cannot express (another URL shape, retries, a non-HTTP
@@ -240,17 +246,17 @@ show. `createSyncController` (a root export, the sibling of
 `createDatabaseManager`) owns that:
 
 ```ts
-import { createRunSync, createSyncController } from '@remelondb/core'
+import { createRunSync, createSyncController } from '@remelondb/core';
 
 const controller = createSyncController({
   runSync: createRunSync({ database: db, pullChanges, pushChanges }),
   triggers: (fire) => {
-    const onOnline = () => fire()
-    window.addEventListener('online', onOnline)
-    return () => window.removeEventListener('online', onOnline)
+    const onOnline = () => fire();
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
   },
-})
-controller.start()
+});
+controller.start();
 ```
 
 `start()` syncs once, then again on every interval tick (`intervalMs`,
@@ -275,7 +281,9 @@ verb works without `start()`.
 State is data for the UI, published to `subscribe` listeners:
 
 ```ts
-{ status, lastSyncAt, error, cause, lastResult }
+{
+  (status, lastSyncAt, error, cause, lastResult);
+}
 // status: 'idle' | 'syncing' | 'offline' | 'error' | 'resync-required'
 // error: the message; cause: the value the run threw, null after success
 ```
@@ -332,7 +340,7 @@ Why deletion must work this way: [sync-basics.md](../sync-basics.md).
 
 When the server answers `resyncRequired` (pruned history, expired
 cursor), the engine re-pulls from `cursor: null` and applies in
-*replacement* mode: matching records reconciled, missing ones created,
+_replacement_ mode: matching records reconciled, missing ones created,
 **local synced records absent from the snapshot destroyed**, while dirty
 records survive and push afterwards. That includes tombstones: an
 offline delete survives the rebuild and is pushed after it (records in
@@ -349,7 +357,7 @@ last-synced schema version in local storage automatically.
 ## Testing a backend
 
 `packages/driver-node/src/syncIntegration.test.ts` contains a minimal
-*conforming* fake backend (rev cursor, per-record conflict detection,
+_conforming_ fake backend (rev cursor, per-record conflict detection,
 push-returns-cursor+changes): a useful template for what your server
 must do, and the test scenarios double as an executable spec of client
 behavior.

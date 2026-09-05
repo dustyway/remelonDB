@@ -31,7 +31,10 @@ A client that has never synced sends `cursor: null`:
 ```
 
 ```json
-{ "changes": { "todos": { "created": [], "updated": [], "deleted": [] } }, "cursor": "0" }
+{
+  "changes": { "todos": { "created": [], "updated": [], "deleted": [] } },
+  "cursor": "0"
+}
 ```
 
 The store is empty, so the changes are empty — but the cursor is the
@@ -41,14 +44,30 @@ is relative to a cursor.
 ## 2. Push a created todo
 
 ```json
-{ "cursor": "0",
-  "changes": { "todos": {
-    "created": [ { "id": "h1", "text": "created over http", "done": false, "created_at": 1753000000000 } ],
-    "updated": [], "deleted": [] } } }
+{
+  "cursor": "0",
+  "changes": {
+    "todos": {
+      "created": [
+        {
+          "id": "h1",
+          "text": "created over http",
+          "done": false,
+          "created_at": 1753000000000
+        }
+      ],
+      "updated": [],
+      "deleted": []
+    }
+  }
+}
 ```
 
 ```json
-{ "cursor": "1", "changes": { "todos": { "created": [], "updated": [], "deleted": [] } } }
+{
+  "cursor": "1",
+  "changes": { "todos": { "created": [], "updated": [], "deleted": [] } }
+}
 ```
 
 A push answers like a pull: the new cursor plus any foreign changes
@@ -69,9 +88,23 @@ Same request as stop 1, different world:
 ```
 
 ```json
-{ "changes": { "todos": { "created": [],
-    "updated": [ { "text": "created over http", "done": false, "created_at": 1753000000000, "id": "h1" } ],
-    "deleted": [] } }, "cursor": "1" }
+{
+  "changes": {
+    "todos": {
+      "created": [],
+      "updated": [
+        {
+          "text": "created over http",
+          "done": false,
+          "created_at": 1753000000000,
+          "id": "h1"
+        }
+      ],
+      "deleted": []
+    }
+  },
+  "cursor": "1"
+}
 ```
 
 The todo arrives in `updated`, not `created`. Pull deltas are upserts:
@@ -84,15 +117,30 @@ where the server uses it for validation and conflict handling.
 Toggling `done`, with the current cursor:
 
 ```json
-{ "cursor": "1",
-  "changes": { "todos": {
-    "created": [],
-    "updated": [ { "id": "h1", "text": "created over http", "done": true, "created_at": 1753000000000 } ],
-    "deleted": [] } } }
+{
+  "cursor": "1",
+  "changes": {
+    "todos": {
+      "created": [],
+      "updated": [
+        {
+          "id": "h1",
+          "text": "created over http",
+          "done": true,
+          "created_at": 1753000000000
+        }
+      ],
+      "deleted": []
+    }
+  }
+}
 ```
 
 ```json
-{ "cursor": "2", "changes": { "todos": { "created": [], "updated": [], "deleted": [] } } }
+{
+  "cursor": "2",
+  "changes": { "todos": { "created": [], "updated": [], "deleted": [] } }
+}
 ```
 
 Rows on the wire are always complete records, not field patches;
@@ -104,11 +152,23 @@ pushing.
 Replaying that update as if the client had never advanced:
 
 ```json
-{ "cursor": "0",
-  "changes": { "todos": {
-    "created": [],
-    "updated": [ { "id": "h1", "text": "stale write", "done": false, "created_at": 1753000000000 } ],
-    "deleted": [] } } }
+{
+  "cursor": "0",
+  "changes": {
+    "todos": {
+      "created": [],
+      "updated": [
+        {
+          "id": "h1",
+          "text": "stale write",
+          "done": false,
+          "created_at": 1753000000000
+        }
+      ],
+      "deleted": []
+    }
+  }
+}
 ```
 
 ```json
@@ -122,12 +182,17 @@ then push again. `synchronize()` does this loop automatically.
 ## 6. Delete travels as a tombstone
 
 ```json
-{ "cursor": "2",
-  "changes": { "todos": { "created": [], "updated": [], "deleted": ["h1"] } } }
+{
+  "cursor": "2",
+  "changes": { "todos": { "created": [], "updated": [], "deleted": ["h1"] } }
+}
 ```
 
 ```json
-{ "cursor": "3", "changes": { "todos": { "created": [], "updated": [], "deleted": [] } } }
+{
+  "cursor": "3",
+  "changes": { "todos": { "created": [], "updated": [], "deleted": [] } }
+}
 ```
 
 A client that last pulled at cursor `"2"` now receives the deletion:
@@ -137,7 +202,10 @@ A client that last pulled at cursor `"2"` now receives the deletion:
 ```
 
 ```json
-{ "changes": { "todos": { "created": [], "updated": [], "deleted": ["h1"] } }, "cursor": "3" }
+{
+  "changes": { "todos": { "created": [], "updated": [], "deleted": ["h1"] } },
+  "cursor": "3"
+}
 ```
 
 Deletions are data, not absence. A client that was offline for the
@@ -166,16 +234,24 @@ one case that breaks the 200 rule, because the request itself is
 malformed. Sending this:
 
 ```json
-{ "cursor": "3",
-  "changes": { "todos": {
-    "created": [ { "id": "bad1", "text": "", "done": false, "created_at": 1 } ],
-    "updated": [], "deleted": [] } } }
+{
+  "cursor": "3",
+  "changes": {
+    "todos": {
+      "created": [{ "id": "bad1", "text": "", "done": false, "created_at": 1 }],
+      "updated": [],
+      "deleted": []
+    }
+  }
+}
 ```
 
 returns HTTP 400 with the exact path of the problem:
 
 ```json fragment
-{ "error": "[ { \"code\": \"too_small\", \"path\": [\"changes\", \"todos\", \"created\", 0, \"text\"], ... } ]" }
+{
+  "error": "[ { \"code\": \"too_small\", \"path\": [\"changes\", \"todos\", \"created\", 0, \"text\"], ... } ]"
+}
 ```
 
 The example server validates with the same Zod objects the client

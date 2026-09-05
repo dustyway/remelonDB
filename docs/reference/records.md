@@ -1,16 +1,16 @@
 # Records reference
 
 A **RawRecord** is the plain-object representation of a row on the JS side.
-It is a dumb data bag — no class, no methods — and it is *valid by
-construction*, because everything that becomes a record passes through one
+It is a dumb data bag — no class, no methods — and it is _valid by
+construction_, because everything that becomes a record passes through one
 trust boundary: `sanitizedRaw`.
 
 ```ts
 interface RawRecord {
-  id: string
-  _status: 'synced' | 'created' | 'updated' | 'deleted'
-  _changed: string           // comma-separated dirty column names
-  [column: string]: SqlValue // every schema column, type-correct
+  id: string;
+  _status: 'synced' | 'created' | 'updated' | 'deleted';
+  _changed: string; // comma-separated dirty column names
+  [column: string]: SqlValue; // every schema column, type-correct
 }
 ```
 
@@ -21,22 +21,22 @@ The second argument is a `TableSchema` — the object `table()` returns.
 Input is an untrusted `DirtyRaw` — an adapter row, a sync payload, user
 data. Output is a RawRecord where:
 
-| Field | Rule |
-| --- | --- |
-| `id` | kept if a non-empty string; otherwise a generated 16-char `[a-z0-9]` id (`randomId()`, upstream-compatible format) |
-| `_status` | kept if a valid status; otherwise `'created'` |
-| `_changed` | kept if a string; otherwise `''` |
-| schema columns | present **always**, coerced per the table below |
-| anything else | **dropped** — unknown keys never survive sanitization |
+| Field          | Rule                                                                                                               |
+| -------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `id`           | kept if a non-empty string; otherwise a generated 16-char `[a-z0-9]` id (`randomId()`, upstream-compatible format) |
+| `_status`      | kept if a valid status; otherwise `'created'`                                                                      |
+| `_changed`     | kept if a string; otherwise `''`                                                                                   |
+| schema columns | present **always**, coerced per the table below                                                                    |
+| anything else  | **dropped** — unknown keys never survive sanitization                                                              |
 
 Coercion per declared column type — invalid or missing values become the
 type's default (`nullValue`), which is `null` for optional columns:
 
-| Type | Valid input | Invalid/missing becomes |
-| --- | --- | --- |
-| `string` | `string` | `''` (or `null` if optional) |
-| `number` | finite `number` | `0` (or `null`) — `NaN`/`Infinity` are invalid |
-| `boolean` | `boolean`, or `1`/`0` (converted to `true`/`false`) | `false` (or `null`) |
+| Type      | Valid input                                         | Invalid/missing becomes                        |
+| --------- | --------------------------------------------------- | ---------------------------------------------- |
+| `string`  | `string`                                            | `''` (or `null` if optional)                   |
+| `number`  | finite `number`                                     | `0` (or `null`) — `NaN`/`Infinity` are invalid |
+| `boolean` | `boolean`, or `1`/`0` (converted to `true`/`false`) | `false` (or `null`)                            |
 
 Note the deliberate asymmetries: numbers are **not** parsed from strings,
 booleans are **not** derived from truthiness — only the exact storage
@@ -96,6 +96,6 @@ These transitions are maintained by `Collection.prepareUpdate`
 ids. It throws when no random source is available, which is the state a
 React Native app is in until it imports a polyfill; see
 [runtimes.md](runtimes.md). Caller-provided ids are
-accepted as-is by `sanitizedRaw` (any non-empty string); id *format* is not
+accepted as-is by `sanitizedRaw` (any non-empty string); id _format_ is not
 validated because ids only ever travel as bound parameters, never as SQL
 text.

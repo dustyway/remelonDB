@@ -24,13 +24,13 @@ Both are typechecked in CI; simulation runs locally (see below).
 
 Sync bugs live in interleavings. A client edits offline, another
 pushes first, a push response gets lost, the server garbage-collects a
-tombstone, and only *one specific ordering* of those events corrupts
+tombstone, and only _one specific ordering_ of those events corrupts
 state. Example-based tests check the orderings someone thought of; the
 interesting bug is by definition in one nobody did.
 
 The model attacks this differently: describe the protocol as a small
 mathematical machine, state what "correct" means as properties that
-must hold after *every* possible sequence of events, and let a tool
+must hold after _every_ possible sequence of events, and let a tool
 search orderings by the tens of thousands. The model found one real
 design obligation (the GC-floor guard below) and provides a
 reproducible demonstration of the race the protocol exists to prevent.
@@ -90,7 +90,7 @@ What it does include is the hostile stuff:
 - **Whether refusals are visible** (`SILENT_DROP`), a fault switch: a
   server that applies less than it reports as accepted.
 - **Whether a rejected id can leak an effect** (`DELETE_LEAK`), the
-  opposite fault switch: a server that applies *more* than it reports —
+  opposite fault switch: a server that applies _more_ than it reports —
   a refused id's same-push deletion lands anyway. This is the engine
   bug the deleted-supersedes rule fixed (wire spec §1).
 
@@ -100,10 +100,10 @@ Four properties, checked after every step of every explored trace:
 
 - `cursorBound` — a client's cursor never runs ahead of the server's
   revision. A sanity floor.
-- `perRowAgreement` — the heart. In words: *if your cursor claims you
+- `perRowAgreement` — the heart. In words: _if your cursor claims you
   have seen history up to revision N, then for any row whose last
   server change is ≤ N and which you hold no local edit on, you must
-  agree with the server.* A client that claims to be caught up but
+  agree with the server._ A client that claims to be caught up but
   silently disagrees is exactly what "a lost write" means.
 - `fullAgreement` — a client that is fully caught up (cursor at the
   server's revision) with nothing left to push mirrors the server
@@ -117,18 +117,18 @@ Four properties, checked after every step of every explored trace:
 ## What the checking found
 
 **The lost-write race, reproducible.** The wire spec requires that a
-push response carries the new cursor *and* the interleaved foreign
+push response carries the new cursor _and_ the interleaved foreign
 changes together, or neither ([sync-wire.md](sync-wire.md) §3).
 `PUSH_MODE = "naive"` models the tempting shortcut: adopt the cursor,
 skip the changes. Flip the constant and run the checker; it produces a
 `perRowAgreement` violation within seconds — a concrete trace where a
 client permanently skips another device's committed write. That trace
-is the *reason* the spec makes cursor-plus-changes a package, kept in
+is the _reason_ the spec makes cursor-plus-changes a package, kept in
 executable form.
 
 **Refusals must be visible, and that is checkable.** A server can
 decline a row for many reasons (validation, a tombstoned id, an
-append-only table). What it may not do is decline *quietly*: apply less
+append-only table). What it may not do is decline _quietly_: apply less
 than it reports as accepted. `SILENT_DROP = true` models that fault —
 the response names fewer rejections than the server actually dropped —
 and the invariants fall within a second. The trace is the phantom
@@ -146,8 +146,8 @@ the model now draws storage refusals as a separate nondeterministic
 stage (content rows only, merged into the same `rejected` list) and all
 invariants hold across 25,000 traces. The checking also exposed a blind
 spot: the three original invariants exempt dirty rows, and rejected
-rows stay dirty, so *no existing property could see a half-applied
-rejection*. With `DELETE_LEAK = true` — the engine bug the
+rows stay dirty, so _no existing property could see a half-applied
+rejection_. With `DELETE_LEAK = true` — the engine bug the
 deleted-supersedes rule fixed (§1), where a refused id's same-push
 deletion applied anyway — the original three invariants stay green
 while the new `rejectedNoEffect` falls in milliseconds. The invariant
@@ -157,7 +157,7 @@ keeps the lost-write race.
 
 **The GC-floor obligation — discovered by the model.** The fast path
 (server answers a push with cursor + interleave) is only lawful when
-the server can compute the *complete* interleave. A client whose
+the server can compute the _complete_ interleave. A client whose
 cursor is below the GC floor has lost deletions from its window: the
 tombstones are gone, so the interleave cannot mention them, and
 adopting the cursor would resurrect a deleted record. The model run
@@ -187,7 +187,7 @@ quint run docs/sync_model.qnt --invariant=allInvariants \
 each, invariants checked at every step — deep but sampled.
 
 Alongside it, `quint verify` does **bounded model checking** (Apalache
-over an SMT solver): it covers *every* possible trace up to a given
+over an SMT solver): it covers _every_ possible trace up to a given
 depth, exhaustively. Its cost grows steeply with depth (minutes to
 hours). Both stay offline rather than in CI: simulation reaches deep
 interleavings by luck, bounded checking rules out shallow ones by
@@ -204,8 +204,8 @@ naive-mode canary (a 4-step trace) fails `verify` at depth 5 in about
   known bugs the checks find fast — are evidence the search is
   effective at this model's scale, not a guarantee of unbounded
   correctness.
-- **The model is not the implementation.** It verifies the *protocol
-  design* — the contract in [sync-wire.md](sync-wire.md). That the
+- **The model is not the implementation.** It verifies the _protocol
+  design_ — the contract in [sync-wire.md](sync-wire.md). That the
   code implements the contract is carried by the spec's other
   executable verifications: the server conformance suite
   (`@remelondb/server/conformance` — one scenario per item of the wire

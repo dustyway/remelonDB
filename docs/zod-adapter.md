@@ -2,8 +2,8 @@
 
 Status: implemented (packages/core/src/zod). Companion to
 [schema-inferred-types.md](schema-inferred-types.md): that doc makes
-the table literal the source of truth *inside* a client; this one lets a
-shared Zod schema be the source of truth *across* a whole stack (server
+the table literal the source of truth _inside_ a client; this one lets a
+shared Zod schema be the source of truth _across_ a whole stack (server
 database, wire validation, client database).
 
 ## Why
@@ -48,22 +48,24 @@ export const Card = z.object({
   back: z.string(),
   due_at: z.number(),
   notes: z.string().nullable(),
-})
+});
 
 // client
-import { zodTable } from '@remelondb/core/zod'
-export const cards = zodTable('cards', Card, { indexed: ['deck_id', 'due_at'] })
+import { zodTable } from '@remelondb/core/zod';
+export const cards = zodTable('cards', Card, {
+  indexed: ['deck_id', 'due_at'],
+});
 // cards is a plain TableSchema — usable in appSchema, ModelFor, db.get
 ```
 
 Mapping rules (the supported vocabulary, v1):
 
-| Zod | Column |
-| --- | --- |
-| `z.string()` (incl. refinements: `.min`, `.email`, …) | `string` |
-| `z.number()` (incl. `.int()`, refinements) | `number` |
-| `z.boolean()` | `boolean` |
-| `.nullable()` of the above | the same column, `.optional()` |
+| Zod                                                   | Column                         |
+| ----------------------------------------------------- | ------------------------------ |
+| `z.string()` (incl. refinements: `.min`, `.email`, …) | `string`                       |
+| `z.number()` (incl. `.int()`, refinements)            | `number`                       |
+| `z.boolean()`                                         | `boolean`                      |
+| `.nullable()` of the above                            | the same column, `.optional()` |
 
 Everything else is a loud error at `zodTable` call time, naming the key
 and the unsupported construct. Two deliberate rejections:
@@ -73,7 +75,7 @@ and the unsupported construct. Two deliberate rejections:
   `.optional()` would silently conflate the two. The error message tells
   the user to write `.nullable()`.
 - **Refinements are kept, not lost.** A refined `z.string().email()`
-  still maps to a `string` column — but the *original* Zod object is
+  still maps to a `string` column — but the _original_ Zod object is
   what validates wire payloads (section 2), so the email check runs at
   the trust boundary even though SQLite stores a plain string.
 
@@ -88,9 +90,9 @@ The adapter builds Zod schemas for the sync protocol's wire types
 the same per-table objects:
 
 ```ts
-import { syncSchemas } from '@remelondb/core/zod'
+import { syncSchemas } from '@remelondb/core/zod';
 
-const sync = syncSchemas({ cards: Card, decks: Deck, reviews: Review })
+const sync = syncSchemas({ cards: Card, decks: Deck, reviews: Review });
 // sync.pullResult  — parses { changes, cursor } | { resyncRequired: true }
 // sync.pushArgs    — parses { changes, cursor }
 // sync.pushResult  — parses { cursor, changes, rejected? } | { conflict: true }

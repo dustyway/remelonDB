@@ -2,7 +2,7 @@
 
 The `Database` owns the driver, the collections, the writer queue, and the
 change-notification bus. This is the runtime API reference; the query
-*language* is in [queries.md](queries.md), models in [models.md](models.md).
+_language_ is in [queries.md](queries.md), models in [models.md](models.md).
 
 ## Opening
 
@@ -30,7 +30,7 @@ with `Database is closing`, and so do external-change applies; blocks
 already accepted run to completion, including anything they were still
 waiting on in the driver's cross-context work slot.
 
-Core-owned *driver* work that does not go through the queue — the query
+Core-owned _driver_ work that does not go through the queue — the query
 behind a fetch, `db.localStorage`, the sync helpers — is drained too, in
 a second phase. It is the driver call that is waited for, not the whole
 high-level operation: a fetch's row-to-record mapping runs after, and
@@ -84,9 +84,9 @@ Awaiting it is therefore enough to know the file is released, which is
 what an owner replacing one database with another needs:
 
 ```ts
-await previous.close()   // nothing it opened is still open
-const next = createDatabaseManager({ open })
-await next.init()
+await previous.close(); // nothing it opened is still open
+const next = createDatabaseManager({ open });
+await next.init();
 ```
 
 `DatabaseManager.close()` closes through `db.close()`, so everything
@@ -114,7 +114,7 @@ All work is serialized through one strictly-FIFO queue:
 `db.get(tasks)` (a table object) or `db.get(Task)` (a model class) returns
 the table's typed Collection.
 
-The two forms differ in what the records *are*. Records from a
+The two forms differ in what the records _are_. Records from a
 collection with a bound model class (listed in `Database.open`'s
 `modelClasses`) are model instances. They provide the `update` builder,
 `markAsDeleted()`, `observe()`, and association helpers. Without a bound
@@ -129,12 +129,12 @@ Collection-level CRUD (`collection.update(id, fields)`,
 
 ```ts
 await db.write(async () => {
-  const task = await db.get(Task).create({ name: 'a', position: 1 })
-  await db.get(Task).update(task.id, { name: 'b' })   // sanitized, dirty-tracked
-  await db.get(Task).markAsDeleted(task.id)           // sync tombstone
-  await db.get(Task).destroyPermanently(task.id)      // gone for real
-})
-const found = await db.get(Task).find('some-id')      // throws if missing
+  const task = await db.get(Task).create({ name: 'a', position: 1 });
+  await db.get(Task).update(task.id, { name: 'b' }); // sanitized, dirty-tracked
+  await db.get(Task).markAsDeleted(task.id); // sync tombstone
+  await db.get(Task).destroyPermanently(task.id); // gone for real
+});
+const found = await db.get(Task).find('some-id'); // throws if missing
 ```
 
 - `create`/`update` auto-stamp `created_at`/`updated_at` when those columns
@@ -157,14 +157,18 @@ the write block.
 ## Observation
 
 ```ts
-const unsub = db.get(Task)
+const unsub = db
+  .get(Task)
   .query(Q.where('is_done', false))
   .observe(
     (records) => render(records),
     (error) => showDatabaseError(error),
-  )
+  );
 
-const unsub2 = db.get(Task).query().observeCount((n) => setBadge(n))
+const unsub2 = db
+  .get(Task)
+  .query()
+  .observeCount((n) => setBadge(n));
 ```
 
 The second argument handles observation failures. A re-fetch can fail
@@ -205,7 +209,7 @@ const db = await Database.open({
   schema,
   name: 'app.db',
   onObservation: (event) => metrics.record(event),
-})
+});
 ```
 
 Each event names the table and query description, records/count mode,

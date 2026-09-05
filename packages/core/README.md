@@ -13,11 +13,11 @@ DSL and its SQL compiler, schema and migrations, the `Database`/`Collection`/
 through a ~7-method `SqliteDriver` interface; pick the driver for your
 platform:
 
-| Platform | Driver package |
-| --- | --- |
-| Node | [`@remelondb/driver-node`](https://www.npmjs.com/package/@remelondb/driver-node) (better-sqlite3) |
-| Browser | [`@remelondb/driver-web`](https://www.npmjs.com/package/@remelondb/driver-web) (SQLite-WASM + OPFS in a Worker) |
-| React Native | [`@remelondb/driver-rn`](https://www.npmjs.com/package/@remelondb/driver-rn) (expo-sqlite; runs in Expo Go) |
+| Platform              | Driver package                                                                                                                             |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Node                  | [`@remelondb/driver-node`](https://www.npmjs.com/package/@remelondb/driver-node) (better-sqlite3)                                          |
+| Browser               | [`@remelondb/driver-web`](https://www.npmjs.com/package/@remelondb/driver-web) (SQLite-WASM + OPFS in a Worker)                            |
+| React Native          | [`@remelondb/driver-rn`](https://www.npmjs.com/package/@remelondb/driver-rn) (expo-sqlite; runs in Expo Go)                                |
 | React Native, no expo | [`@remelondb/driver-rn-cpp`](https://www.npmjs.com/package/@remelondb/driver-rn-cpp) (C++ TurboModule, bundled SQLite; dev build required) |
 
 Because every driver is real SQLite and passes the same
@@ -34,17 +34,23 @@ its `@remelondb/server/conformance` suite.
 
 ```ts
 import {
-  appSchema, column as c, table, Database, ModelFor, Q, synchronize,
-} from '@remelondb/core'
-import { NodeSqliteDriver } from '@remelondb/driver-node'
+  appSchema,
+  column as c,
+  table,
+  Database,
+  ModelFor,
+  Q,
+  synchronize,
+} from '@remelondb/core';
+import { NodeSqliteDriver } from '@remelondb/driver-node';
 
 const tasks = table('tasks', {
   name: c.string(),
   position: c.number().indexed(),
   is_done: c.boolean(),
-})
+});
 
-const schema = appSchema({ version: 1, tables: [tasks] })
+const schema = appSchema({ version: 1, tables: [tasks] });
 
 class Task extends ModelFor(tasks) {
   // no field declarations: name/position/is_done are typed from the
@@ -56,19 +62,23 @@ const db = await Database.open({
   schema,
   modelClasses: [Task],
   name: 'app.db',
-})
+});
 
 const task = await db.write(() =>
   db.get(Task).create({ name: 'try it', position: 1 }),
-)
-await db.write(() => task.update(() => { task.is_done = true }))
+);
+await db.write(() =>
+  task.update(() => {
+    task.is_done = true;
+  }),
+);
 
 const unsubscribe = db
   .get(Task)
   .query(Q.where('is_done', false), Q.sortBy('position'))
-  .observe((open) => console.log('open tasks:', open.length))
+  .observe((open) => console.log('open tasks:', open.length));
 
-await synchronize({ database: db, pullChanges, pushChanges }) // your backend
+await synchronize({ database: db, pullChanges, pushChanges }); // your backend
 ```
 
 App bootstraps should wrap this in `createDatabaseManager` (see the

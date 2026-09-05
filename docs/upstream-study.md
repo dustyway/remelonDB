@@ -53,6 +53,7 @@ migration range silently falls back to destroy-and-recreate** (index.js:191).
 ## Warts / bugs to fix in the rewrite
 
 **Native binding (the reason the rewrite exists)**
+
 - Not a TurboModule, no codegen. Classic bridge module + blocking-sync `install()`
   that grabs `bridge.runtime` from `RCTCxxBridge`, none of which exists on
   bridgeless New Architecture.
@@ -62,10 +63,11 @@ migration range silently falls back to destroy-and-recreate** (index.js:191).
   (compileSdk 28, NDK 20.1).
 - Elaborate teardown hackery (Catalyst destroy → reflection) to close the DB
   before C++ destructors run on a dead thread (DatabaseBridge.cpp:22–77).
-- Android JSI convention: errors are *returned* as `Error` objects, not thrown;
+- Android JSI convention: errors are _returned_ as `Error` objects, not thrown;
   the JS dispatcher checks `instanceof Error` (index.native.js:101).
 
 **Query layer**
+
 - `encodeQuery` inlines values via string escaping instead of placeholders;
   the code itself flags this as wrong (encodeValue/index.js:28). Only
   `encodeBatch` and `unsafeSqlQuery` use bound args.
@@ -85,6 +87,7 @@ migration range silently falls back to destroy-and-recreate** (index.js:191).
   is a TODO.
 
 **Record-caching protocol (ID-vs-raw)**
+
 - Native tracks which record ids it has sent to JS and returns bare ids for
   those; JS RecordCache resolves ids to cached Models. Cache updates ride on
   batch opcodes (`cacheBehavior` +1/-1/0).
@@ -94,7 +97,8 @@ migration range silently falls back to destroy-and-recreate** (index.js:191).
   root cause.
 
 **Core / reactivity**
-- `Database.batch` clears `_preparedState` *before* the adapter call succeeds
+
+- `Database.batch` clears `_preparedState` _before_ the adapter call succeeds
   (`TODO: What if this fails?`): no rollback contract.
 - Docs promise concurrent readers; `WorkQueue` runs everything strictly serial.
 - Two parallel notification systems everywhere (RxJS subjects AND hand-rolled
@@ -107,6 +111,7 @@ migration range silently falls back to destroy-and-recreate** (index.js:191).
   ties the two together.
 
 **Sync**
+
 - Lost-write race: pull cursor is `last_modified > lastPulledAt` with the
   timestamp chosen by the backend; any write landing in the pull window with a
   timestamp ≤ the returned cursor is never pulled again. Client merely logs a
@@ -135,6 +140,7 @@ migration range silently falls back to destroy-and-recreate** (index.js:191).
   bridge for JSON delivery (compat shim).
 
 **Misc**
+
 - Node driver is a hand-rolled reimplementation of the native driver (drift
   risk); has a typo'd `{ verboze: … }` option and other oddities.
 - `getRandomBytes`/`getRandomIds` piggyback on the DB bridge module.

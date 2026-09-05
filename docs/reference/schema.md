@@ -10,19 +10,19 @@ One Zod object per table is the source of truth
 ([zod-adapter.md](../zod-adapter.md)):
 
 ```ts
-import { z } from 'zod'
-import { appSchema } from '@remelondb/core'
-import { zodTable } from '@remelondb/core/zod'
+import { z } from 'zod';
+import { appSchema } from '@remelondb/core';
+import { zodTable } from '@remelondb/core/zod';
 
 const TaskRow = z.object({
   name: z.string(),
   position: z.number(),
   is_done: z.boolean(),
   project_id: z.string().nullable(),
-})
-const tasks = zodTable('tasks', TaskRow, { indexed: ['position'] })
+});
+const tasks = zodTable('tasks', TaskRow, { indexed: ['position'] });
 
-const schema = appSchema({ version: 1, tables: [tasks] })
+const schema = appSchema({ version: 1, tables: [tasks] });
 ```
 
 - **Column vocabulary**: `z.string()`, `z.number()`, `z.boolean()`, each
@@ -53,14 +53,14 @@ produce — Zod-free stacks (and migration steps, below) write it
 directly:
 
 ```ts
-import { appSchema, column as c, table } from '@remelondb/core'
+import { appSchema, column as c, table } from '@remelondb/core';
 
 const tasks = table('tasks', {
   name: c.string(),
   position: c.number().indexed(),
   is_done: c.boolean(),
   project_id: c.string().optional(),
-})
+});
 ```
 
 `c.string()`/`c.number()`/`c.boolean()`, with `.optional()` (may be
@@ -76,11 +76,11 @@ must match `^[a-zA-Z_][a-zA-Z0-9_]*$`; duplicate tables are rejected;
 
 Every table implicitly gets three columns — never declare them:
 
-| Column | Purpose |
-| --- | --- |
-| `id` | primary key, 16-char generated string (or caller-provided) |
-| `_status` | sync lifecycle: `synced` / `created` / `updated` / `deleted` |
-| `_changed` | comma-separated names of columns changed since last sync |
+| Column     | Purpose                                                      |
+| ---------- | ------------------------------------------------------------ |
+| `id`       | primary key, 16-char generated string (or caller-provided)   |
+| `_status`  | sync lifecycle: `synced` / `created` / `updated` / `deleted` |
+| `_changed` | comma-separated names of columns changed since last sync     |
 
 Reserved and rejected: column names `id`, `_status`, `_changed`, and the
 SQLite rowid aliases `rowid`/`oid`/`_rowid_` (case-insensitive); table names
@@ -123,9 +123,14 @@ tooling and tests.
 
 ```ts
 import {
-  schemaMigrations, createTable, addColumns, unsafeExecuteSql,
-  stepsForMigration, encodeMigrationSteps, column as c,
-} from '@remelondb/core'
+  schemaMigrations,
+  createTable,
+  addColumns,
+  unsafeExecuteSql,
+  stepsForMigration,
+  encodeMigrationSteps,
+  column as c,
+} from '@remelondb/core';
 
 const migrations = schemaMigrations({
   migrations: [
@@ -141,9 +146,12 @@ const migrations = schemaMigrations({
         }),
       ],
     },
-    { toVersion: 3, steps: [createTable({ name: 'tags', columns: { /* … */ } })] },
+    {
+      toVersion: 3,
+      steps: [createTable({ name: 'tags', columns: {/* … */} })],
+    },
   ],
-})
+});
 ```
 
 - Migrations must be **sorted and contiguous** (`toVersion` 2, 3, 4, …);
@@ -164,13 +172,18 @@ const migrations = schemaMigrations({
 ### Applying a migration
 
 ```ts
-const steps = stepsForMigration(migrations, { from: userVersion, to: schema.version })
+const steps = stepsForMigration(migrations, {
+  from: userVersion,
+  to: schema.version,
+});
 if (steps === null) {
   // range not covered — an explicit decision point, never silent
-  throw new Error('No migration path; refusing to touch the database')
+  throw new Error('No migration path; refusing to touch the database');
 }
-await driver.executeBatch(encodeMigrationSteps(steps).map((sql) => [sql, [[]]]))
-await driver.setUserVersion(schema.version)
+await driver.executeBatch(
+  encodeMigrationSteps(steps).map((sql) => [sql, [[]]]),
+);
+await driver.setUserVersion(schema.version);
 ```
 
 **`stepsForMigration` returns `null` for an uncovered range** — the caller

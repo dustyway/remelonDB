@@ -21,12 +21,12 @@ concurrent rendering and StrictMode's deliberate double-mounting.
 Wrap the tree in a provider to unlock the zero-argument hooks:
 
 ```tsx
-import { DatabaseProvider } from '@remelondb/core/react'
-import { manager } from './db'
+import { DatabaseProvider } from '@remelondb/core/react';
+import { manager } from './db';
 
 <DatabaseProvider manager={manager}>
   <App />
-</DatabaseProvider>
+</DatabaseProvider>;
 ```
 
 The provider is a convenience, not a requirement: `useDatabaseState`
@@ -37,8 +37,8 @@ multi-database setups can skip the provider entirely.
 ## Manager hooks
 
 ```tsx
-const { status, error } = useDatabaseState()  // lifecycle transitions
-const db = useDatabase()                      // Database | null until ready
+const { status, error } = useDatabaseState(); // lifecycle transitions
+const db = useDatabase(); // Database | null until ready
 ```
 
 The two hooks answer different questions. `useDatabaseState` is for
@@ -65,7 +65,7 @@ The sync sibling is `useSyncState(controller)`: the state of a
 subscription, re-rendering exactly on transitions.
 
 ```tsx
-const { status, lastResult } = useSyncState(controller)
+const { status, lastResult } = useSyncState(controller);
 // status: 'idle' | 'syncing' | 'offline' | 'error' | 'resync-required'
 ```
 
@@ -84,28 +84,28 @@ session's open queued behind the previous close.
 
 ```tsx
 const { manager, syncController, closeError } = useSessionDatabase({
-  userId,                                   // null while signed out
+  userId, // null while signed out
   createManager: (id) => createUserDatabaseManager(id),
   sync: { pullChanges, pushChanges },
   controller: { triggers: browserSyncTriggers },
-})
+});
 ```
 
 It renders nothing. Wrap the tree yourself once the manager exists:
 
 ```tsx
-if (!manager) return <SignedOut />
+if (!manager) return <SignedOut />;
 return (
   <DatabaseProvider manager={manager}>
     <App controller={syncController} />
   </DatabaseProvider>
-)
+);
 ```
 
 **Where you call it is part of the contract.** The queue that makes the
 next open wait for the previous close lives in the hook, so it lives as
 long as the component calling it. Call it from something that stays
-mounted across session *and* route changes, and let route layouts read
+mounted across session _and_ route changes, and let route layouts read
 the manager from context. Calling it inside a layout your router
 unmounts brings back the race it prevents: the queue is empty again on
 remount, so the next open has nothing to wait for, and routers destroy
@@ -154,12 +154,14 @@ failed close: recovery is a reload, not another attempt.
 ## Query hooks
 
 ```tsx
-const db = useDatabase()
-const { data: decks, isLoading, error } = useQuery(
-  db && db.get(Deck).query(Q.sortBy('created_at', Q.desc)),
-)
-const due = useQueryCount(db && dueCardsQuery(db, now))
-const dueState = useQueryCountResult(db && dueCardsQuery(db, now))
+const db = useDatabase();
+const {
+  data: decks,
+  isLoading,
+  error,
+} = useQuery(db && db.get(Deck).query(Q.sortBy('created_at', Q.desc)));
+const due = useQueryCount(db && dueCardsQuery(db, now));
+const dueState = useQueryCountResult(db && dueCardsQuery(db, now));
 ```
 
 `useQuery` subscribes to a query's results and re-renders whenever
@@ -176,7 +178,7 @@ is `0`.
 
 There is deliberately no deps argument anywhere. Queries are data — a
 frozen description plus a table — so the hooks key their subscription
-on that *structure*, not on object identity. Rebuilding an equivalent
+on that _structure_, not on object identity. Rebuilding an equivalent
 query every render is free and reuses the live subscription; changing
 the query's actual content (a different `Q.where`, another table) tears
 down and resubscribes. The class of stale-dependency bugs that
@@ -186,7 +188,7 @@ API.
 The corollary: the first structurally-equal query instance is the one
 that gets observed; later equivalent instances are ignored. Since
 equivalent queries return equivalent results by definition, this is
-invisible — but a query whose *meaning* depends on out-of-band state it
+invisible — but a query whose _meaning_ depends on out-of-band state it
 does not encode (nothing in Q does this) would be miskeyed.
 
 ### Shared subscriptions
@@ -207,8 +209,8 @@ same single observation per distinct query and re-render less.
 ### Deriving values: `select`
 
 ```tsx
-const { data: count } = useQuery(q, { select: (rows) => rows.length })
-const { data: newest } = useQuery(q, { select: (rows) => rows[0] ?? null })
+const { data: count } = useQuery(q, { select: (rows) => rows.length });
+const { data: newest } = useQuery(q, { select: (rows) => rows[0] ?? null });
 ```
 
 `select` derives the rendered value from the rows, per consumer — two
@@ -231,7 +233,7 @@ library on top, not for this module.
 ```tsx
 const { data, isPreviousData } = useQuery(searchQuery(term), {
   keepPreviousData: true,
-})
+});
 ```
 
 When the query's structure changes (a new search term, another page),
@@ -246,7 +248,7 @@ The semantics, precisely:
 
 - The first delivery of the new query replaces the rows and clears
   `isPreviousData`. Success always wins.
-- If the new query *fails* before its first delivery, the error
+- If the new query _fails_ before its first delivery, the error
   surfaces immediately in `error` while the previous rows stay
   rendered and `isPreviousData` stays true; the first later success
   clears both.
@@ -272,11 +274,11 @@ The write-side counterpart of the query hooks. Wrap an async write and
 get state instead of a bare promise to babysit:
 
 ```ts
-import { useMutation } from '@remelondb/core/react'
+import { useMutation } from '@remelondb/core/react';
 
 const { mutate, mutateAsync, data, error, isPending, reset } = useMutation(
   (title: string) => db.write(() => db.get(Deck).create({ title })),
-)
+);
 ```
 
 `mutate(...args)` is fire-and-observe: it returns `void`, so a floating
@@ -287,9 +289,9 @@ original error) for flows that must continue only after success:
 
 ```ts
 const onSubmit = async (fields: FormFields) => {
-  await mutateAsync(fields.title)
-  closeDialog()               // only reached when the write committed
-}
+  await mutateAsync(fields.title);
+  closeDialog(); // only reached when the write committed
+};
 ```
 
 The two entry points are deliberate. A `mutate` that both swallowed
@@ -321,10 +323,10 @@ usual diff is one line per site.
 
 ```tsx
 // before: factory plus dependency array
-const { data } = useQuery(() => (db ? getDecksQuery(db) : null), [db])
+const { data } = useQuery(() => (db ? getDecksQuery(db) : null), [db]);
 
 // after: plain expression, no deps
-const { data } = useQuery(db && getDecksQuery(db))
+const { data } = useQuery(db && getDecksQuery(db));
 ```
 
 What to delete along with the bridge file:

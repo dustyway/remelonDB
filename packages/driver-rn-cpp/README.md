@@ -7,7 +7,6 @@
 > development build. Same class name, same conformance suite —
 > switching is one import change.
 
-
 The React Native `SqliteDriver`: a **pure C++ TurboModule** wrapping a
 bundled SQLite amalgamation. Bridgeless/New-Architecture-native by
 construction: codegen'd spec, no classic bridge module, no manual
@@ -51,8 +50,8 @@ cd ios && pod install
 ```
 
 ```ts
-import { Database } from '@remelondb/core'
-import { RnSqliteDriver } from '@remelondb/driver-rn'
+import { Database } from '@remelondb/core';
+import { RnSqliteDriver } from '@remelondb/driver-rn';
 
 const db = await Database.open({
   driver: new RnSqliteDriver(),
@@ -60,7 +59,7 @@ const db = await Database.open({
   migrations,
   modelClasses: [Task, Project],
   name: 'app.db', // resolved into the app's database directory
-})
+});
 ```
 
 Apps should wrap the open in `createDatabaseManager` (core) and drive
@@ -69,16 +68,16 @@ bootstrap as web, with the takeover callback simply unused on native.
 
 ## How it's put together
 
-| Piece | Role |
-| --- | --- |
-| `src/specs/NativeRemelonDriver.ts` | codegen spec — synchronous methods (SQLite runs in-process on the JS thread, like upstream's JSI mode; Promises are added in TS) |
-| `src/RnSqliteDriver.ts` | the seam implementation over the native module |
-| `cpp/RemelonDriver.{h,cpp}` | the C++ TurboModule (in `facebook::react` for autolinking); connections keyed by name |
-| `cpp/SqliteConnection.{h,cpp}` | sqlite3 wrapper: statement cache, JSI binding/reading, atomic batches with rollback, WAL, destroy incl. sidecars |
-| `cpp/DatabasePlatform.*`, `cpp/platform/`, `ios/DatabasePlatformIOS.mm` | the one platform seam: where database files live (Android `Context.getDatabasePath` parent via JNI; iOS Application Support) |
-| `react-native.config.js` | Android cxx-module autolinking (CLI generates the provider glue, adds `cpp/CMakeLists.txt` to the app build) |
-| `codegenConfig.ios.modulesProvider` + `ios/RemelonDriverProvider.mm` | iOS module registration |
-| `scripts/fetch-sqlite.mjs` | pins one SQLite version for both platforms (FTS5 on, `SQLITE_DQS=0`, no load-extension) |
+| Piece                                                                   | Role                                                                                                                             |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `src/specs/NativeRemelonDriver.ts`                                      | codegen spec — synchronous methods (SQLite runs in-process on the JS thread, like upstream's JSI mode; Promises are added in TS) |
+| `src/RnSqliteDriver.ts`                                                 | the seam implementation over the native module                                                                                   |
+| `cpp/RemelonDriver.{h,cpp}`                                             | the C++ TurboModule (in `facebook::react` for autolinking); connections keyed by name                                            |
+| `cpp/SqliteConnection.{h,cpp}`                                          | sqlite3 wrapper: statement cache, JSI binding/reading, atomic batches with rollback, WAL, destroy incl. sidecars                 |
+| `cpp/DatabasePlatform.*`, `cpp/platform/`, `ios/DatabasePlatformIOS.mm` | the one platform seam: where database files live (Android `Context.getDatabasePath` parent via JNI; iOS Application Support)     |
+| `react-native.config.js`                                                | Android cxx-module autolinking (CLI generates the provider glue, adds `cpp/CMakeLists.txt` to the app build)                     |
+| `codegenConfig.ios.modulesProvider` + `ios/RemelonDriverProvider.mm`    | iOS module registration                                                                                                          |
+| `scripts/fetch-sqlite.mjs`                                              | pins one SQLite version for both platforms (FTS5 on, `SQLITE_DQS=0`, no load-extension)                                          |
 
 Booleans bind as 0/1 (the seam-wide convention), rows come back
 column-keyed with `null | number | string` values, batches run in one
@@ -87,7 +86,7 @@ Node driver passes conformance with.
 
 ## 16 KB page alignment
 
-SQLite compiles from source *inside the app build* (Android); there are
+SQLite compiles from source _inside the app build_ (Android); there are
 no prebuilt `.so` files in this package, so Google Play's 16 KB
 page-size requirement is satisfied by the app's own toolchain (AGP 8.5+ /
 NDK r28 align by default). Shipping prebuilts is how upstream aged out

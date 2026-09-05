@@ -10,12 +10,12 @@ this package owns rows, revisions, and scopes.
 
 Every synced table carries four machinery columns:
 
-| column | type | role |
-| --- | --- | --- |
-| `id` | `text` primary key | client-minted record id |
-| `rev` | `bigint` | revision stamp, indexed with the scope column |
-| `deleted_at` | `timestamptz` null | tombstone marker; null = alive |
-| scope | any | whose data this is (user, team, workspace) |
+| column       | type               | role                                          |
+| ------------ | ------------------ | --------------------------------------------- |
+| `id`         | `text` primary key | client-minted record id                       |
+| `rev`        | `bigint`           | revision stamp, indexed with the scope column |
+| `deleted_at` | `timestamptz` null | tombstone marker; null = alive                |
+| scope        | any                | whose data this is (user, team, workspace)    |
 
 Deletes are tombstones, never `DELETE` — a removed row must still sync to other
 devices. Upserts never resurrect a tombstone and never touch `insertOnly`
@@ -27,12 +27,12 @@ names, the default mapping is identity and a table needs no mapper code.
 ## Usage
 
 ```ts
-import { drizzle } from 'drizzle-orm/node-postgres'
-import { z } from 'zod'
-import { syncSchemas } from '@remelondb/core/zod'
-import { createSyncEngine } from '@remelondb/server'
-import { createDrizzleStore } from '@remelondb/store-drizzle'
-import { decks } from './schema'
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { z } from 'zod';
+import { syncSchemas } from '@remelondb/core/zod';
+import { createSyncEngine } from '@remelondb/server';
+import { createDrizzleStore } from '@remelondb/store-drizzle';
+import { decks } from './schema';
 
 // one Zod object per table: the client derives its local schema from it
 // (zodTable), the server validates rows with it — see docs/zod-adapter.md
@@ -40,10 +40,10 @@ const Deck = z.object({
   name: z.string().min(1),
   source_lang: z.string(),
   target_lang: z.string(),
-})
-const wire = syncSchemas({ decks: Deck })
+});
+const wire = syncSchemas({ decks: Deck });
 
-const db = drizzle(process.env.DATABASE_URL!)
+const db = drizzle(process.env.DATABASE_URL!);
 
 const store = createDrizzleStore<string>({
   db,
@@ -56,14 +56,14 @@ const store = createDrizzleStore<string>({
       scope: decks.ownerId,
     },
   },
-})
+});
 
 const engine = createSyncEngine({
   store,
   tables: {
     decks: { validate: (row) => wire.rows.decks.safeParse(row).success },
   },
-})
+});
 ```
 
 With NestJS, [`@remelondb/nestjs`](../nestjs/README.md) does the engine and
