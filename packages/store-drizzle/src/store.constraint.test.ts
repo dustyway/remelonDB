@@ -114,9 +114,10 @@ describe('constraint violations surface as per-record rejections', () => {
 
     // updating your own row keeps its handle: upsert on the same id is an
     // update, not a second insert, so no self-collision
+    const currentA = pulled(await userA.pull(pullArgs));
     const named = accepted(
       await userA.push({
-        cursor: bothNull.cursor!,
+        cursor: currentA.cursor,
         changes: profileChanges([{ id: 'a1', handle: 'kept' }]),
       }),
     );

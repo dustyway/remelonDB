@@ -83,20 +83,21 @@ export function createReferenceServer(
   const changesSince = (
     user: string,
     since: number,
-    exclude: ReadonlySet<string>,
+    exclude: ReadonlyMap<string, ReadonlySet<string>>,
   ): SyncChanges => {
     const changes: Record<
       string,
       { created: DirtyRaw[]; updated: DirtyRaw[]; deleted: string[] }
     > = {};
     for (const [table, rows] of tablesOf(user)) {
+      const excludeIds = exclude.get(table);
       const set = {
         created: [],
         updated: [],
         deleted: [],
       } as (typeof changes)[string];
       for (const stored of rows.values()) {
-        if (stored.rev <= since || exclude.has(stored.row.id)) continue;
+        if (stored.rev <= since || excludeIds?.has(stored.row.id)) continue;
         if (stored.deleted) set.deleted.push(stored.row.id);
         else set.updated.push(stored.row);
       }
@@ -124,7 +125,7 @@ export function createReferenceServer(
       }
       const effectiveSince = args.migration !== null ? 0 : since;
       return {
-        changes: changesSince(user, effectiveSince, new Set()),
+        changes: changesSince(user, effectiveSince, new Map()),
         cursor: String(Math.max(since, maxRevOf(user))),
       };
     },
@@ -132,17 +133,21 @@ export function createReferenceServer(
       const since = decodeCursor(args.cursor);
       if (since === null) return { conflict: true };
 
-      const requestIds = new Set<string>();
-      for (const change of Object.values(args.changes)) {
+      const requestIds = new Map<string, Set<string>>();
+      for (const [table, change] of Object.entries(args.changes)) {
+        const ids = new Set<string>();
         for (const row of [...change.created, ...change.updated]) {
-          requestIds.add(String(row['id']));
+          ids.add(String(row['id']));
         }
-        for (const id of change.deleted) requestIds.add(id);
+        for (const id of change.deleted) ids.add(id);
+        requestIds.set(table, ids);
       }
       // conflict dominates: any pushed record already past the cursor
-      for (const rows of tablesOf(user).values()) {
+      for (const [table, rows] of tablesOf(user)) {
+        const ids = requestIds.get(table);
+        if (!ids) continue;
         for (const stored of rows.values()) {
-          if (requestIds.has(stored.row.id) && stored.rev > since) {
+          if (ids.has(stored.row.id) && stored.rev > since) {
             return { conflict: true };
           }
         }

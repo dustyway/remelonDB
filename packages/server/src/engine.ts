@@ -25,7 +25,7 @@ export interface SyncHandlers {
  */
 export class SyncProtocolError extends Error {
   constructor(
-    readonly code: 'unusable-id',
+    readonly code: 'unusable-id' | 'invalid-rejection',
     message: string,
   ) {
     super(message);
@@ -82,7 +82,7 @@ const decodeCursor = (cursor: string): number | null => {
 
 const toChanges = (
   byTable: ReadonlyMap<string, readonly StoredChange[]>,
-  exclude: ReadonlySet<string>,
+  exclude: ReadonlyMap<string, ReadonlySet<string>>,
 ): SyncChanges => {
   const changes: Record<
     string,
@@ -94,8 +94,9 @@ const toChanges = (
       updated: [],
       deleted: [],
     } as (typeof changes)[string];
+    const excludeIds = exclude.get(table);
     for (const change of stored) {
-      if (exclude.has(change.id)) continue;
+      if (excludeIds?.has(change.id)) continue;
       if (change.row === null) set.deleted.push(change.id);
       else set.updated.push(change.row);
     }
@@ -160,7 +161,7 @@ export function createSyncEngine<Scope>(options: SyncEngineOptions<Scope>): {
         return {
           changes: toChanges(
             await collectSince(tx, scope, effectiveSince),
-            new Set(),
+            new Map(),
           ),
           cursor: String(Math.max(since, effMax)),
         };
@@ -202,36 +203,90 @@ export function createSyncEngine<Scope>(options: SyncEngineOptions<Scope>): {
         // one of its effects anyway
         const deletes = [...new Set(change?.deleted ?? [])];
         for (const id of deletes) byId.delete(id);
-        const rows: WireRow[] = [];
-        for (const row of byId.values()) {
-          if (options.tables[table]?.validate?.(row) === false) {
-            (rejected[table] ??= []).push(row.id);
-          } else {
-            rows.push(row);
-          }
-        }
-        return { table, rows, deletes };
+        // every id this changeset names, before validation splits it —
+        // the conflict scan must see all of them, or a row rejected here
+        // escapes the stale check and its newer server rev is never
+        // delivered (permanent divergence)
+        const allIds = [...byId.keys(), ...deletes];
+        return { table, rows: [...byId.values()], deletes, allIds };
       });
 
       return options.store.transaction(scope, 'push', async (tx) => {
-        // ownership rejections precede the stale check: cursors are
-        // horizons over the scope's own rows, so a foreign row's rev is
-        // incomparable and must not force conflict loops
+        // A push cursor above the served max cannot be honest: `rev >
+        // since` would never fire and the conflict scan would be
+        // disabled wholesale. Reject it, as the reference server does.
+        const effMax = Math.max(await tx.maxRev(scope), await tx.gcFloor());
+        if (since > effMax) return { conflict: true };
+
+        // Ownership first: a foreign row is not this scope's, so its rev
+        // is incomparable to a scope-horizon cursor. Reject and exclude
+        // it from the conflict scan and everything after.
         for (const entry of parsed) {
-          const ids = [...entry.rows.map((r) => r.id), ...entry.deletes];
-          if (ids.length === 0) continue;
-          const foreign = new Set(await tx.foreignIds(entry.table, scope, ids));
+          if (entry.allIds.length === 0) continue;
+          const foreign = new Set(
+            await tx.foreignIds(entry.table, scope, entry.allIds),
+          );
           if (foreign.size > 0) {
             (rejected[entry.table] ??= []).push(...foreign);
             entry.rows = entry.rows.filter((r) => !foreign.has(r.id));
             entry.deletes = entry.deletes.filter((id) => !foreign.has(id));
+            entry.allIds = entry.allIds.filter((id) => !foreign.has(id));
           }
         }
+
+        // Conflict dominates, and it is checked over EVERY non-foreign
+        // requested id — including ids a later step will reject. A row
+        // modified server-side after the cursor answers conflict before
+        // it is ever judged stale, so the client re-pulls the newer
+        // content instead of silently advancing its cursor past it. The
+        // revs are kept for the append-only check below.
+        const revsByTable = new Map<string, ReadonlyMap<string, number>>();
+        for (const entry of parsed) {
+          if (entry.allIds.length === 0) continue;
+          const revs = await tx.currentRevs(entry.table, scope, entry.allIds);
+          revsByTable.set(entry.table, revs);
+          for (const rev of revs.values()) {
+            if (rev > since) return { conflict: true };
+          }
+        }
+
+        for (const entry of parsed) {
+          const validate = options.tables[entry.table]?.validate;
+          if (!validate) continue;
+          entry.rows = entry.rows.filter((row) => {
+            if (validate(row)) return true;
+            (rejected[entry.table] ??= []).push(row.id);
+            return false;
+          });
+        }
+
+        // A hook may only reject ids that are in the request, keyed by a
+        // table that exists: a phantom id would tell the client to keep
+        // a record it has no dirty copy of and drop the real one from the
+        // interleave. A violation is a server bug, surfaced as one.
+        const requestedByTable = new Map(
+          parsed.map((entry) => [entry.table, new Set(entry.allIds)]),
+        );
         const applyExtraRejections = (extra: {
           readonly [table: string]: readonly string[];
         }): void => {
           for (const [table, ids] of Object.entries(extra)) {
             if (ids.length === 0) continue;
+            const requested = requestedByTable.get(table);
+            if (!requested) {
+              throw new SyncProtocolError(
+                'invalid-rejection',
+                `sync push: hook rejected ids for unknown table '${table}'`,
+              );
+            }
+            for (const id of ids) {
+              if (!requested.has(id)) {
+                throw new SyncProtocolError(
+                  'invalid-rejection',
+                  `sync push: hook rejected '${table}/${id}', not in the request`,
+                );
+              }
+            }
             const drop = new Set(ids);
             (rejected[table] ??= []).push(...ids);
             const entry = parsed.find((p) => p.table === table);
@@ -261,23 +316,10 @@ export function createSyncEngine<Scope>(options: SyncEngineOptions<Scope>): {
           );
         }
 
-        // conflict dominates what remains (the contract's MUST)
-        const revsByTable = new Map<string, ReadonlyMap<string, number>>();
-        for (const entry of parsed) {
-          const ids = [...entry.rows.map((r) => r.id), ...entry.deletes];
-          if (ids.length === 0) continue;
-          const revs = await tx.currentRevs(entry.table, scope, ids);
-          revsByTable.set(entry.table, revs);
-          for (const rev of revs.values()) {
-            if (rev > since) return { conflict: true };
-          }
-        }
-
-        // past the conflict check every named rev is <= cursor, so a
-        // write aimed at a tombstone would silently no-op in the store
-        // (upsert MUST NOT resurrect) and an append-only table would
-        // swallow the change; both must be visible in `rejected` or the
-        // client marks a refused write as synced and diverges for good
+        // Every named rev is now <= cursor, so a write aimed at a
+        // tombstone would silently no-op (upsert MUST NOT resurrect) and
+        // an append-only table would swallow it; both must be visible in
+        // `rejected` or the client marks a refused write as synced.
         for (const entry of parsed) {
           if (entry.rows.length === 0) continue;
           const drop = new Set(
@@ -296,8 +338,6 @@ export function createSyncEngine<Scope>(options: SyncEngineOptions<Scope>): {
           if (drop.size > 0) {
             (rejected[entry.table] ??= []).push(...drop);
             entry.rows = entry.rows.filter((r) => !drop.has(r.id));
-            // a rejected id leaves no effect: unreachable after the
-            // deleted-supersedes normalization, kept as the invariant
             entry.deletes = entry.deletes.filter((id) => !drop.has(id));
           }
         }
@@ -306,12 +346,8 @@ export function createSyncEngine<Scope>(options: SyncEngineOptions<Scope>): {
           if (entry.rows.length > 0) {
             const refused = await tx.upsert(entry.table, scope, entry.rows);
             if (refused && refused.length > 0) {
-              // storage said no (constraint violation): same lane as
-              // validation refusals — never silent, never a 500
               (rejected[entry.table] ??= []).push(...refused);
               const drop = new Set(refused);
-              // a rejected id leaves no effect: unreachable after the
-              // deleted-supersedes normalization, kept as the invariant
               entry.deletes = entry.deletes.filter((id) => !drop.has(id));
             }
           }
@@ -324,25 +360,31 @@ export function createSyncEngine<Scope>(options: SyncEngineOptions<Scope>): {
 
         const rejectedField =
           Object.keys(rejected).length > 0 ? { rejected } : {};
+
+        // Collect the interleave, THEN read the floor: a gc committing
+        // during the collect prunes deletions from the window and raises
+        // the floor past them, so reading the floor after the collect
+        // turns that race into an honest degrade instead of a lost
+        // delete. The exclusion is keyed by (table, id): a bare id set
+        // would suppress the same id in a different table.
+        const collected = await collectSince(tx, scope, since);
         const floor = await tx.gcFloor();
-        // the fast path needs the COMPLETE interleave; below the floor
-        // deletions are gone from the window — degrade (the obligation
-        // the formal model found)
         if (since < floor) {
           return { cursor: null, changes: null, ...rejectedField };
         }
-        const requestIds = new Set(
-          parsed
-            .flatMap((entry) => [
+        const requestIds = new Map<string, ReadonlySet<string>>(
+          parsed.map((entry) => [
+            entry.table,
+            new Set([
               ...entry.rows.map((r) => r.id),
               ...entry.deletes,
-            ])
-            .concat(Object.values(rejected).flat()),
+              ...(rejected[entry.table] ?? []),
+            ]),
+          ]),
         );
         return {
-          // never issue a cursor below the floor (same rule as pull)
           cursor: String(Math.max(await tx.maxRev(scope), floor)),
-          changes: toChanges(await collectSince(tx, scope, since), requestIds),
+          changes: toChanges(collected, requestIds),
           ...rejectedField,
         };
       });

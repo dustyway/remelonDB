@@ -32,7 +32,7 @@ transport that delivers these values conforms.
   NOT appear on the wire in either direction; unknown keys are dropped
   by the client's sanitizer, not errors.
 - **ChangeSet** — `{ created: Record[], updated: Record[], deleted:
-  RecordId[] }`. `deleted` carries ids only.
+RecordId[] }`. `deleted` carries ids only.
 - **Changes** — `{ [tableName]: ChangeSet }`. Tables absent from the
   object mean "no changes there".
 
@@ -116,9 +116,11 @@ Semantics:
   together or none do.
 - **Conflict.** If any pushed record was modified on the server after
   the request's cursor, the server MUST reject the whole push with
-  `conflict` and apply nothing. The client then pulls (merging
-  per-column, local dirty columns winning), and pushes again — a
-  bounded loop (default 5 rounds) before surfacing an error.
+  `conflict` and apply nothing. This check covers every requested record in
+  the authenticated scope before validation can reject it. The client then
+  pulls (merging per-column, local dirty columns winning), and pushes again —
+  a bounded loop (default 5 rounds) before surfacing an error. A cursor beyond
+  the server's current horizon is also a conflict.
 - **Rejected records (partial accept).** A server MAY refuse individual
   records (validation, authorization, uniqueness) by listing their ids
   in `rejected` while accepting the rest. Rejected records' effects
@@ -134,17 +136,17 @@ Semantics:
 - **Cursor and interleaved changes are a package.** A non-null `cursor`
   MUST identify the push transaction's snapshot and MUST be accompanied
   by `changes`: everything committed between the request cursor and
-  that snapshot, excluding the push's own records. Returning a cursor
-  without those foreign changes reintroduces the lost-write race
-  through the back door. The client applies `changes`, marks synced,
-  adopts `cursor` — its own writes never echo.
+  that snapshot, excluding the push's own records by table and id.
+  Returning a cursor without those foreign changes reintroduces the
+  lost-write race through the back door. The client applies `changes`,
+  marks synced, adopts `cursor` — its own writes never echo.
 - **Degraded mode is legal — and sometimes mandatory.** `cursor: null,
-  changes: null` means "the server applied the push but cannot compute
+changes: null` means "the server applied the push but cannot compute
   the interleave". The client keeps its old cursor; the next pull
   re-delivers the push echo, which apply absorbs by equality. Correct
   either way — the fast path is a per-backend upgrade, invisible to app
   code. A server MUST degrade whenever it cannot compute the interleave
-  *completely* — in particular when the request cursor predates its
+  _completely_ — in particular when the request cursor predates its
   tombstone/change-log retention floor: the window has lost deletions,
   a "complete as far as we know" interleave would silently resurrect a
   deleted record on the client, and the degraded path routes the client
@@ -167,11 +169,12 @@ A conforming backend:
    never with silently incomplete data.
 4. Applies pushes atomically; answers `conflict` when any pushed record
    is stale; applies nothing on conflict.
-5. Never returns a push cursor without the *complete* interleaved
+5. Never returns a push cursor without the _complete_ interleaved
    foreign changes (degraded `null`/`null` is the escape hatch, and is
    mandatory when the request cursor predates the retention floor).
 6. Excludes rejected records' effects entirely; rejection lists name
-   ids that exist in the request.
+   ids that exist in the request under a configured table. Conflict
+   detection runs before rejection for every requested non-foreign id.
 7. Scopes every response to the authenticated client's data.
 
 ## 5. What servers may rely on from the client
@@ -207,7 +210,7 @@ For a server test suite; each item is one scenario or property test.
 2. Incremental pull returns exactly the rows changed after the cursor.
 3. Deletions arrive as ids in `deleted`; deleted rows never appear as
    records.
-4. A change committing *during* a pull (concurrent transaction) is
+4. A change committing _during_ a pull (concurrent transaction) is
    returned by the next pull — never lost. (The commit-order property;
    needs an interleaving harness or property test.)
 5. Push replay: identical push applied twice yields identical server
@@ -226,10 +229,10 @@ For a server test suite; each item is one scenario or property test.
 13. In a table declared `appendOnly`, a write to an existing id is
     rejected by id and the stored row is unchanged. Opt-in, so the
     suite runs it only when the backend declares such a table — and it
-    must be declared through the backend's *own* registration, which is
+    must be declared through the backend's _own_ registration, which is
     what catches a transport that drops engine config on the way to its
     endpoints.
-14. A refusal originating in *storage itself*, a unique or foreign-key
+14. A refusal originating in _storage itself_, a unique or foreign-key
     constraint the database enforces, is named in `rejected` like any
     other refusal, never a thrown error: the refused row leaves no
     trace, the rest of the push applies, and the same id retried with
@@ -239,7 +242,7 @@ For a server test suite; each item is one scenario or property test.
     the row is not applied. Opt-in (`crossValidation`): the backend
     mounts its own hook, so the case proves the hook wiring survives
     the registrant's whole stack.
-16. A cross-validation refusal of a *deletion* is reported by id and
+16. A cross-validation refusal of a _deletion_ is reported by id and
     the row stays alive: a server that reports the refusal but applies
     the tombstone anyway diverges every other device. Same opt-in.
 17. An id named in `deleted` supersedes its created/updated content in
@@ -248,8 +251,12 @@ For a server test suite; each item is one scenario or property test.
     to nothing.
 18. When the surviving statement for a duplicated id is refused (a
     deletion the cross-validation hook denies), the id is rejected and
-    the row keeps its *pre-push* content: the superseded update leaves
+    the row keeps its _pre-push_ content: the superseded update leaves
     no trace either. Opt-in (`crossValidation`).
+19. A stale record answers `conflict` even when validation would reject
+    its submitted value.
+20. Interleave exclusion is keyed by table and id: pushing `tableA/id`
+    does not hide an interleaved change to `tableB/id`.
 
 ## Versioning
 
