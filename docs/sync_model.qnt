@@ -32,6 +32,15 @@
 // Simplifications: one synced user, fixed row ids, a push batch shares
 // one revision (the wire contract: pushes are atomic).
 //
+// One client here is one row-set and one cursor, so the multi-tab shape
+// is out of frame: several browser contexts sharing a single database
+// and cursor, running sync concurrently, is not a configuration this
+// model can reach or refute. That arbitration lives in the broker, and
+// docs/multi-tab.qnt is where it is modelled — write-slot ownership,
+// port death and the sync lease. A sync-side hazard that needs two
+// contexts on one cursor belongs there, or in a remodel of this one
+// that splits a client's row-set from its sync runners.
+//
 // Check:    quint typecheck docs/sync_model.qnt
 // Simulate: quint run docs/sync_model.qnt --invariant=allInvariants \
 //             --max-samples=25000 --max-steps=60
