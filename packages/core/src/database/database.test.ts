@@ -7,6 +7,9 @@ import {
   sanitizedRaw,
   type RawRecord,
 } from '../rawRecord/index';
+import { Collection } from './Collection';
+import type { Database } from './Database';
+import * as Q from '../query/Q';
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -135,5 +138,19 @@ describe('markAsChanged', () => {
     markAsChanged(raw, 'a');
     expect(raw._status).toBe('created');
     expect(raw._changed).toBe('');
+  });
+});
+
+describe('blob query restrictions', () => {
+  it('rejects blob predicates and sorting for untyped callers', () => {
+    const assets = table('assets', { data: c.blob() });
+    const collection = new Collection(null as unknown as Database, assets);
+
+    expect(() => collection.query(Q.where('data', 'encoded'))).toThrow(
+      "Cannot query blob column 'assets.data'",
+    );
+    expect(() => collection.query(Q.sortBy('data'))).toThrow(
+      "Cannot query blob column 'assets.data'",
+    );
   });
 });

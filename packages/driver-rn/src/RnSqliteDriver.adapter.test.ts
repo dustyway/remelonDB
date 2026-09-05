@@ -124,6 +124,22 @@ describe('statements', () => {
       [1],
     );
   });
+
+  it('passes blob values through as Uint8Array', async () => {
+    const driver = await opened();
+    const bytes = new Uint8Array([0, 127, 255]);
+    database.getAllAsync.mockResolvedValue([{ data: bytes }]);
+
+    await expect(driver.query('select data from assets', [])).resolves.toEqual([
+      { data: bytes },
+    ]);
+    await driver.execute('insert into assets (data) values (?)', [bytes]);
+
+    expect(database.runAsync).toHaveBeenCalledWith(
+      'insert into assets (data) values (?)',
+      [bytes],
+    );
+  });
 });
 
 describe('executeBatch', () => {

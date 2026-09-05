@@ -55,8 +55,10 @@ export class NodeSqliteDriver implements SqliteDriver {
   }
 
   async query(sql: string, args: SqlArgs): Promise<Row[]> {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- better-sqlite3 types `all()` as `unknown[]`; the driver contract is that callers ask for columns SQLite can return.
-    return this.openDb.prepare(sql).all(...bindArgs(args)) as Row[];
+    return this.openDb
+      .prepare(sql)
+      .all(...bindArgs(args))
+      .map(normalizeRow);
   }
 
   async execute(sql: string, args: SqlArgs): Promise<void> {
@@ -93,9 +95,34 @@ export class NodeSqliteDriver implements SqliteDriver {
   }
 }
 
+const isRowObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+function normalizeRow(value: unknown): Row {
+  if (!isRowObject(value)) {
+    throw new Error('NodeSqliteDriver: SQLite returned a non-object row');
+  }
+  const row: Row = {};
+  for (const [key, column] of Object.entries(value)) {
+    if (column instanceof Uint8Array) {
+      row[key] = new Uint8Array(column);
+    } else if (
+      column === null ||
+      typeof column === 'string' ||
+      typeof column === 'number' ||
+      typeof column === 'boolean'
+    ) {
+      row[key] = column;
+    } else {
+      throw new Error(`NodeSqliteDriver: unsupported column value '${key}'`);
+    }
+  }
+  return row;
+}
+
 // SQLite has no boolean storage class and better-sqlite3 rejects boolean
 // bind values, so they become 0/1 at the seam.
-function bindArgs(args: SqlArgs): (string | number | null)[] {
+function bindArgs(args: SqlArgs): (string | number | Uint8Array | null)[] {
   return args.map((value) => {
     if (typeof value === 'boolean') {
       return value ? 1 : 0;

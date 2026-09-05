@@ -15,9 +15,14 @@ const tasks = table('tasks', {
   position: c.number().indexed(),
   is_done: c.boolean(),
   project_id: c.string().optional(),
+  attachment: c.blob(),
+  thumbnail: c.blob().optional(),
 });
 
 type TaskRecord = InferRecord<typeof tasks>;
+type BlobIsIndexable = 'indexed' extends keyof ReturnType<typeof c.blob>
+  ? true
+  : false;
 
 // Compile-time-only helpers
 type Equal<A, B> =
@@ -39,7 +44,10 @@ describe('schema-inferred types', () => {
     assertType<Equal<TaskRecord['is_done'], boolean>>();
     // optional column: | null, not | undefined
     assertType<Equal<TaskRecord['project_id'], string | null>>();
+    assertType<Equal<TaskRecord['attachment'], Uint8Array>>();
+    assertType<Equal<TaskRecord['thumbnail'], Uint8Array | null>>();
     assertType<Equal<TaskRecord['id'], string>>();
+    assertType<Equal<BlobIsIndexable, false>>();
     /* eslint-disable @typescript-eslint/no-unused-vars -- the alias only
        exists so the @ts-expect-error below is checked. */
     // @ts-expect-error — _status is core-internal, not on app-facing records
@@ -53,6 +61,7 @@ describe('schema-inferred types', () => {
     const t = null as unknown as Task;
     assertType<Equal<typeof t.name, string>>();
     assertType<Equal<typeof t.project_id, string | null>>();
+    assertType<Equal<typeof t.attachment, Uint8Array>>();
     const use = (): unknown => {
       // @ts-expect-error — misspelled/undeclared fields do not exist
       return t.nmae;
@@ -72,6 +81,10 @@ describe('schema-inferred types', () => {
     const use = (): void => {
       collection.query(Q.where('position', Q.gt(1)), Q.sortBy('name'));
       collection.query(Q.where('id', 'x'));
+      // @ts-expect-error -- blob columns cannot participate in predicates
+      collection.query(Q.where('attachment', 'encoded'));
+      // @ts-expect-error -- blob columns cannot participate in sorting
+      collection.query(Q.sortBy('attachment'));
       // @ts-expect-error — 'nmae' is not a column of tasks
       collection.query(Q.where('nmae', 'x'));
       // @ts-expect-error — sortBy is checked too

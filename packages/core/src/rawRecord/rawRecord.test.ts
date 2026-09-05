@@ -9,6 +9,8 @@ const tasksTable = table('tasks', {
   is_done: c.boolean(),
   project_id: c.string().optional(),
   rating: c.number().optional(),
+  attachment: c.blob(),
+  thumbnail: c.blob().optional(),
 });
 
 describe('sanitizedRaw', () => {
@@ -22,6 +24,8 @@ describe('sanitizedRaw', () => {
       is_done: true,
       project_id: 'p1',
       rating: null,
+      attachment: new Uint8Array([1, 2, 3]),
+      thumbnail: null,
     };
     expect(sanitizedRaw(dirty, tasksTable)).toEqual(dirty);
   });
@@ -72,6 +76,16 @@ describe('sanitizedRaw', () => {
     expect(sanitizedRaw({ is_done: 2 }, tasksTable).is_done).toBe(false);
   });
 
+  it('accepts blobs and copies their bytes on ingress', () => {
+    const input = new Uint8Array([0, 127, 255]);
+    const raw = sanitizedRaw({ attachment: input }, tasksTable);
+
+    expect(raw.attachment).toEqual(input);
+    expect(raw.attachment).not.toBe(input);
+    input[0] = 42;
+    expect(raw.attachment).toEqual(new Uint8Array([0, 127, 255]));
+  });
+
   it('fills absent columns with nullValue defaults', () => {
     const raw = sanitizedRaw({}, tasksTable);
     expect(raw).toMatchObject({
@@ -82,6 +96,8 @@ describe('sanitizedRaw', () => {
       is_done: false,
       project_id: null,
       rating: null,
+      attachment: new Uint8Array(),
+      thumbnail: null,
     });
   });
 });
@@ -103,6 +119,7 @@ describe('nullValue', () => {
     expect(nullValue({ name: 'a', type: 'string' })).toBe('');
     expect(nullValue({ name: 'a', type: 'number' })).toBe(0);
     expect(nullValue({ name: 'a', type: 'boolean' })).toBe(false);
+    expect(nullValue({ name: 'a', type: 'blob' })).toEqual(new Uint8Array());
     expect(
       nullValue({ name: 'a', type: 'string', isOptional: true }),
     ).toBeNull();

@@ -29,7 +29,9 @@ function encodeCreateTable(table: TableSchema): string {
     '"id" primary key',
     '"_changed"',
     '"_status"',
-    ...table.columnArray.map((column) => `"${column.name}"`),
+    ...table.columnArray.map(
+      (column) => `"${column.name}"${column.type === 'blob' ? ' BLOB' : ''}`,
+    ),
   ].join(', ');
   return `create table "${table.name}" (${columns})`;
 }
@@ -59,6 +61,8 @@ function defaultValueSql(column: ColumnSchema): string {
     case 'number':
     case 'boolean':
       return '0';
+    case 'blob':
+      return "X''";
   }
 }
 
@@ -68,7 +72,7 @@ function encodeAddColumns(step: {
 }): string[] {
   return step.columns.flatMap((column) => [
     // ADD COLUMN with DEFAULT backfills existing rows in SQLite
-    `alter table "${step.table}" add "${column.name}" default ${defaultValueSql(column)}`,
+    `alter table "${step.table}" add "${column.name}"${column.type === 'blob' ? ' BLOB' : ''} default ${defaultValueSql(column)}`,
     ...(column.isIndexed ? [encodeIndex(step.table, column.name)] : []),
   ]);
 }

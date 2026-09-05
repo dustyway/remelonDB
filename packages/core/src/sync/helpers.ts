@@ -4,7 +4,11 @@ import * as Q from '../query/Q';
 import type { Clause } from '../query/ast';
 import type { Row } from '../driver/SqliteDriver';
 import type { TableSchema } from '../schema/index';
-import type { DirtyRaw, RawRecord } from '../rawRecord/index';
+import {
+  areValuesEqual,
+  type DirtyRaw,
+  type RawRecord,
+} from '../rawRecord/index';
 import type { Database } from '../database/Database';
 import { runDirect } from '../database/directWork';
 import type { SyncChanges } from './types';
@@ -17,7 +21,8 @@ export function areRecordsEqual(a: RawRecord, b: RawRecord): boolean {
   const keysA = Object.keys(a);
   const keysB = Object.keys(b);
   return (
-    keysA.length === keysB.length && keysA.every((key) => a[key] === b[key])
+    keysA.length === keysB.length &&
+    keysA.every((key) => areValuesEqual(a[key] ?? null, b[key] ?? null))
   );
 }
 

@@ -12,7 +12,7 @@
  */
 
 /** The entire value vocabulary that crosses the seam, in either direction. */
-export type SqlValue = string | number | boolean | null;
+export type SqlValue = string | number | boolean | Uint8Array | null;
 
 export type SqlArgs = readonly SqlValue[];
 

@@ -9,10 +9,11 @@
  * return one cached Model instance per id, wrapping the cached raw.
  * Without a model class, M is RawRecord and records pass through as-is.
  */
-import type { Clause } from '../query/ast';
+import type { Clause, Where } from '../query/ast';
 import * as Q from '../query/Q';
 import type { TableSchema } from '../schema/index';
 import {
+  areValuesEqual,
   markAsChanged,
   sanitizedRaw,
   setRawSanitized,
@@ -28,6 +29,25 @@ import {
   type Model,
   type ModelClass,
 } from '../model/Model';
+
+const assertQueryableColumn = (table: TableSchema, name: string): void => {
+  if (table.columns[name]?.type === 'blob') {
+    throw new Error(`Cannot query blob column '${table.name}.${name}'`);
+  }
+};
+
+const assertQueryableWhere = (table: TableSchema, where: Where): void => {
+  if (where.type === 'where') {
+    assertQueryableColumn(table, where.left);
+    if ('column' in where.comparison.right) {
+      assertQueryableColumn(table, where.comparison.right.column);
+    }
+  } else if (where.type === 'and' || where.type === 'or') {
+    for (const condition of where.conditions) {
+      assertQueryableWhere(table, condition);
+    }
+  }
+};
 
 export type ChangeType = 'created' | 'updated' | 'destroyed';
 
@@ -92,6 +112,17 @@ export class Collection<M = RawRecord, C extends string = string> {
   }
 
   query(...clauses: Clause<C>[]): Query<M> {
+    for (const clause of clauses) {
+      if (clause.type === 'sortBy') {
+        assertQueryableColumn(this.schema, clause.sortColumn);
+      } else if (
+        clause.type === 'where' ||
+        clause.type === 'and' ||
+        clause.type === 'or'
+      ) {
+        assertQueryableWhere(this.schema, clause);
+      }
+    }
     return new Query(this, Q.buildQueryDescription(clauses));
   }
 
@@ -170,8 +201,10 @@ export class Collection<M = RawRecord, C extends string = string> {
       }
       const before = updated[key];
       setRawSanitized(updated, value, column);
-      if (updated[key] !== before) {
+      if (!areValuesEqual(updated[key] ?? null, before ?? null)) {
         markAsChanged(updated, key);
+      } else {
+        updated[key] = before ?? null;
       }
     }
     return { type: 'update', table: this.table, raw: updated };

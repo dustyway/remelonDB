@@ -45,6 +45,7 @@ describe('comparisons', () => {
   it('rejects invalid values', () => {
     expect(() => Q.where('a', undefined as never)).toThrow('did you mean null');
     expect(() => Q.eq({} as never)).toThrow('primitive');
+    expect(() => Q.eq(new Uint8Array([1]) as never)).toThrow('primitive');
     expect(() => Q.gt(null as never)).toThrow('null');
     expect(() => Q.gt(NaN)).toThrow('NaN');
     expect(() => Q.oneOf(['a', null as never])).toThrow('null');
