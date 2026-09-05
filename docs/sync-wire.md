@@ -95,9 +95,10 @@ Semantics:
   can no longer serve completely (pruned tombstones or change log).
   Answering such a cursor with partial data is a silent lost delete.
   On receiving it, the client re-pulls from `null` and applies with
-  replacement semantics: reconcile against the full snapshot, destroy
-  local synced records absent from it, keep local dirty records (they
-  merge and push as usual).
+  replacement semantics: for each table present in the response,
+  reconcile against its full snapshot, destroy local synced records
+  absent from it, and keep local dirty records (they merge and push as
+  usual). An omitted table still means "no changes there".
 
 ## 3. Push
 

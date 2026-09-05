@@ -240,8 +240,8 @@ describe('blob wire values', () => {
   });
 });
 
-describe('replacement covers the whole schema', () => {
-  it('a table the snapshot omits loses its synced rows and keeps dirty ones', async () => {
+describe('replacement snapshots', () => {
+  it('leaves an omitted table unchanged', async () => {
     await db.write(async () => {
       await applyRemoteChanges(db, {
         tasks: { created: [task('t1', 'keep')], updated: [], deleted: [] },
@@ -265,8 +265,13 @@ describe('replacement covers the whole schema', () => {
     });
 
     const noteRows = await driver.query('select * from "notes"', []);
-    expect(noteRows).toHaveLength(1);
-    expect(noteRows[0]).toMatchObject({ id: 'n2', _status: 'created' });
+    expect(noteRows).toHaveLength(2);
+    expect(noteRows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'n1', _status: 'synced' }),
+        expect.objectContaining({ id: 'n2', _status: 'created' }),
+      ]),
+    );
     expect(await driver.query('select * from "tasks"', [])).toHaveLength(1);
   });
 });

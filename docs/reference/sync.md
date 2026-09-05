@@ -341,11 +341,12 @@ Why deletion must work this way: [sync-basics.md](../sync-basics.md).
 
 When the server answers `resyncRequired` (pruned history, expired
 cursor), the engine re-pulls from `cursor: null` and applies in
-_replacement_ mode: matching records reconciled, missing ones created,
-**local synced records absent from the snapshot destroyed**, while dirty
-records survive and push afterwards. That includes tombstones: an
-offline delete survives the rebuild and is pushed after it (records in
-the snapshot never resurrect over a pending local delete).
+_replacement_ mode. Within each table present in the response, matching
+records are reconciled and missing ones are created. **Local synced records
+absent from that table's snapshot are destroyed**, while dirty records survive
+and push afterwards. An omitted table remains unchanged. That includes
+tombstones: an offline delete survives the rebuild and is pushed after it
+(records in the snapshot never resurrect over a pending local delete).
 
 ## Migration pulls
 

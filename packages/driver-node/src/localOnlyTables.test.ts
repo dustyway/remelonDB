@@ -92,23 +92,30 @@ describe('local-only tables and the push', () => {
 });
 
 describe('local-only tables and the pull', () => {
-  it('a pull naming one is rejected rather than applied', async () => {
-    await expect(
-      db.write(async () => {
-        await applyRemoteChanges(db, {
-          media_cache: {
-            created: [{ id: 'm1', file_id: 'f', bytes: '' }],
-            updated: [],
-            deleted: [],
-          },
-        });
-      }),
-    ).rejects.toThrow("local-only table 'media_cache'");
+  it.each([false, true])(
+    'a pull naming one is rejected rather than applied (replacement: %s)',
+    async (replacement) => {
+      await expect(
+        db.write(async () => {
+          await applyRemoteChanges(
+            db,
+            {
+              media_cache: {
+                created: [{ id: 'm1', file_id: 'f', bytes: '' }],
+                updated: [],
+                deleted: [],
+              },
+            },
+            { replacement },
+          );
+        }),
+      ).rejects.toThrow("local-only table 'media_cache'");
 
-    expect(await driver.query('select * from "media_cache"', [])).toHaveLength(
-      0,
-    );
-  });
+      expect(
+        await driver.query('select * from "media_cache"', []),
+      ).toHaveLength(0);
+    },
+  );
 
   it('a replacement leaves local-only rows intact and replaces the rest', async () => {
     await db.write(async () => {

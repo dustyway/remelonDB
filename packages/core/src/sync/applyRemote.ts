@@ -10,8 +10,8 @@
  *          → missing: create (anomaly unless sendCreatedAsUpdated)
  * deleted  → always destroys, even over local changes
  *
- * With `replacement: true` (resync), local synced records absent from the
- * snapshot are destroyed as well; dirty records are kept.
+ * With `replacement: true` (resync), local synced records absent from each
+ * table's snapshot are destroyed as well; dirty records are kept.
  *
  * Must be called inside a database.write block.
  */
@@ -84,25 +84,7 @@ export async function applyRemoteChanges(
   const log = options.log ?? (() => {});
   const operations: BatchOperation[] = [];
 
-  // A replacement is the whole truth: a table the snapshot omits holds
-  // nothing server-side, and its local synced rows must go with the rest.
-  // Sweeping only the payload's tables left them alive forever.
-  const effectiveChanges: SyncChanges = options.replacement
-    ? Object.fromEntries(
-        Object.values(database.schema.tables)
-          .filter((table) => !table.localOnly)
-          .map((table) => [
-            table.name,
-            remoteChanges[table.name] ?? {
-              created: [],
-              updated: [],
-              deleted: [],
-            },
-          ]),
-      )
-    : remoteChanges;
-
-  for (const [table, tableChanges] of Object.entries(effectiveChanges)) {
+  for (const [table, tableChanges] of Object.entries(remoteChanges)) {
     if (!database.schema.tables[table]) {
       log(
         `sync: ignoring changes for unknown table '${table}' (forward compat)`,
