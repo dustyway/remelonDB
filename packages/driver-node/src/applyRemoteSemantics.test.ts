@@ -72,7 +72,7 @@ describe('the created bucket against local state', () => {
     expect(await hasUnsyncedChanges(db)).toBe(true);
   });
 
-  it('a locally-created record keeps its values against a remote update', async () => {
+  it('a pushed but unmarked creation accepts a later remote update', async () => {
     await db.write(async () => {
       await db.get('tasks').create({ id: 't1', name: 'mine', position: 1 });
     });
@@ -86,9 +86,31 @@ describe('the created bucket against local state', () => {
     const rows = await driver.query('select * from "tasks"', []);
     expect(rows[0]).toMatchObject({
       id: 't1',
-      name: 'mine',
-      position: 1,
+      name: 'theirs',
+      position: 9,
       _status: 'created',
+    });
+  });
+
+  it('a later local edit to a creation survives a remote update', async () => {
+    await db.write(async () => {
+      await db.get('tasks').create({ id: 't1', name: 'mine', position: 1 });
+      await db.get('tasks').update('t1', { name: 'mine-later' });
+    });
+
+    await db.write(async () => {
+      await applyRemoteChanges(db, {
+        tasks: { created: [], updated: [task('t1', 'theirs', 9)], deleted: [] },
+      });
+    });
+
+    const rows = await driver.query('select * from "tasks"', []);
+    expect(rows[0]).toMatchObject({
+      id: 't1',
+      name: 'mine-later',
+      position: 9,
+      _status: 'created',
+      _changed: 'name',
     });
   });
 });

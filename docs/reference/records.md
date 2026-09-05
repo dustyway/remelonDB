@@ -76,8 +76,10 @@ on. Same coercion table as above.
 The dirty-tracking design (inherited from upstream, kept in the
 [sync design](../sync-design.md)):
 
-- A freshly created record is `_status: 'created'`, `_changed: ''` — the
-  whole record is new, so no per-column tracking is needed.
+- A freshly created record is `_status: 'created'`, `_changed: ''`. Later
+  edits keep the `created` status and append their column names to `_changed`.
+  This lets an interrupted push reconcile a newer server row without losing
+  edits made after the creation snapshot.
 - Updating a synced record sets `_status: 'updated'` and appends each
   modified column name to `_changed` — this powers per-column conflict
   resolution during sync (local wins for columns in `_changed`, server wins

@@ -133,11 +133,11 @@ describe('markAsChanged', () => {
     expect(raw._changed).toBe('a,b');
   });
 
-  it('leaves created records untracked', () => {
+  it('tracks later edits while preserving created status', () => {
     const raw = sanitizedRaw({}, testTable);
     markAsChanged(raw, 'a');
     expect(raw._status).toBe('created');
-    expect(raw._changed).toBe('');
+    expect(raw._changed).toBe('a');
   });
 });
 

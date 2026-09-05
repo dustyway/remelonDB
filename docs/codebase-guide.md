@@ -663,12 +663,13 @@ return raw;
 These two columns are how the library remembers what it still owes the server. `_status` is the row's sync state; `_changed` is the set of columns edited locally since the last push. `markAsChanged(raw, col)` (`rawRecord/index.ts`) maintains them:
 
 ```ts
-// created or deleted records are left alone: the whole record is new or gone
-if (raw._status === 'synced') raw._status = 'updated';
+// created records keep their status; deleted records are left alone
+if (raw._status === 'deleted') return;
+if (raw._status !== 'created') raw._status = 'updated';
 raw._changed = addToSet(raw._changed, col); // comma-joined column set
 ```
 
-A record that is already `created` or `deleted` is not touched — the entire record is pending anyway, so per-column tracking would be noise. Only a `synced` record transitions to `updated` and starts accumulating changed columns. A subtle correctness point lives in the caller: `prepareUpdate` invokes `markAsChanged` _only for columns whose sanitized value actually changed_ (`Collection.prepareUpdate`). Assigning a field its current value marks nothing dirty, which keeps `_changed` honest and — you will see in Chapter 10 — is what lets a device's genuine edits survive a concurrent sync while no-op writes do not needlessly win conflicts.
+A deleted record is not touched. A created record keeps its status but tracks edits made after creation, while a synced record transitions to `updated`. This distinction lets a creation whose push landed before an interrupted local mark accept newer server values without losing edits made during the push. A subtle correctness point lives in the caller: `prepareUpdate` invokes `markAsChanged` _only for columns whose sanitized value actually changed_ (`Collection.prepareUpdate`). Assigning a field its current value marks nothing dirty, which keeps `_changed` honest and — you will see in Chapter 10 — is what lets a device's genuine edits survive a concurrent sync while no-op writes do not needlessly win conflicts.
 
 These two columns are the local state that Chapter 10's conflict rules interpret.
 

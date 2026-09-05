@@ -75,7 +75,7 @@ module sync_model {
   pure val DIRTY_STATUSES = Set("created", "updated", "deleted")
 
   type SRow = { present: bool, del: bool, value: int, rev: int }
-  type CRow = { value: int, status: str }
+  type CRow = { value: int, status: str, changed: bool }
 
   var sRows: str -> SRow
   var sRev: int
@@ -98,7 +98,7 @@ module sync_model {
     sRows' = IDS.mapBy(id => { present: false, del: false, value: NO_VAL, rev: 0 }),
     sRev' = 0,
     gcFloor' = 0,
-    cRows' = CLIENTS.mapBy(c => IDS.mapBy(id => { value: NO_VAL, status: "none" })),
+    cRows' = CLIENTS.mapBy(c => IDS.mapBy(id => { value: NO_VAL, status: "none", changed: false })),
     cursor' = CLIENTS.mapBy(c => 0),
     lastRejected' = Set(),
     lastBefore' = IDS.mapBy(id => { present: false, del: false, value: NO_VAL, rev: 0 }),
@@ -112,7 +112,7 @@ module sync_model {
     nondet v = oneOf(VALS)
     all {
       cRows.get(c).get(id).status == "none",
-      cRows' = cRows.setBy(c, m => m.set(id, { value: v, status: "created" })),
+      cRows' = cRows.setBy(c, m => m.set(id, { value: v, status: "created", changed: false })),
       cursor' = cursor,
       sRows' = sRows, sRev' = sRev, gcFloor' = gcFloor,
       lastRejected' = Set(), lastBefore' = lastBefore,
@@ -128,6 +128,7 @@ module sync_model {
       cRows' = cRows.setBy(c, m => m.setBy(id, r => {
         value: v,
         status: if (r.status == "created") "created" else "updated",
+        changed: true,
       })),
       cursor' = cursor,
       sRows' = sRows, sRev' = sRev, gcFloor' = gcFloor,
@@ -140,7 +141,7 @@ module sync_model {
     nondet id = oneOf(IDS)
     all {
       Set("synced", "updated").contains(cRows.get(c).get(id).status),
-      cRows' = cRows.setBy(c, m => m.setBy(id, r => { value: r.value, status: "deleted" })),
+      cRows' = cRows.setBy(c, m => m.setBy(id, r => { value: r.value, status: "deleted", changed: false })),
       cursor' = cursor,
       sRows' = sRows, sRev' = sRev, gcFloor' = gcFloor,
       lastRejected' = Set(), lastBefore' = lastBefore,
@@ -152,9 +153,13 @@ module sync_model {
   def pullRow(c: str, id: str): CRow = {
     val s = sRows.get(id)
     val l = cRows.get(c).get(id)
-    if (s.present and s.rev > cursor.get(c) and Set("none", "synced").contains(l.status))
-      if (s.del) { value: NO_VAL, status: "none" }
-      else { value: s.value, status: "synced" }
+    if (s.present and s.rev > cursor.get(c))
+      if (s.del) { value: NO_VAL, status: "none", changed: false }
+      else if (Set("none", "synced").contains(l.status))
+        { value: s.value, status: "synced", changed: false }
+      else if (l.status == "created" and not(l.changed))
+        { value: s.value, status: "created", changed: false }
+      else l
     else l
   }
 
@@ -210,16 +215,16 @@ module sync_model {
       val l = cRows.get(c).get(id)
       val s = sRows.get(id)
       if (accepted.contains(id))
-        if (l.status == "deleted") { value: NO_VAL, status: "none" }
-        else { value: l.value, status: "synced" }
+        if (l.status == "deleted") { value: NO_VAL, status: "none", changed: false }
+        else { value: l.value, status: "synced", changed: false }
       else if (and {
         fullPathOk(c),
         s.present,
         s.rev > cursor.get(c),
         Set("none", "synced").contains(l.status),
       })
-        if (s.del) { value: NO_VAL, status: "none" }
-        else { value: s.value, status: "synced" }
+        if (s.del) { value: NO_VAL, status: "none", changed: false }
+        else { value: s.value, status: "synced", changed: false }
       else l
     })
 
@@ -322,9 +327,11 @@ module sync_model {
       cRows' = cRows.set(c, IDS.mapBy(id => {
         val s = sRows.get(id)
         val l = cRows.get(c).get(id)
-        if (DIRTY_STATUSES.contains(l.status)) l
-        else if (s.present and not(s.del)) { value: s.value, status: "synced" }
-        else { value: NO_VAL, status: "none" }
+        if (s.present and not(s.del) and l.status == "created" and not(l.changed))
+          { value: s.value, status: "created", changed: false }
+        else if (DIRTY_STATUSES.contains(l.status)) l
+        else if (s.present and not(s.del)) { value: s.value, status: "synced", changed: false }
+        else { value: NO_VAL, status: "none", changed: false }
       })),
       cursor' = cursor.set(c, sRev),
       sRows' = sRows, sRev' = sRev, gcFloor' = gcFloor,

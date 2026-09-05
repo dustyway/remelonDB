@@ -181,15 +181,10 @@ export async function applyRemoteChanges(
     };
 
     const updateResolved = (local: RawRecord, dirty: DirtyRaw): void => {
-      // A locally-created record is wholly local knowledge and keeps its
-      // values (sync_model.qnt's pullRow rule): its _changed is empty, so
-      // the per-column merge would otherwise hand every column to the
-      // remote and the next push would send the server's own values back
-      // as this client's creation.
-      let resolved =
-        local._status === 'created'
-          ? local
-          : resolveConflict(local, dirty, schema);
+      // Created rows track edits made after creation in _changed. Using the
+      // server row as the base lets a push accepted before an interrupted
+      // mark reconcile later remote updates without losing local edits.
+      let resolved = resolveConflict(local, dirty, schema);
       if (options.conflictResolver) {
         resolved = options.conflictResolver(table, local, dirty, resolved);
       }
