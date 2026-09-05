@@ -14,11 +14,15 @@ while the rest of the push applies).
 ## Usage
 
 ```ts
-import { RemelonSyncModule } from '@remelondb/nestjs'
-import { createDrizzleStore } from '@remelondb/store-drizzle'
-import { z } from 'zod'
+import { RemelonSyncModule } from '@remelondb/nestjs';
+import { createDrizzleStore } from '@remelondb/store-drizzle';
+import { z } from 'zod';
 
-const Deck = z.object({ name: z.string().min(1), source_lang: z.string(), target_lang: z.string() })
+const Deck = z.object({
+  name: z.string().min(1),
+  source_lang: z.string(),
+  target_lang: z.string(),
+});
 
 @Module({
   imports: [
@@ -26,7 +30,7 @@ const Deck = z.object({ name: z.string().min(1), source_lang: z.string(), target
       imports: [DbModule],
       inject: [DRIZZLE],
       useFactory: (db: Db) => ({
-        store: createDrizzleStore<string>({ db, tables: { /* ... */ } }),
+        store: createDrizzleStore<string>({ db, tables: {/* ... */} }),
         tables: { decks: Deck },
         // engine table config beyond validation. The module builds its
         // own engine, so config not passed here does not exist on the
@@ -34,8 +38,10 @@ const Deck = z.object({ name: z.string().min(1), source_lang: z.string(), target
         tableOptions: { review_events: { appendOnly: true } },
         // the authenticated principal; null answers 401
         scopeFrom: async (request) => {
-          const session = await auth.api.getSession({ headers: (request as Request).headers })
-          return session?.user.id ?? null
+          const session = await auth.api.getSession({
+            headers: (request as Request).headers,
+          });
+          return session?.user.id ?? null;
         },
       }),
     }),

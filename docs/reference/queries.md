@@ -13,19 +13,19 @@ db.get(Task).query(
   Q.where('position', Q.gt(2)),
   Q.sortBy('position', Q.desc),
   Q.take(20),
-)
+);
 ```
 
 The standalone pipeline the rest of this doc describes:
 
 ```ts
-import { Q, encodeQuery } from '@remelondb/core'
+import { Q, encodeQuery } from '@remelondb/core';
 
 const description = Q.buildQueryDescription([
   Q.where('is_done', false),
   Q.sortBy('position', Q.desc),
-])
-const [sql, args] = encodeQuery({ table: 'tasks', description })
+]);
+const [sql, args] = encodeQuery({ table: 'tasks', description });
 ```
 
 Everything is validated at construction: identifiers must match
@@ -42,16 +42,16 @@ Descriptions are deep-frozen outside production and survive
 Every operator below can also take `Q.column('other_column')` where noted, to
 compare two columns of the same row/table.
 
-| Builder | SQL emitted | Semantics |
-| --- | --- | --- |
-| `Q.eq(v)` | `col is ?` | Null-safe equality: `eq(null)` matches null. Strict across types — `'42'` never equals `42`. Column RHS allowed. |
-| `Q.notEq(v)` | `col is not ?` | Negation of `eq` — **matches rows where the column is null** (`null IS NOT 'x'` is true). Column RHS allowed. |
-| `Q.gt/gte/lt/lte(v)` | `col > ?` etc. | Null never matches (either side). Rejects `null` at build time. Across storage classes, SQLite ordering applies: any text sorts above any number. Column RHS allowed. |
-| `Q.between(a, b)` | `col between ? and ?` | Two numbers, inclusive. Null never matches. |
-| `Q.oneOf([...])` | `col in (?, ?, …)` | Non-null values only. Empty list matches **nothing**. Null column never matches. |
-| `Q.notIn([...])` | `col not in (?, …)` | Non-null values only. Empty list matches **everything, including null rows** (SQLite rule). Non-empty list never matches null rows. |
-| `Q.like(p)` / `Q.notLike(p)` | `col like ? escape '\'` | See [LIKE](#like-and-escapelike). `notLike` never matches null rows. |
-| `Q.includes(s)` | `instr(col, ?) > 0` | Literal substring match. **Case-sensitive** (unlike `like`). Null never matches. |
+| Builder                      | SQL emitted             | Semantics                                                                                                                                                             |
+| ---------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Q.eq(v)`                    | `col is ?`              | Null-safe equality: `eq(null)` matches null. Strict across types — `'42'` never equals `42`. Column RHS allowed.                                                      |
+| `Q.notEq(v)`                 | `col is not ?`          | Negation of `eq` — **matches rows where the column is null** (`null IS NOT 'x'` is true). Column RHS allowed.                                                         |
+| `Q.gt/gte/lt/lte(v)`         | `col > ?` etc.          | Null never matches (either side). Rejects `null` at build time. Across storage classes, SQLite ordering applies: any text sorts above any number. Column RHS allowed. |
+| `Q.between(a, b)`            | `col between ? and ?`   | Two numbers, inclusive. Null never matches.                                                                                                                           |
+| `Q.oneOf([...])`             | `col in (?, ?, …)`      | Non-null values only. Empty list matches **nothing**. Null column never matches.                                                                                      |
+| `Q.notIn([...])`             | `col not in (?, …)`     | Non-null values only. Empty list matches **everything, including null rows** (SQLite rule). Non-empty list never matches null rows.                                   |
+| `Q.like(p)` / `Q.notLike(p)` | `col like ? escape '\'` | See [LIKE](#like-and-escapelike). `notLike` never matches null rows.                                                                                                  |
+| `Q.includes(s)`              | `instr(col, ?) > 0`     | Literal substring match. **Case-sensitive** (unlike `like`). Null never matches.                                                                                      |
 
 The `is`/`is not` and text-above-numbers rules are SQLite's own semantics,
 adopted deliberately: there is no second engine to compromise with, and the
@@ -65,7 +65,7 @@ driver conformance corpus pins them on every platform.
   inside a pattern, escape it:
 
 ```ts
-Q.where('name', Q.like(`%${Q.escapeLike(userInput)}%`))
+Q.where('name', Q.like(`%${Q.escapeLike(userInput)}%`));
 ```
 
 `Q.escapeLike` backslash-escapes `\`, `%`, and `_`. (Upstream WatermelonDB's
@@ -78,14 +78,22 @@ is the lossless replacement.)
 - `Q.on(table, column, value)` or `Q.on(table, ...conditions)` places
   conditions on a joined table.
 
-Joins need an *association* so the compiler knows the join keys:
+Joins need an _association_ so the compiler knows the join keys:
 
 ```ts
 const associations = [
-  { from: 'tasks', to: 'projects', info: { type: 'belongs_to', key: 'project_id' } },
-  { from: 'tasks', to: 'comments', info: { type: 'has_many', foreignKey: 'task_id' } },
-]
-encodeQuery({ table: 'tasks', description, associations })
+  {
+    from: 'tasks',
+    to: 'projects',
+    info: { type: 'belongs_to', key: 'project_id' },
+  },
+  {
+    from: 'tasks',
+    to: 'comments',
+    info: { type: 'has_many', foreignKey: 'task_id' },
+  },
+];
+encodeQuery({ table: 'tasks', description, associations });
 ```
 
 Join semantics — deliberate and worth knowing:

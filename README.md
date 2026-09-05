@@ -79,36 +79,36 @@ A taste of the API — the same code on every platform, swapping only
 the driver import:
 
 ```ts
-import { z } from 'zod'
-import { appSchema, Database, ModelFor, Q } from '@remelondb/core'
-import { zodTable } from '@remelondb/core/zod'
-import { NodeSqliteDriver } from '@remelondb/driver-node'
+import { z } from 'zod';
+import { appSchema, Database, ModelFor, Q } from '@remelondb/core';
+import { zodTable } from '@remelondb/core/zod';
+import { NodeSqliteDriver } from '@remelondb/driver-node';
 
 const TaskRow = z.object({
   name: z.string(),
   position: z.number(),
   is_done: z.boolean(),
-})
-const tasks = zodTable('tasks', TaskRow, { indexed: ['position'] })
+});
+const tasks = zodTable('tasks', TaskRow, { indexed: ['position'] });
 
-const schema = appSchema({ version: 1, tables: [tasks] })
+const schema = appSchema({ version: 1, tables: [tasks] });
 
 // no field declarations: name/position/is_done are typed from the
 // table definition; accessors are schema-generated
 class Task extends ModelFor(tasks) {}
 
 const db = await Database.open({
-  driver: new NodeSqliteDriver(),   // RnSqliteDriver / WebSqliteDriver in apps
+  driver: new NodeSqliteDriver(), // RnSqliteDriver / WebSqliteDriver in apps
   schema,
   modelClasses: [Task],
   name: 'app.db',
-})
+});
 
-await db.write(() => db.get(Task).create({ name: 'try it', position: 1 }))
+await db.write(() => db.get(Task).create({ name: 'try it', position: 1 }));
 
 db.get(Task)
   .query(Q.where('is_done', false), Q.sortBy('position'))
-  .observe((open) => console.log('open tasks:', open.length))
+  .observe((open) => console.log('open tasks:', open.length));
 ```
 
 In an app, wrap the open in `createDatabaseManager` (and the React

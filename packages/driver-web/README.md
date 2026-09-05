@@ -24,20 +24,24 @@ open, retryable failure, takeover handled — with the React hook for
 lifecycle state:
 
 ```ts
-import { createDatabaseManager, Database } from '@remelondb/core'
-import { useDatabaseState } from '@remelondb/core/react'
-import { WebSqliteDriver } from '@remelondb/driver-web'
+import { createDatabaseManager, Database } from '@remelondb/core';
+import { useDatabaseState } from '@remelondb/core/react';
+import { WebSqliteDriver } from '@remelondb/driver-web';
 
 const manager = createDatabaseManager({
   open: (onTakenOver) =>
     Database.open({
-      driver: new WebSqliteDriver({ shared: true, takeover: true, onTakenOver }),
+      driver: new WebSqliteDriver({
+        shared: true,
+        takeover: true,
+        onTakenOver,
+      }),
       schema,
       migrations,
       modelClasses: [Task],
       name: 'app.db',
     }),
-})
+});
 
 // in a component: const { status, error } = useDatabaseState(manager)
 // when status is 'ready': manager.database
@@ -47,8 +51,8 @@ const manager = createDatabaseManager({
 tests and scripts; apps should let the manager own the lifecycle. The
 todo-sync example's `frontend/src/db.ts` is the working reference.
 
-- **Persistence is never silently downgraded**: the default `storage:
-  'opfs'` fails loudly if OPFS is unavailable. `open()` rejects with a
+- **Persistence is never silently downgraded.** The default `storage: 'opfs'`
+  fails loudly if OPFS is unavailable. `open()` rejects with a
   typed **`OpfsUnavailableError`** (`code: 'OPFS_UNAVAILABLE'`), refused
   up front — before any worker/broker spawns — when OPFS is blocked: an
   old browser, a sandboxed iframe, Node, or **Firefox private browsing /
@@ -79,11 +83,12 @@ connection's lifetime:
 
 ```ts
 const driver = new WebSqliteDriver({
-  takeover: true,          // take the database from another tab
-  onTakenOver: () => {     // ...and learn when one takes it from us
-    showBanner('This app was opened in another tab.')
+  takeover: true, // take the database from another tab
+  onTakenOver: () => {
+    // ...and learn when one takes it from us
+    showBanner('This app was opened in another tab.');
   },
-})
+});
 ```
 
 - Default (`takeover` unset): opening a database another tab holds
@@ -112,7 +117,7 @@ is blocked for the same reason. Mobile has no such restriction — see
 For every tab live simultaneously, opt in to **shared mode**:
 
 ```ts
-const driver = new WebSqliteDriver({ shared: true })
+const driver = new WebSqliteDriver({ shared: true });
 ```
 
 All tabs then route through one SharedWorker broker to a single
@@ -145,9 +150,13 @@ export default defineConfig({
   optimizeDeps: {
     // prebundling rewrites the driver's worker URLs into .vite/deps,
     // where the worker files do not exist
-    exclude: ["@remelondb/driver-web", "@remelondb/core", "@sqlite.org/sqlite-wasm"],
+    exclude: [
+      '@remelondb/driver-web',
+      '@remelondb/core',
+      '@sqlite.org/sqlite-wasm',
+    ],
   },
-})
+});
 ```
 
 Shared mode needs `@remelondb/driver-web` 0.1.2 or newer.
@@ -163,18 +172,18 @@ Every request carries an `id`; the answering side replies with
 are structured-clonable plain data (`src/protocol.ts` is the source of
 truth). Who answers depends on the op:
 
-| Op | Answered by | Purpose |
-| --- | --- | --- |
-| `open` | worker | open by name, report `user_version` (async: awaits pool install) |
-| `close` | worker | close the named connection |
-| `query` / `execute` | worker | one SELECT / one non-SELECT statement |
-| `executeBatch` | worker | atomic multi-statement transaction |
-| `setUserVersion` | worker | `PRAGMA user_version` after setup/migration |
-| `destroy` | worker | delete the database and sidecar files |
-| `ping` | worker | liveness probe (the broker checks its compute channel) |
-| `acquireSlot` / `releaseSlot` | broker | cross-tab write-block arbitration (never reach SQLite) |
-| `publishChanges` | broker | relay a commit's change set to the other tabs |
-| `syncTurn` | broker | sync-lease request: grant/renew for the holder, deny others |
+| Op                            | Answered by | Purpose                                                          |
+| ----------------------------- | ----------- | ---------------------------------------------------------------- |
+| `open`                        | worker      | open by name, report `user_version` (async: awaits pool install) |
+| `close`                       | worker      | close the named connection                                       |
+| `query` / `execute`           | worker      | one SELECT / one non-SELECT statement                            |
+| `executeBatch`                | worker      | atomic multi-statement transaction                               |
+| `setUserVersion`              | worker      | `PRAGMA user_version` after setup/migration                      |
+| `destroy`                     | worker      | delete the database and sidecar files                            |
+| `ping`                        | worker      | liveness probe (the broker checks its compute channel)           |
+| `acquireSlot` / `releaseSlot` | broker      | cross-tab write-block arbitration (never reach SQLite)           |
+| `publishChanges`              | broker      | relay a commit's change set to the other tabs                    |
+| `syncTurn`                    | broker      | sync-lease request: grant/renew for the holder, deny others      |
 
 In shared mode the broker additionally pushes three unsolicited control
 messages to tabs: `{control: 'spawnWorker'}` asks a tab to host the compute
@@ -186,12 +195,12 @@ occur, over a direct Worker transport.
 
 ## Layout
 
-| Piece | Role |
-| --- | --- |
-| `src/protocol.ts` | RPC message types + the `Endpoint` transport abstraction |
-| `src/server.ts` | worker-side server: connections by name, statement cache, boolean→0/1 binding, atomic batches with rollback, OPFS/memory storage resolution |
-| `src/worker.ts` | browser Worker entry (sqlite-wasm init + server) |
-| `src/WebSqliteDriver.ts` | main-thread driver: request/response correlation, seam contract |
+| Piece                    | Role                                                                                                                                        |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/protocol.ts`        | RPC message types + the `Endpoint` transport abstraction                                                                                    |
+| `src/server.ts`          | worker-side server: connections by name, statement cache, boolean→0/1 binding, atomic batches with rollback, OPFS/memory storage resolution |
+| `src/worker.ts`          | browser Worker entry (sqlite-wasm init + server)                                                                                            |
+| `src/WebSqliteDriver.ts` | main-thread driver: request/response correlation, seam contract                                                                             |
 
 ## Browser-verification checklist
 
@@ -216,13 +225,11 @@ occur, over a direct Worker transport.
       (`sudo safaridriver --enable`). Not headless — Safari can't. Only
       one automation session may exist; kill stray `safaridriver`
       processes if the session refuses to start.
-- [x] Worker + wasm loading through the Vite pipeline (vitest browser
-      mode) **and a real production build**: `pnpm --filter
-      @remelondb/driver-web smoke:vite` packs the tarballs, scaffolds a
-      Vite app consuming them the way the root README documents,
-      `vite build` + `vite preview`, and drives headless Chromium at the
-      output — OPFS open from the production bundle, data persisted
-      across a page reload
+- [x] Vite production smoke: `pnpm --filter @remelondb/driver-web smoke:vite`.
+      It covers worker and wasm loading in browser mode, packs the tarballs,
+      scaffolds the reference Vite app, runs `vite build` and `vite preview`,
+      and drives headless Chromium against the output. OPFS opens from the
+      production bundle and data persists across a page reload.
 - [x] Multi-tab behavior: single-connection by design, documented below
       (see "Multi-tab usage")
 

@@ -11,7 +11,7 @@ SQLite compares type-aware: the number `5` never equals the string
 silently matches nothing:
 
 ```ts
-db.get(tasks).query(Q.where('position', '5'))   // compiles; empty result
+db.get(tasks).query(Q.where('position', '5')); // compiles; empty result
 ```
 
 This is the same silent-wrong-answer class that schema-inferred types
@@ -53,9 +53,9 @@ infer exactly as before, and an enum column infers its union.
 
 ```ts
 const tasks = table('tasks', {
-  state: c.enum(['open', 'done']),     // ColumnDef<'string', false, 'open' | 'done'>
-})
-type R = InferRecord<typeof tasks>     // { state: 'open' | 'done', ... }
+  state: c.enum(['open', 'done']), // ColumnDef<'string', false, 'open' | 'done'>
+});
+type R = InferRecord<typeof tasks>; // { state: 'open' | 'done', ... }
 ```
 
 At runtime `c.enum(values)` produces exactly what `c.string()`
@@ -87,7 +87,7 @@ Q.like/notLike/includes(pattern: string): Comparison<string>
 the comparison. `Q.and`/`Q.or` must NOT aggregate independent column
 and value unions — `And<'position' | 'title', number | string>` can no
 longer distinguish valid leaves from crossed ones. Instead they carry
-the union of their conditions' *complete* leaf descriptions:
+the union of their conditions' _complete_ leaf descriptions:
 
 ```ts
 type WhereLeaf = WhereDescription<string, Value>
@@ -109,7 +109,9 @@ a column→value map derived from the table (`id` included as `string`).
 The accepted clause type distributes over it:
 
 ```ts
-type WhereFor<M> = { [K in keyof M & string]: WhereDescription<K, M[K]> }[keyof M & string]
+type WhereFor<M> = {
+  [K in keyof M & string]: WhereDescription<K, M[K]>;
+}[keyof M & string];
 ```
 
 `V` sits covariantly, so the check is subtype-shaped: `Q.eq('open')`

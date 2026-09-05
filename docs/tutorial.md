@@ -58,15 +58,15 @@ the client table here, and the same object validates the sync wire in
 section 10.
 
 ```js
-import { z } from 'zod'
-import { appSchema } from '@remelondb/core'
-import { zodTable } from '@remelondb/core/zod'
+import { z } from 'zod';
+import { appSchema } from '@remelondb/core';
+import { zodTable } from '@remelondb/core/zod';
 
 const DeckRow = z.object({
   title: z.string().min(1),
   created_at: z.number(),
   updated_at: z.number(),
-})
+});
 
 const CardRow = z.object({
   deck_id: z.string(),
@@ -75,19 +75,19 @@ const CardRow = z.object({
   due_at: z.number(),
   created_at: z.number(),
   updated_at: z.number(),
-})
+});
 
 const ReviewRow = z.object({
   card_id: z.string(),
   rating: z.number().int().min(0).max(3),
   reviewed_at: z.number(),
-})
+});
 
-const decks = zodTable('decks', DeckRow)
-const cards = zodTable('cards', CardRow, { indexed: ['deck_id', 'due_at'] })
-const reviews = zodTable('reviews', ReviewRow, { indexed: ['card_id'] })
+const decks = zodTable('decks', DeckRow);
+const cards = zodTable('cards', CardRow, { indexed: ['deck_id', 'due_at'] });
+const reviews = zodTable('reviews', ReviewRow, { indexed: ['card_id'] });
 
-const schema = appSchema({ version: 1, tables: [decks, cards, reviews] })
+const schema = appSchema({ version: 1, tables: [decks, cards, reviews] });
 ```
 
 The column vocabulary is `z.string()`, `z.number()`, `z.boolean()`,
@@ -112,25 +112,25 @@ generated from the schema when the class is bound, so the class body
 only declares associations.
 
 ```js
-import { ModelFor } from '@remelondb/core'
+import { ModelFor } from '@remelondb/core';
 
 class Deck extends ModelFor(decks) {
   static associations = {
     cards: { type: 'has_many', foreignKey: 'deck_id' },
-  }
+  };
 }
 
 class Card extends ModelFor(cards) {
   static associations = {
     decks: { type: 'belongs_to', key: 'deck_id' },
     reviews: { type: 'has_many', foreignKey: 'card_id' },
-  }
+  };
 }
 
 class Review extends ModelFor(reviews) {
   static associations = {
     cards: { type: 'belongs_to', key: 'card_id' },
-  }
+  };
 }
 ```
 
@@ -143,8 +143,8 @@ reacts when another tab takes the database over. Section 11 goes into
 the details; for now it is one extra line:
 
 ```js
-import { createDatabaseManager, Database } from '@remelondb/core'
-import { NodeSqliteDriver } from '@remelondb/driver-node'
+import { createDatabaseManager, Database } from '@remelondb/core';
+import { NodeSqliteDriver } from '@remelondb/driver-node';
 
 const manager = createDatabaseManager({
   open: () =>
@@ -152,10 +152,10 @@ const manager = createDatabaseManager({
       driver: new NodeSqliteDriver(),
       schema,
       modelClasses: [Deck, Card, Review],
-      name: 'flashcards.db',   // ':memory:' for experiments
+      name: 'flashcards.db', // ':memory:' for experiments
     }),
-})
-const db = await manager.init()
+});
+const db = await manager.init();
 ```
 
 On first open the schema DDL runs; on later opens with a higher schema
@@ -170,20 +170,26 @@ atomic batch:
 ```js
 const deck = await db.write(() =>
   db.get(Deck).create({ title: 'Spanish basics' }),
-)
+);
 
 const FRONTS = [
-  ['hola', 'hello'], ['adiós', 'goodbye'], ['gracias', 'thank you'],
-  ['por favor', 'please'], ['lo siento', 'sorry'],
-]
+  ['hola', 'hello'],
+  ['adiós', 'goodbye'],
+  ['gracias', 'thank you'],
+  ['por favor', 'please'],
+  ['lo siento', 'sorry'],
+];
 await db.write(async () => {
   const ops = FRONTS.map(([front, back]) =>
     db.get(Card).prepareCreate({
-      deck_id: deck.id, front, back, due_at: Date.now(),
+      deck_id: deck.id,
+      front,
+      back,
+      due_at: Date.now(),
     }),
-  )
-  await db.batch(ops)   // one transaction; all or nothing
-})
+  );
+  await db.batch(ops); // one transaction; all or nothing
+});
 ```
 
 `db.write()` itself is a serialized writer window, not a transaction:
@@ -195,12 +201,12 @@ transaction:
 
 ```js fragment
 await db.write(async () => {
-  const cards = await db.get(Card).query(Q.where('deck_id', deck.id)).fetch()
+  const cards = await db.get(Card).query(Q.where('deck_id', deck.id)).fetch();
   await db.batch([
     ...cards.map((card) => card.prepareMarkAsDeleted()),
     deck.prepareMarkAsDeleted(),
-  ])   // parent and children vanish together, or not at all
-})
+  ]); // parent and children vanish together, or not at all
+});
 ```
 
 Ids are client-generated (16 characters, sync-safe), so records never
@@ -214,10 +220,10 @@ where the user is waiting:
 
 ```js fragment
 try {
-  await db.write(() => db.get(Deck).create({ title }))
-  closeDialog()          // only once the write is durable
+  await db.write(() => db.get(Deck).create({ title }));
+  closeDialog(); // only once the write is durable
 } catch (error) {
-  showError(error)       // the deck was not created; say so
+  showError(error); // the deck was not created; say so
 }
 ```
 
@@ -230,14 +236,17 @@ Queries are built from `Q` conditions on a collection. The study queue
 is "cards of this deck that are due, oldest first":
 
 ```js
-import { Q } from '@remelondb/core'
+import { Q } from '@remelondb/core';
 
-const dueCards = await db.get(Card).query(
-  Q.where('deck_id', deck.id),
-  Q.where('due_at', Q.lte(Date.now())),
-  Q.sortBy('due_at'),
-  Q.take(20),
-).fetch()
+const dueCards = await db
+  .get(Card)
+  .query(
+    Q.where('deck_id', deck.id),
+    Q.where('due_at', Q.lte(Date.now())),
+    Q.sortBy('due_at'),
+    Q.take(20),
+  )
+  .fetch();
 ```
 
 The full operator set (comparisons, `oneOf`, `like`, boolean nesting)
@@ -250,26 +259,28 @@ Observation keeps UI in step with the database without re-querying by
 hand. A due-count badge:
 
 ```js
-const unsubscribe = db.get(Card).query(
-  Q.where('due_at', Q.lte(Date.now())),
-).observeCount((n) => setBadge(n))
+const unsubscribe = db
+  .get(Card)
+  .query(Q.where('due_at', Q.lte(Date.now())))
+  .observeCount((n) => setBadge(n));
 ```
 
 One caveat before wiring a badge to this: `Date.now()` is captured
-when the query is built. Observation re-runs when *records change*,
+when the query is built. Observation re-runs when _records change_,
 not when the clock advances, so a card quietly becoming due does not
 fire the callback. Either rebuild the observation on a timer:
 
 ```js fragment
-let stop = observeDue()
+let stop = observeDue();
 const timer = setInterval(() => {
-  stop()
-  stop = observeDue()   // fresh Date.now() cutoff
-}, 60_000)
+  stop();
+  stop = observeDue(); // fresh Date.now() cutoff
+}, 60_000);
 function observeDue() {
-  return db.get(Card).query(
-    Q.where('due_at', Q.lte(Date.now())),
-  ).observeCount((n) => setBadge(n))
+  return db
+    .get(Card)
+    .query(Q.where('due_at', Q.lte(Date.now())))
+    .observeCount((n) => setBadge(n));
 }
 ```
 
@@ -297,18 +308,22 @@ date on the card. Prepare both operations and commit them in one batch so
 neither can succeed without the other:
 
 ```js
-const card = dueCards[0]
-const DAY = 24 * 60 * 60 * 1000
-const now = Date.now()
+const card = dueCards[0];
+const DAY = 24 * 60 * 60 * 1000;
+const now = Date.now();
 
 await db.write(() =>
   db.batch([
     db.get(Review).prepareCreate({
-      card_id: card.id, rating: 3, reviewed_at: now,
+      card_id: card.id,
+      rating: 3,
+      reviewed_at: now,
     }),
-    card.prepareUpdate(() => { card.due_at = now + DAY }),
+    card.prepareUpdate(() => {
+      card.due_at = now + DAY;
+    }),
   ]),
-)
+);
 ```
 
 After this commits, the observer from section 7 fires with the new
@@ -319,11 +334,14 @@ review rows; the reviews table is the source of truth and the card's
 Associations from section 3 come with helpers:
 
 ```js
-const cardsInDeck = await deck.children('cards').fetch()
-const parent = await card.related('decks')          // the Deck, or null
-const deckReviews = await db.get(Review).query(
-  Q.on('cards', 'deck_id', deck.id),                // join through cards
-).fetch()
+const cardsInDeck = await deck.children('cards').fetch();
+const parent = await card.related('decks'); // the Deck, or null
+const deckReviews = await db
+  .get(Review)
+  .query(
+    Q.on('cards', 'deck_id', deck.id), // join through cards
+  )
+  .fetch();
 ```
 
 ## 9. Grow the schema
@@ -335,7 +353,7 @@ place. Migration steps state column deltas directly, so they use the
 column builders:
 
 ```js
-import { schemaMigrations, addColumns, column as c } from '@remelondb/core'
+import { schemaMigrations, addColumns, column as c } from '@remelondb/core';
 
 const migrations = schemaMigrations({
   migrations: [
@@ -349,7 +367,7 @@ const migrations = schemaMigrations({
       ],
     },
   ],
-})
+});
 ```
 
 Then pass the migrations when opening (sketch — fill in your own
@@ -369,13 +387,17 @@ protocol implemented once, above a small storage seam. Configure it
 with the tables to sync and get per-user pull/push handlers back:
 
 ```js
-import { createMemoryStore, createSyncEngine } from '@remelondb/server'
-import { syncSchemas } from '@remelondb/core/zod'
+import { createMemoryStore, createSyncEngine } from '@remelondb/server';
+import { syncSchemas } from '@remelondb/core/zod';
 
-const wire = syncSchemas({ decks: DeckRow, cards: CardRow, reviews: ReviewRow })
+const wire = syncSchemas({
+  decks: DeckRow,
+  cards: CardRow,
+  reviews: ReviewRow,
+});
 
 const engine = createSyncEngine({
-  store: createMemoryStore(),   // or your database adapter
+  store: createMemoryStore(), // or your database adapter
   tables: {
     decks: { validate: (row) => wire.rows.decks.safeParse(row).success },
     cards: { validate: (row) => wire.rows.cards.safeParse(row).success },
@@ -384,8 +406,8 @@ const engine = createSyncEngine({
       appendOnly: true,
     },
   },
-})
-const handlers = engine.as('user-1')   // { pull(args), push(args) }
+});
+const handlers = engine.as('user-1'); // { pull(args), push(args) }
 ```
 
 `syncSchemas` turns the section-2 Zod objects into wire validators:
@@ -405,13 +427,13 @@ direct — this block really runs in CI, pushing the flashcards from
 section 5 into the memory store:
 
 ```js
-import { synchronize, hasUnsyncedChanges } from '@remelondb/core'
+import { synchronize, hasUnsyncedChanges } from '@remelondb/core';
 
 const result = await synchronize({
   database: db,
   pullChanges: (args) => handlers.pull(args),
   pushChanges: (args) => handlers.push(args),
-})
+});
 // result says what happened — { lease, resynced, pulled, pushed,
 // rejected, rejectedRecords, retryCount } — so UI state ("recovered
 // from a server reset", "2 changes rejected") comes from data, not
@@ -419,7 +441,7 @@ const result = await synchronize({
 // rejected rows stay dirty and retry forever, so anything above 0
 // deserves an attention state, not a "synced" label.
 
-const clean = !(await hasUnsyncedChanges(db))   // true: everything pushed
+const clean = !(await hasUnsyncedChanges(db)); // true: everything pushed
 ```
 
 In production the handlers sit behind two routes — every protocol
@@ -431,7 +453,10 @@ cookie jar carries the session); the transport classifies failures and
 validates every response with the same wire schemas the server uses:
 
 ```js fragment
-import { createSyncTransport, readSyncResponse } from '@remelondb/core/transport'
+import {
+  createSyncTransport,
+  readSyncResponse,
+} from '@remelondb/core/transport';
 
 const post = (path, body, signal) =>
   readSyncResponse(path, () =>
@@ -442,15 +467,15 @@ const post = (path, body, signal) =>
       body: JSON.stringify(body),
       signal,
     }),
-  )
+  );
 
 const { pullChanges, pushChanges } = createSyncTransport({
   post,
   validatePullResult: (raw) => wire.pullResult.parse(raw),
   validatePushResult: (raw) => wire.pushResult.parse(raw),
-})
+});
 
-await synchronize({ database: db, pullChanges, pushChanges })
+await synchronize({ database: db, pullChanges, pushChanges });
 ```
 
 A response the engine cannot act on — a 401, a 5xx, no network, a body
@@ -489,12 +514,12 @@ const scratch = createDatabaseManager({
       modelClasses: [Deck, Card, Review],
       name: ':memory:',
     }),
-})
+});
 
-console.log(scratch.state.status)   // 'idle'
-const db2 = await scratch.init()
-console.log(scratch.state.status)   // 'ready'
-console.log(db2 === scratch.database) // true
+console.log(scratch.state.status); // 'idle'
+const db2 = await scratch.init();
+console.log(scratch.state.status); // 'ready'
+console.log(db2 === scratch.database); // true
 ```
 
 In React (web or native), drive the UI from the manager's state with
@@ -505,16 +530,24 @@ the hook from `@remelondb/core/react`, and on the web pass
 const manager = createDatabaseManager({
   open: (onTakenOver) =>
     Database.open({
-      driver: new WebSqliteDriver({ shared: true, takeover: true, onTakenOver }),
-      schema, migrations, modelClasses, name: 'app.db',
+      driver: new WebSqliteDriver({
+        shared: true,
+        takeover: true,
+        onTakenOver,
+      }),
+      schema,
+      migrations,
+      modelClasses,
+      name: 'app.db',
     }),
-})
+});
 
 function Root() {
-  const { status, error } = useDatabaseState(manager)
-  if (status === 'ready') return <App db={manager.database} />
-  if (status === 'error') return <Retry error={error} onRetry={() => manager.init()} />
-  return <Splash />
+  const { status, error } = useDatabaseState(manager);
+  if (status === 'ready') return <App db={manager.database} />;
+  if (status === 'error')
+    return <Retry error={error} onRetry={() => manager.init()} />;
+  return <Splash />;
 }
 ```
 
@@ -526,12 +559,12 @@ The todo-sync example runs this bootstrap on web and native alike
 Section 10 called `synchronize()` by hand. An app wants that call made
 at the right moments — after a local write, on regaining network, in
 the background — without ever running twice at once, and it wants a
-status to show. `createSyncController` owns the *when* the way the
+status to show. `createSyncController` owns the _when_ the way the
 manager owns open/close. This block runs in CI against the section-10
 handlers:
 
 ```js
-import { createRunSync, createSyncController } from '@remelondb/core'
+import { createRunSync, createSyncController } from '@remelondb/core';
 
 const controller = createSyncController({
   runSync: createRunSync({
@@ -539,19 +572,19 @@ const controller = createSyncController({
     pullChanges: (args) => handlers.pull(args),
     pushChanges: (args) => handlers.push(args),
   }),
-  intervalMs: null,   // no background clock in this script
-})
+  intervalMs: null, // no background clock in this script
+});
 
 const firstRun = new Promise((resolve) =>
   controller.subscribe((state) => {
-    if (state.lastSyncAt !== null) resolve(state)
+    if (state.lastSyncAt !== null) resolve(state);
   }),
-)
-controller.start()
-const state = await firstRun
-console.log(state.status)                  // 'idle'
-console.log(state.lastResult.rejected)     // 0
-controller.dispose()
+);
+controller.start();
+const state = await firstRun;
+console.log(state.status); // 'idle'
+console.log(state.lastResult.rejected); // 0
+controller.dispose();
 ```
 
 In an app you keep the defaults instead: a 60-second interval, a
@@ -564,7 +597,7 @@ auth failure. Status for the UI comes from `subscribe`
 (`idle`/`syncing`/`offline`/`error`/`resync-required`, plus
 `lastResult` with the rejection fields from section 10). And the
 shutdown order is fixed: `controller.dispose()` aborts an in-flight
-run, *then* the database closes — on logout or account switch, always
+run, _then_ the database closes — on logout or account switch, always
 dispose first. Details: [sync reference](reference/sync.md).
 
 ### Multiple accounts on one device
@@ -590,26 +623,33 @@ account can open its own:
 ```js fragment
 // One owner (only onLogin/onLogout touch this) and one transition at
 // a time: never let two of them run concurrently.
-let manager = null
+let manager = null;
 
 async function onLogin(userId) {
-  await onLogout()   // an account switch closes the old database first
-  const name = `user_${hex(userId)}.db`
+  await onLogout(); // an account switch closes the old database first
+  const name = `user_${hex(userId)}.db`;
   manager = createDatabaseManager({
     open: (onTakenOver) =>
       Database.open({
-        driver: new WebSqliteDriver({ shared: true, takeover: true, onTakenOver }),
-        schema, migrations, modelClasses, name,
+        driver: new WebSqliteDriver({
+          shared: true,
+          takeover: true,
+          onTakenOver,
+        }),
+        schema,
+        migrations,
+        modelClasses,
+        name,
       }),
-  })
-  return manager.init()
+  });
+  return manager.init();
 }
 
 async function onLogout() {
-  const closing = manager
-  await closing?.close()
+  const closing = manager;
+  await closing?.close();
   if (manager === closing) {
-    manager = null   // a login during the await owns the variable now
+    manager = null; // a login during the await owns the variable now
   }
 }
 ```

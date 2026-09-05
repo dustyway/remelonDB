@@ -87,7 +87,7 @@ const normalize = (line) => line.trim().replace(/\s+/g, ' ');
   }
   check(capabilities.size > 0, 'conformance: no optional capabilities derived');
   const tableMatch = doc.match(
-    /\| Capability \| Enables \|\n\|[^\n]*\|\n([\s\S]*?)\n\n/,
+    /\|\s*Capability\s*\|\s*Enables\s*\|\n\|[^\n]*\|\n([\s\S]*?)\n\n/,
   );
   check(tableMatch !== null, 'backend.md: capability table not found');
   if (tableMatch) {

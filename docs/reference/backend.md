@@ -24,17 +24,17 @@ and scopes; it knows nothing about cursors, conflicts, or the wire.
 The wire spec ([sync-wire.md](../sync-wire.md)) binds the whole server;
 the seam splits its obligations:
 
-| Obligation | Owner |
-| --- | --- |
-| Consistent snapshot per operation | store (`transaction`) |
-| Commit-ordered revisions | store: revisions assigned so that pushes for one scope commit in revision order (`transaction(scope, 'push', …)` MUST serialize per scope — the advisory-lock obligation) |
-| Cursor encoding, opacity, floor checks | engine (revision-based reference mechanism) |
-| Conflict detection and ordering vs rejection | engine (ownership rejections first — foreign revisions are incomparable to a scope's cursor — then whole-push conflict) |
-| Per-record validation | engine, via per-table `validate`/`appendOnly` + optional `crossValidateChanges` (referential checks over the full change set, deletions included) |
-| Tombstoned-write rejection | engine, via the store's `tombstonedIds` |
-| Storage refusals surfaced as rejections | store: `upsert` may return ids the database itself refused (unique/FK constraints); the engine folds them into `rejected` |
-| Upsert discipline (never touch creation stamps, never resurrect tombstones), tombstoning, retention | store |
-| Interleave computation, the both-or-neither package rule, mandatory degrade below the floor | engine |
+| Obligation                                                                                          | Owner                                                                                                                                                                     |
+| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Consistent snapshot per operation                                                                   | store (`transaction`)                                                                                                                                                     |
+| Commit-ordered revisions                                                                            | store: revisions assigned so that pushes for one scope commit in revision order (`transaction(scope, 'push', …)` MUST serialize per scope — the advisory-lock obligation) |
+| Cursor encoding, opacity, floor checks                                                              | engine (revision-based reference mechanism)                                                                                                                               |
+| Conflict detection and ordering vs rejection                                                        | engine (ownership rejections first — foreign revisions are incomparable to a scope's cursor — then whole-push conflict)                                                   |
+| Per-record validation                                                                               | engine, via per-table `validate`/`appendOnly` + optional `crossValidateChanges` (referential checks over the full change set, deletions included)                         |
+| Tombstoned-write rejection                                                                          | engine, via the store's `tombstonedIds`                                                                                                                                   |
+| Storage refusals surfaced as rejections                                                             | store: `upsert` may return ids the database itself refused (unique/FK constraints); the engine folds them into `rejected`                                                 |
+| Upsert discipline (never touch creation stamps, never resurrect tombstones), tombstoning, retention | store                                                                                                                                                                     |
+| Interleave computation, the both-or-neither package rule, mandatory degrade below the floor         | engine                                                                                                                                                                    |
 
 The seam is not an ORM adapter: `changedSince` returns wire-ready rows
 (the store owns column mapping), and the engine never constructs
@@ -48,12 +48,12 @@ parameter — a user id, a tenant key, whatever partitions the data.
 Each synced table carries four machinery columns next to its columns
 from the shared Zod object:
 
-| column | type | role |
-| --- | --- | --- |
-| `id` | `text` primary key | client-minted record id — never a server default |
-| `rev` | `bigint` | revision stamp |
-| `deleted_at` | `timestamptz` null | tombstone marker; deletes are never `DELETE` |
-| owner | any | the sync scope (user, team, workspace) |
+| column       | type               | role                                             |
+| ------------ | ------------------ | ------------------------------------------------ |
+| `id`         | `text` primary key | client-minted record id — never a server default |
+| `rev`        | `bigint`           | revision stamp                                   |
+| `deleted_at` | `timestamptz` null | tombstone marker; deletes are never `DELETE`     |
+| owner        | any                | the sync scope (user, team, workspace)           |
 
 Index `(owner, rev)` — every incremental pull filters on exactly that
 pair. Two bookkeeping objects (the revision sequence, the one-row meta
@@ -118,14 +118,14 @@ handlers — in-process, or through real HTTP behind a fetch wrapper.
 Passing it is what "implements the protocol" means.
 
 ```ts
-import { registerServerConformance } from '@remelondb/server/conformance'
+import { registerServerConformance } from '@remelondb/server/conformance';
 
 registerServerConformance({
   name: 'engine over MyStore',
   // fresh context per test: clean state, authenticated handlers
   makeContext: async () => {
-    const engine = createSyncEngine({ store: myStore(), tables })
-    return { handlers: engine.as('user-a'), secondUser: engine.as('user-b') }
+    const engine = createSyncEngine({ store: myStore(), tables });
+    return { handlers: engine.as('user-a'), secondUser: engine.as('user-b') };
   },
   fixtures: {
     tasks: {
@@ -134,7 +134,7 @@ registerServerConformance({
       invalidRow: () => ({ id: nextId(), name: '', done: false }),
     },
   },
-})
+});
 ```
 
 Three properties make the suite portable. `makeContext` returns
@@ -144,14 +144,14 @@ Fixtures abstract the schema, so the suite does not care what your
 tables are called. And optional capabilities let cases that need extra
 powers skip visibly instead of being faked:
 
-| Capability | Enables |
-| --- | --- |
-| `secondUser` | scoping cases (10, 14) |
-| `concurrently` | the write-during-a-pull commit-order case (4) |
-| `invalidRow` in a fixture | per-record validation rejection (7) |
-| `appendOnly` | the append-only refusal case (13) |
-| `uniqueColumn` | storage constraint refusals as rejections (14) |
-| `crossValidation` | the hook-wiring cases: refused row, refused deletion (15, 16) |
+| Capability                | Enables                                                       |
+| ------------------------- | ------------------------------------------------------------- |
+| `secondUser`              | scoping cases (10, 14)                                        |
+| `concurrently`            | the write-during-a-pull commit-order case (4)                 |
+| `invalidRow` in a fixture | per-record validation rejection (7)                           |
+| `appendOnly`              | the append-only refusal case (13)                             |
+| `uniqueColumn`            | storage constraint refusals as rejections (14)                |
+| `crossValidation`         | the hook-wiring cases: refused row, refused deletion (15, 16) |
 
 The suite runs against five registrations in this repository: the
 memory store, the reference server, the drizzle store over pglite, the

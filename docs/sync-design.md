@@ -13,8 +13,8 @@ design input. The normative wire contract lives in
 
 Every device keeps a full local copy of its data and works against it
 directly — offline is the normal case, not an error. Each local write
-also records *that* the record changed (`_status`: created, updated,
-or deleted) and *which columns* changed (`_changed`). Nothing else is
+also records _that_ the record changed (`_status`: created, updated,
+or deleted) and _which columns_ changed (`_changed`). Nothing else is
 needed later: the dirty flags are the entire sync state.
 
 A sync is two phases, always in this order:
@@ -24,13 +24,13 @@ A sync is two phases, always in this order:
 2. **Push** — send everything locally dirty to the server, and mark it
    clean once accepted.
 
-The *cursor* is an opaque token the server hands out; the client just
+The _cursor_ is an opaque token the server hands out; the client just
 stores it and echoes it back. The server is the master copy, but it
 never merges: when both sides changed the same record, the **client**
 resolves the conflict, column by column — the merged record is the
 remote version, with the locally-changed columns laid back on top. If
-two devices edited *different* columns, both edits survive. If they
-edited the *same* column, the later pusher wins. A `conflictResolver`
+two devices edited _different_ columns, both edits survive. If they
+edited the _same_ column, the later pusher wins. A `conflictResolver`
 hook can override this per record.
 
 Changesets on the wire are per-table groups:
@@ -48,9 +48,9 @@ is the reason this protocol exists as a rewrite rather than a copy.
 Upstream's pull contract is "give me rows with
 `last_modified > lastPulledAt`", with a server timestamp. Here is how
 that loses data: a write starts at 10:00:00.000 but its transaction
-commits a moment *after* a concurrent pull already ran. The pull's
+commits a moment _after_ a concurrent pull already ran. The pull's
 cursor says 10:00:00.050. The committed write's timestamp (10:00:00.000)
-is *before* the cursor — so no future pull ever returns it. The
+is _before_ the cursor — so no future pull ever returns it. The
 devices now disagree forever, and nothing reports an error. Any
 timestamp assigned at write time (not commit time) has this race, and
 upstream delegates the problem to backend discipline in prose.
@@ -64,7 +64,7 @@ guarantee one invariant:
 > — including changes concurrent with the pull that commit later —
 > MUST be returned by some future `pull(c')`.
 
-Visibility is ordered by *commit*, not by write time. Wall-clock
+Visibility is ordered by _commit_, not by write time. Wall-clock
 timestamps cannot satisfy this; a revision sequence assigned in commit
 order, a transaction-horizon watermark, or a single-writer change log
 all can (see [Backend obligations](#backend-obligations)).
@@ -77,7 +77,7 @@ diffed every time — under active use, no pull is ever empty. Upstream's
 own limitations doc names the fix; this protocol adopts it:
 
 **The fix: a push responds like a pull.** The push response carries a
-new cursor plus whatever *other* clients committed in between
+new cursor plus whatever _other_ clients committed in between
 (`changes`), excluding the push's own records. The client applies
 those foreign changes, marks its pushed records synced, and adopts the
 cursor — its own writes never echo back.
@@ -127,9 +127,8 @@ not neutral:
   500 that wedges the sync loop.
 
 The contract takes no side on upstream's sanitize-vs-refuse policy
-question; it only insists that *if* the server refuses, the refusal is
-visible and whole. Upstream's whole-push conflict rule (its push rule
-5) is kept unchanged: `rejected` is for record-specific refusals,
+question; it only insists that _if_ the server refuses, the refusal is
+visible and whole. Upstream's whole-push conflict rule (its push rule 5) is kept unchanged: `rejected` is for record-specific refusals,
 `conflict` for staleness.
 
 ## Protocol at a glance
@@ -151,7 +150,7 @@ push(changes, cursor)
   an error to the app.
 - **Resync**: on `resyncRequired`, the client re-pulls from `null` and
   reconciles against the full server state (update matching ids,
-  create missing ones, destroy local *synced* records absent from the
+  create missing ones, destroy local _synced_ records absent from the
   snapshot — local dirty records are merged and pushed as usual). This
   exists so servers can prune tombstones and change logs after a
   bounded retention window instead of keeping them forever.
@@ -182,7 +181,7 @@ costs storage — above all, the server must remember every deletion
 committed after the snapshot (tombstones, or a change log) — and no
 server keeps it forever. Expiry is the server withdrawing the
 promise, not a timeout: after a retention window of its choosing it
-prunes old tombstones and, in the same stroke, raises the *floor* —
+prunes old tombstones and, in the same stroke, raises the _floor_ —
 the oldest revision it can still serve completely (`gcFloor` in the
 storage seam; the shipped store's `gc(floor)` raises it). Any pull
 whose cursor lies below the floor is answered `resyncRequired`: the
@@ -241,7 +240,7 @@ the executable version of this contract.
 
 ## Trade-offs this design accepts
 
-The fixes above close the *contract* flaws. What remains are deliberate
+The fixes above close the _contract_ flaws. What remains are deliberate
 trade-offs — know them before building on the sync layer:
 
 - **Last-writer-wins per column.** When two devices edit the same

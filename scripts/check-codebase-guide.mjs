@@ -22,11 +22,15 @@ const expect = (condition, message) => {
   if (!condition) failures.push(message);
 };
 
-const metadataVersion = guide.match(/^version:\s*"([^" ·]+)[^"\n]*"/m)?.[1];
+const metadataVersion = guide.match(
+  /^version:\s*['"]([^'" ·]+)[^'"\n]*['"]/m,
+)?.[1];
 // The cover date (pandoc's standard `date`, rendered on the title page)
 // must match the version stamp's date part, or the two drift apart.
-const coverDate = guide.match(/^date:\s*"([^"]+)"/m)?.[1];
-const versionDate = guide.match(/^version:\s*"[^"·]*·\s*([^"\s]+)"/m)?.[1];
+const coverDate = guide.match(/^date:\s*['"]([^'"]+)['"]/m)?.[1];
+const versionDate = guide.match(
+  /^version:\s*['"][^'"·]*·\s*([^'"\s]+)['"]/m,
+)?.[1];
 expect(
   coverDate === versionDate,
   `cover date ${coverDate ?? '<missing>'} != version stamp date ${versionDate ?? '<missing>'}`,

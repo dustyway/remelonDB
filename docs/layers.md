@@ -48,30 +48,32 @@ Dumb by design. Target: ~7 methods, all parameterized, no callbacks
 (Promises), no per-driver semantics.
 
 ```ts
-type SqlValue = string | number | boolean | null
-type SqlArgs = SqlValue[]
+type SqlValue = string | number | boolean | null;
+type SqlArgs = SqlValue[];
 
 interface SqliteDriver {
   /** Open (creating if needed) and return the current PRAGMA user_version. */
-  open(name: string, opts?: DriverOptions): Promise<{ userVersion: number }>
-  close(): Promise<void>
+  open(name: string, opts?: DriverOptions): Promise<{ userVersion: number }>;
+  close(): Promise<void>;
 
   /** SELECT. Rows come back column-name-keyed (or columnar — see perf note). */
-  query(sql: string, args: SqlArgs): Promise<Row[]>
+  query(sql: string, args: SqlArgs): Promise<Row[]>;
 
   /** Single non-SELECT statement (DDL during setup, PRAGMAs). */
-  execute(sql: string, args: SqlArgs): Promise<void>
+  execute(sql: string, args: SqlArgs): Promise<void>;
 
   /**
    * Atomic write transaction: all statements commit or none do.
    * The sole mutation path for records, tombstones, local storage.
    */
-  executeBatch(statements: Array<[sql: string, argSets: SqlArgs[]]>): Promise<void>
+  executeBatch(
+    statements: Array<[sql: string, argSets: SqlArgs[]]>,
+  ): Promise<void>;
 
-  setUserVersion(version: number): Promise<void>
+  setUserVersion(version: number): Promise<void>;
 
   /** Delete the database file(s). Used by unsafeResetDatabase. */
-  destroy(): Promise<void>
+  destroy(): Promise<void>;
 }
 ```
 
@@ -83,7 +85,7 @@ Notes:
   JSI driver may resolve everything synchronously under the hood; core must
   never depend on same-tick resolution for correctness. If benchmarks later
   show microtask latency hurting hot paths, we can add an optional sync fast
-  path as a driver *capability*, an optimization rather than a semantic.
+  path as a driver _capability_, an optimization rather than a semantic.
 - **Parameterized SQL end to end.** Upstream inlines query values via string
   escaping (its own code flags this as wrong). Our compiler emits `?`
   placeholders everywhere; `SqlValue` is the entire value vocabulary crossing
@@ -96,7 +98,6 @@ Notes:
   core decides fresh-setup vs migration vs ready and sends the DDL itself.
   Upstream's silent destroy-on-missing-migration-path becomes an explicit
   error with an opt-in escape hatch.
-
 
 ## The Q DSL and the one-engine rule
 
@@ -113,7 +114,7 @@ The result is a stable, typed, engine-neutral query API for applications.
 
 ### One engine: SQLite everywhere
 
-**Query semantics are the product.** What a query *means* is defined by hundreds of small engine rules: `LIKE` is case-insensitive, `NULL > 3` matches nothing, binary collation orders `Z` before `a`. No two engines agree on all of them.
+**Query semantics are the product.** What a query _means_ is defined by hundreds of small engine rules: `LIKE` is case-insensitive, `NULL > 3` matches nothing, binary collation orders `Z` before `a`. No two engines agree on all of them.
 
 Run SQLite on device but a JS/IndexedDB engine on web, and the same code with the same data returns different rows on different platforms: silent wrong answers that no error ever surfaces, and that sync then faithfully propagates. Avoiding that means hand-replicating SQLite's rules in a second engine and re-proving equivalence for every operator, optimization, and bug fix, forever. That permanent tax is what upstream paid for its LokiJS web adapter, the half of the project even its maintainer didn't trust.
 
@@ -128,7 +129,7 @@ The DSL provides the portability; the single engine provides the truth. Each mak
 
 ### No in-memory exception
 
-Upstream WatermelonDB keeps a tiny in-memory matcher so observers of *simple* queries can be updated without re-querying the database — a second engine that must replicate SQLite semantics exactly (null handling, storage-class ordering, ASCII-only LIKE folding) and be conformance-tested against it. remelonDB has no such shortcut: observers re-query SQLite on relevant change, so "one engine" holds without exception and the matcher/SQL agreement obligation does not exist. The distinctive semantics that agreement suite pinned live on as plain SQL cases in the driver conformance corpus.
+Upstream WatermelonDB keeps a tiny in-memory matcher so observers of _simple_ queries can be updated without re-querying the database — a second engine that must replicate SQLite semantics exactly (null handling, storage-class ordering, ASCII-only LIKE folding) and be conformance-tested against it. remelonDB has no such shortcut: observers re-query SQLite on relevant change, so "one engine" holds without exception and the matcher/SQL agreement obligation does not exist. The distinctive semantics that agreement suite pinned live on as plain SQL cases in the driver conformance corpus.
 
 ## Decisions (and what they fix)
 

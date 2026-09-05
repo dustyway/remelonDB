@@ -24,11 +24,11 @@ import it. The client derives its device schema from it (`zodTable`);
 the server derives its validators:
 
 ```js
-import { z } from 'zod'
-import { syncSchemas } from '@remelondb/core/zod'
+import { z } from 'zod';
+import { syncSchemas } from '@remelondb/core/zod';
 
-const Task = z.object({ name: z.string().min(1), done: z.boolean() })
-const wire = syncSchemas({ tasks: Task })
+const Task = z.object({ name: z.string().min(1), done: z.boolean() });
+const wire = syncSchemas({ tasks: Task });
 ```
 
 ## The table
@@ -42,14 +42,15 @@ string comes from the environment in production; the fallback matches
 the docker command above, and the drops make the walkthrough rerunnable:
 
 ```js
-import { drizzle } from 'drizzle-orm/node-postgres'
-import { bigint, boolean, pgTable, text, timestamp } from 'drizzle-orm/pg-core'
-import { Pool } from 'pg'
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { bigint, boolean, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { Pool } from 'pg';
 
 const pool = new Pool({
   connectionString:
-    process.env.DATABASE_URL ?? 'postgres://postgres:pg@localhost:5433/postgres',
-})
+    process.env.DATABASE_URL ??
+    'postgres://postgres:pg@localhost:5433/postgres',
+});
 await pool.query(`
   drop table if exists tasks;
   drop table if exists remelon_sync_meta;
@@ -65,8 +66,8 @@ await pool.query(`
     done boolean not null
   );
   create index tasks_owner_rev_idx on tasks (owner, rev);
-`)
-const db = drizzle(pool)
+`);
+const db = drizzle(pool);
 
 const tasks = pgTable('tasks', {
   id: text('id').primaryKey(),
@@ -75,7 +76,7 @@ const tasks = pgTable('tasks', {
   owner: text('owner').notNull(),
   name: text('name').notNull(),
   done: boolean('done').notNull(),
-})
+});
 ```
 
 ## The store
@@ -84,7 +85,7 @@ Point the store at the machinery columns and every storage method is
 generated:
 
 ```js
-import { createDrizzleStore } from '@remelondb/store-drizzle'
+import { createDrizzleStore } from '@remelondb/store-drizzle';
 
 const store = createDrizzleStore({
   db,
@@ -97,7 +98,7 @@ const store = createDrizzleStore({
       scope: tasks.owner,
     },
   },
-})
+});
 ```
 
 ## The engine
@@ -107,15 +108,15 @@ revisions. Per-record validation uses the wire schema derived from the
 same `Task` object:
 
 ```js
-import { createSyncEngine } from '@remelondb/server'
+import { createSyncEngine } from '@remelondb/server';
 
 const engine = createSyncEngine({
   store,
   tables: {
     tasks: { validate: (row) => wire.rows.tasks.safeParse(row).success },
   },
-})
-const ada = engine.as('ada')
+});
+const ada = engine.as('ada');
 ```
 
 `engine.as(scope)` binds the handlers to one authenticated principal —
@@ -127,7 +128,11 @@ What a device does: pull (empty, cursor `"0"`), push a record, and a
 second device's fresh pull sees it — out of Postgres this time:
 
 ```js
-const first = await ada.pull({ cursor: null, schemaVersion: 1, migration: null })
+const first = await ada.pull({
+  cursor: null,
+  schemaVersion: 1,
+  migration: null,
+});
 
 const pushed = await ada.push({
   cursor: first.cursor,
@@ -138,9 +143,13 @@ const pushed = await ada.push({
       deleted: [],
     },
   },
-})
+});
 
-const secondDevice = await ada.pull({ cursor: null, schemaVersion: 1, migration: null })
+const secondDevice = await ada.pull({
+  cursor: null,
+  schemaVersion: 1,
+  migration: null,
+});
 ```
 
 ## Deletion travels as a tombstone
@@ -153,13 +162,13 @@ fresh revision, so any device can still learn about it
 await ada.push({
   cursor: secondDevice.cursor,
   changes: { tasks: { created: [], updated: [], deleted: ['task-1'] } },
-})
+});
 
 const afterDelete = await ada.pull({
   cursor: secondDevice.cursor,
   schemaVersion: 1,
   migration: null,
-})
+});
 ```
 
 `afterDelete.changes.tasks.deleted` names `task-1`; in the table the row
@@ -170,7 +179,9 @@ now has `deleted_at` set and a bumped `rev`.
 Another principal pulling the same server sees nothing:
 
 ```js
-const grace = await engine.as('grace').pull({ cursor: null, schemaVersion: 1, migration: null })
+const grace = await engine
+  .as('grace')
+  .pull({ cursor: null, schemaVersion: 1, migration: null });
 ```
 
 ## Mounting it in a server
@@ -184,14 +195,14 @@ RemelonSyncModule.forRootAsync({
   imports: [DbModule],
   inject: [DRIZZLE],
   useFactory: (db) => ({
-    store: createDrizzleStore({ db, tables: { /* as above */ } }),
+    store: createDrizzleStore({ db, tables: {/* as above */} }),
     tables: { tasks: Task },
     scopeFrom: async (request) => {
-      const session = await auth.api.getSession({ headers: request.headers })
-      return session?.user.id ?? null
+      const session = await auth.api.getSession({ headers: request.headers });
+      return session?.user.id ?? null;
     },
   }),
-})
+});
 ```
 
 To keep integration tests and production on one configuration, define
@@ -201,16 +212,16 @@ exact engine the module would, so the two paths cannot drift:
 ```js fragment
 // sync-config.js — the single source of truth
 export const syncConfig = {
-  store: createDrizzleStore({ db, tables: { /* as above */ } }),
+  store: createDrizzleStore({ db, tables: {/* as above */} }),
   tables: { tasks: Task },
   tableOptions: { events: { appendOnly: true } },
-}
+};
 
 // tests / scripts: a direct engine, no Nest involved
-const handlers = syncEngineFromOptions(syncConfig).as(userId)
+const handlers = syncEngineFromOptions(syncConfig).as(userId);
 
 // production: the same object, plus the transport concern
-RemelonSyncModule.forRoot({ ...syncConfig, scopeFrom })
+RemelonSyncModule.forRoot({ ...syncConfig, scopeFrom });
 ```
 
 Without NestJS the handlers bind to any HTTP server in a few lines. The

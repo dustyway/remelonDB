@@ -8,8 +8,8 @@ exists for the platforms that need it (workers, native modules).
 ## Usage
 
 ```ts
-import { Database } from '@remelondb/core'
-import { NodeSqliteDriver } from '@remelondb/driver-node'
+import { Database } from '@remelondb/core';
+import { NodeSqliteDriver } from '@remelondb/driver-node';
 
 const db = await Database.open({
   driver: new NodeSqliteDriver(),
@@ -17,7 +17,7 @@ const db = await Database.open({
   migrations,
   modelClasses: [Task],
   name: 'app.db', // a filesystem path, or ':memory:' for a throwaway database
-})
+});
 ```
 
 - File-backed databases run in WAL journal mode.
