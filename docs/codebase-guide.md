@@ -530,6 +530,26 @@ export function appSchema(spec: {
 
 `appSchema` bundles a list of tables into a version-stamped, deep-frozen schema. Duplicate table names throw here; duplicate columns threw earlier. The version is the pivot the whole migration story turns on (Chapter 12): `Database.open` compares it against the number on disk and decides what to do. The doc comment states the maintenance rule in one line — _bump `version` and provide migrations whenever a table or column is added._
 
+## Local-only tables
+
+The third argument to `table`, or the corresponding `zodTable` option, can
+keep a table entirely on the device:
+
+```ts
+const mediaCache = table(
+  'media_cache',
+  { file_id: c.string().indexed(), bytes: c.blob() },
+  { localOnly: true },
+);
+```
+
+This is still an ordinary table for DDL, migrations, queries, observation, and
+blobs. Sync excludes it from dirty-record scans, pull application, migration
+descriptors, and replacement pulls. Deletes remove rows immediately instead of
+leaving tombstones, and a server response that names the table is rejected.
+The option is fixed for the lifetime of a table name. Changing a synced table
+to local-only, or the reverse, requires a new table.
+
 ## What it compiles to
 
 The DDL compiler turns a schema and migration steps into SQL statements. Scalar columns have no declared SQL type. Blob columns declare `BLOB`:
@@ -1305,6 +1325,20 @@ Two design choices are visible already and both matter. Pull _always_ precedes p
        ▼        or { conflict: true }  →  loop: re-pull, re-merge, re-push
   markLocalChangesAsSynced (equality gate) · adopt c''
 ```
+
+## Blob payloads
+
+Blobs are binary in SQLite and `Uint8Array` in application code, but the sync
+wire is JSON and carries them as padded base64. That representation is 4/3 of
+the raw byte size. Records are pushed whole, so changing another column on a
+dirty row resends its blob. Encoding and decoding also allocate buffers, and
+the protocol does not stream, chunk, or resume a blob transfer.
+
+Synced blobs therefore fit bounded payloads that need the row's normal sync
+and conflict behavior. Large media belongs in object storage; sync a stable
+key, content type, byte size, and content hash, then cache downloaded bytes in
+a local-only table. The practical limits and oversized-request behavior are in
+the [sync reference](reference/sync.md#binary-payloads).
 
 ## The cursor
 

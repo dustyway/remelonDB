@@ -239,6 +239,27 @@ Both validators must be given, in the same shape `synchronize`'s own
 validation, pass an identity function; the skip is then written down
 where a reviewer sees it.
 
+## Binary payloads
+
+SQLite stores blob columns as bytes and application code reads them as
+`Uint8Array`, but the JSON sync wire carries padded base64 strings. Base64 is
+4/3 of the raw byte size. Pushes send every user column of every dirty record,
+so changing a scalar column on a row also resends its blob. Encoding and
+decoding allocate additional buffers, and the protocol does not stream, chunk,
+or resume blob transfers.
+
+Keep a blob in a synced row only when its maximum size is bounded enough that
+the complete dirty batch fits the transport's request and memory limits. For
+larger media, put the bytes in object storage and sync a stable object key,
+content type, byte size, and content hash. A local-only table can cache the
+downloaded bytes without sending them back through sync. Object upload and row
+sync are separate operations, so use immutable keys and clean up unreferenced
+objects asynchronously.
+
+The [wire contract](../sync-wire.md#6-canonical-http-binding-non-normative)
+documents base64 growth, body-parser limits, and how an oversized batch is
+retried.
+
 ## The sync controller
 
 `synchronize` runs once when called. An app wants it run at the right

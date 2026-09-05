@@ -67,6 +67,12 @@ implement the seam over your database and prove the adapter with the
 suite. The `@remelondb/core/zod` subpath
 derives tables and wire validators from shared Zod schemas.
 
+Schemas support `Uint8Array` blob columns across every driver and the
+Drizzle/Postgres store. Tables declared with `{ localOnly: true }` remain
+queryable and migratable but never enter sync, which makes them suitable for
+device caches. See the [schema reference](docs/reference/schema.md) and the
+[binary payload guidance](docs/reference/sync.md#binary-payloads).
+
 Multi-tab on the web ships behind the opt-in `shared: true` driver
 option: every tab live on one database through a SharedWorker broker,
 with cross-tab write arbitration, change broadcast into each tab's
