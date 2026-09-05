@@ -109,10 +109,13 @@ export interface WebSqliteDriverOptions {
    * fails with a clear error. With `takeover: true`, this driver takes
    * the database instead — the other tab's driver shuts down and its
    * `onTakenOver` callback fires (in-flight statements there are
-   * abandoned; committed data is safe on disk).
+   * abandoned; committed data is safe on disk). Unused while shared mode
+   * is active, where every tab joins one owner and there is nothing to
+   * take over; it applies to the single-tab fallback.
    */
   readonly takeover?: boolean;
-  /** Called when another tab takes this database over (see `takeover`). */
+  /** Called when another tab takes this database over (see `takeover`).
+   * Unused while shared mode is active, for the same reason. */
   readonly onTakenOver?: () => void;
   /**
    * Opt in to the SharedWorker owner (docs/multi-tab.md): all tabs route
