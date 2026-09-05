@@ -265,7 +265,8 @@ export interface DrizzleStore<Scope> extends SyncStore<Scope> {
   /**
    * Prune tombstones with rev <= floor and raise the persisted floor
    * (never lowered). Cursors below the floor then degrade to resync.
-   * The caller picks the floor — retention policy stays the app's.
+   * The caller picks the floor — retention policy stays the app's — and
+   * it must be a non-negative safe integer.
    */
   gc(floor: number): Promise<void>;
 }
@@ -530,14 +531,15 @@ export function createDrizzleStore<Scope>(
         mode === 'pull' ? { isolationLevel: 'repeatable read' } : undefined,
       ),
     gc: async (floor) => {
-      const target = Math.trunc(floor);
-      if (!Number.isFinite(target) || target < 0) {
+      // interpolated into raw SQL, so the value has to be a decimal
+      // integer literal: Math.trunc(1e21) is still '1e+21'
+      if (!Number.isSafeInteger(floor) || floor < 0) {
         throw new Error(`store-drizzle: invalid gc floor '${floor}'`);
       }
       await options.db.transaction(async (tx) => {
         await tx.execute(
           sql.raw(
-            `insert into ${meta} (key, value) values ('gc_floor', ${target}) ` +
+            `insert into ${meta} (key, value) values ('gc_floor', ${floor}) ` +
               `on conflict (key) do update set value = greatest(${meta}.value, excluded.value)`,
           ),
         );
