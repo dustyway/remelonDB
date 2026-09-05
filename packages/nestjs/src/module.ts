@@ -156,16 +156,18 @@ const prepare = <Scope>(options: RemelonSyncOptions<Scope>): SyncRuntime => {
       return scope;
     },
     pull: async (scope, body) => {
-      gate(scope);
+      const resolvedScope = await scope;
+      gate(resolvedScope);
       const parsed = wire.pullArgs.safeParse(body);
       if (!parsed.success)
         throw new BadRequestException('malformed pull request');
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- SyncRuntime erases Scope; this value came from this closure's scopeFrom.
-      const scoped = engine.as(scope as Scope);
+      const scoped = engine.as(resolvedScope as Scope);
       return wire.pullResult.encode(await scoped.pull(parsed.data));
     },
     push: async (scope, body) => {
-      gate(scope);
+      const resolvedScope = await scope;
+      gate(resolvedScope);
       const parsed = pushEnvelope.safeParse(body);
       if (!parsed.success)
         throw new BadRequestException('malformed push request');
@@ -187,7 +189,7 @@ const prepare = <Scope>(options: RemelonSyncOptions<Scope>): SyncRuntime => {
           };
         }
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- as above: SyncRuntime erases Scope, the value came from this closure's scopeFrom.
-        const scoped = engine.as(scope as Scope);
+        const scoped = engine.as(resolvedScope as Scope);
         const result = await scoped.push({ ...parsed.data, changes });
         return wire.pushResult.encode(result);
       } catch (error) {

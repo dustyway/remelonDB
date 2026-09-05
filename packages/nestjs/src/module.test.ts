@@ -251,6 +251,16 @@ describe('SyncRuntime auth gate', () => {
       (await runtimeFor(() => Promise.resolve(null))).scopeFrom({}),
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
+
+  it('awaits a promise passed directly to pull or push', async () => {
+    const runtime = await runtimeFor(() => 'scope-a');
+    await expect(
+      runtime.pull(Promise.resolve('scope-a'), pullBody),
+    ).resolves.toMatchObject({ cursor: '0' });
+    await expect(
+      runtime.push(Promise.resolve('scope-a'), pushBody),
+    ).resolves.toMatchObject({ cursor: '0' });
+  });
 });
 
 // #11: one configuration, two consumers — the Nest module and a
