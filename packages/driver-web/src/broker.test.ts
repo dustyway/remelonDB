@@ -197,3 +197,27 @@ describe('hostile messages', () => {
     expect(a.out).toEqual([{ id: 1, ok: true, result: { slot: 1 } }]);
   });
 });
+
+describe('destroy notification', () => {
+  it('tells the other holders their database is gone', async () => {
+    const connect = await loadBroker();
+    const a = makePort();
+    const b = makePort();
+    connect(a);
+    connect(b);
+
+    a.send({ id: 1, op: 'open', name: 'db', storage: 'memory' });
+    b.send({ id: 1, op: 'open', name: 'db', storage: 'memory' });
+    a.send({ id: 2, op: 'destroy', name: 'db' });
+
+    expect(b.out).toContainEqual({
+      control: 'databaseDestroyed',
+      name: 'db',
+    });
+    // the destroyer is not told about its own destroy
+    expect(a.out).not.toContainEqual({
+      control: 'databaseDestroyed',
+      name: 'db',
+    });
+  });
+});

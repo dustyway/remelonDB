@@ -623,6 +623,16 @@ const handle = (port: PortLike, request: WorkerRequest): void => {
       return;
     }
     case 'destroy': {
+      // the other holders' connections die with the file; without this
+      // they would learn it from the next request failing
+      for (const holder of holders.get(request.name) ?? []) {
+        if (holder !== port) {
+          holder.postMessage({
+            control: 'databaseDestroyed',
+            name: request.name,
+          } satisfies BrokerControlMessage);
+        }
+      }
       holders.delete(request.name);
       holderStorage.delete(request.name);
       forward(port, request);

@@ -157,6 +157,7 @@ export class WebSqliteDriver implements SqliteDriver {
   >();
   private releaseTabLock: (() => void) | null = null;
   private takenOver = false;
+  private destroyedElsewhere = false;
   /**
    * @internal The compute worker this tab spawned for the broker, when it
    * was the one asked to host it. It lives and dies with the tab — except
@@ -209,6 +210,13 @@ export class WebSqliteDriver implements SqliteDriver {
                 case 'externalChanges':
                   if (data.name === this.name) {
                     this.externalChangesHandler?.(data.changes);
+                  }
+                  return;
+                case 'databaseDestroyed':
+                  if (data.name === this.name) {
+                    this.name = null;
+                    this.destroyedElsewhere = true;
+                    this.failAllPending(this.notOpenError());
                   }
                   return;
                 case 'discardWorker':
@@ -354,7 +362,9 @@ export class WebSqliteDriver implements SqliteDriver {
     return new Error(
       this.takenOver
         ? 'WebSqliteDriver: the database was taken over by another tab'
-        : 'WebSqliteDriver: database is not open',
+        : this.destroyedElsewhere
+          ? 'WebSqliteDriver: the database was destroyed by another tab'
+          : 'WebSqliteDriver: database is not open',
     );
   }
 
@@ -416,6 +426,7 @@ export class WebSqliteDriver implements SqliteDriver {
         ? await this.acquireTabLock(name)
         : false;
     this.takenOver = false;
+    this.destroyedElsewhere = false;
     if (!this.endpoint) {
       this.endpoint = this.createEndpoint();
       this.endpoint.addMessageListener((message) => {

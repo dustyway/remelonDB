@@ -87,7 +87,9 @@ export type BrokerControlMessage =
       readonly control: 'externalChanges';
       readonly name: string;
       readonly changes: ExternalChangeSet;
-    };
+    }
+  /** Another tab destroyed this database; every other holder is closed. */
+  | { readonly control: 'databaseDestroyed'; readonly name: string };
 
 /** Compute-worker handoff sent from a page to the broker. */
 export type ClientControlMessage = {
