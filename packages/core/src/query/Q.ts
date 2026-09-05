@@ -74,9 +74,6 @@ function ensureNonNullValue(value: unknown): NonNullValue {
   if (checked === null) {
     throw new Error('Q: null is not allowed here');
   }
-  if (checked instanceof Uint8Array) {
-    throw new Error('Q: blob values are not queryable');
-  }
   return checked;
 }
 

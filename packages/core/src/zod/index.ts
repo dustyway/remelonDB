@@ -66,11 +66,17 @@ export type ColumnsFor<Shape extends z.ZodRawShape> = {
   [K in keyof Shape & string]: ColumnFor<Shape[K]>;
 };
 
-const isBlobSchema = (schema: z.ZodType): boolean =>
-  schema.safeParse(new Uint8Array()).success &&
-  !schema.safeParse('').success &&
-  !schema.safeParse(0).success &&
-  !schema.safeParse(false).success;
+const isBlobSchema = (schema: z.ZodType): boolean => {
+  if (!(schema instanceof z.ZodCustom)) return false;
+  const accepts = schema.def.fn;
+  const acceptsValue = (value: unknown): boolean => accepts(value) === true;
+  return (
+    acceptsValue(new Uint8Array()) &&
+    !acceptsValue('') &&
+    !acceptsValue(0) &&
+    !acceptsValue(false)
+  );
+};
 
 const columnFor = (
   key: string,

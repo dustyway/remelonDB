@@ -53,6 +53,14 @@ describe('comparisons', () => {
     expect(() => Q.like(7 as never)).toThrow('string');
   });
 
+  it('excludes blobs from the query value type', () => {
+    const use = (): void => {
+      // @ts-expect-error -- blob columns cannot participate in queries
+      Q.eq(new Uint8Array([1]));
+    };
+    expect(use).toBeTypeOf('function');
+  });
+
   it('rejects unsafe identifiers', () => {
     expect(() => Q.where('na me', 1)).toThrow('Invalid column name');
     expect(() => Q.where('"a"; drop table t;--', 1)).toThrow(

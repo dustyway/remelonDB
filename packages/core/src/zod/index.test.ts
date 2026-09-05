@@ -99,6 +99,25 @@ describe('zodTable', () => {
     );
   });
 
+  it('recognizes blob schemas whose refinements reject empty bytes', () => {
+    const NonEmptyAsset = z.object({
+      data: z
+        .instanceof(Uint8Array)
+        .refine((value) => value.byteLength > 0, 'blob must not be empty'),
+    });
+
+    expect(zodTable('assets', NonEmptyAsset).columns['data']).toMatchObject({
+      type: 'blob',
+    });
+    const row = syncSchemas({ assets: NonEmptyAsset }).rows['assets']!;
+    expect(() => row.parse({ id: 'a1', data: '' })).toThrow(
+      'blob must not be empty',
+    );
+    expect(row.parse({ id: 'a1', data: 'AQ==' })).toMatchObject({
+      data: new Uint8Array([1]),
+    });
+  });
+
   it('rejects the unsupported, loudly and by name', () => {
     expect(() => zodTable('t', z.object({ a: z.string().optional() }))).toThrow(
       /'a' uses \.optional\(\)/,
