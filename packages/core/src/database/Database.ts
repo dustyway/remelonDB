@@ -518,17 +518,21 @@ export class Database {
             case 'updated': {
               // The broadcast crosses a trust boundary — another context may
               // run an older schema — so it is sanitized before it can reach
-              // the identity map or overwrite a cached instance.
+              // the identity map or overwrite a cached instance. An idless
+              // change names no record: sanitizedRaw would mint an id and
+              // cache a record nobody can ever look up, so it is dropped.
+              if (typeof raw.id !== 'string' || raw.id === '') {
+                break;
+              }
               const sanitized = sanitizedRaw(raw, collection.schema);
-              const cached = collection.cache.get(raw.id);
+              const cached = collection.cache.get(sanitized.id);
               if (cached) {
                 Object.assign(cached, sanitized);
               } else {
                 collection.cache.add(sanitized);
               }
               applied.push({
-                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- the branches above leave this id in the cache: cached stays, uncached is added.
-                record: collection.cache.get(raw.id)!,
+                record: cached ?? sanitized,
                 type: cached ? 'updated' : 'created',
               });
               break;

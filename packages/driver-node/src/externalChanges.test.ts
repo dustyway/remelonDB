@@ -188,4 +188,30 @@ describe('applyExternalChanges', () => {
     expect(note?._raw['stray']).toBeUndefined();
     expect(note?._raw).not.toBe(untrusted);
   });
+
+  it('drops a broadcast change whose record has no usable id', async () => {
+    const changed: unknown[] = [];
+    db.get(Note).onChange((batch) => changed.push(...batch));
+
+    await db.applyExternalChanges({
+      notes: [
+        {
+          record: { id: '', _status: 'synced', _changed: '' },
+          type: 'created',
+        },
+        {
+          record: { _status: 'synced', _changed: '' } as unknown as RawRecord,
+          type: 'updated',
+        },
+        {
+          record: raw({ id: 'n1', text: 'ok', _status: 'synced' }),
+          type: 'created',
+        },
+      ],
+    });
+
+    expect(changed).toHaveLength(1);
+    expect(db.get(Note).cache.get('n1')).toBeDefined();
+    expect(db.get(Note).cache.get('')).toBeUndefined();
+  });
 });
