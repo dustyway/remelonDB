@@ -219,9 +219,8 @@ export function syncSchemas<
   };
 
   const rows = Object.fromEntries(
-    Object.entries(tables).map(([name, schema]) => [
-      name,
-      z.strictObject({
+    Object.entries(tables).map(([name, schema]) => {
+      const wireRow = z.strictObject({
         ...Object.fromEntries(
           Object.entries(schema.shape).map(([key, field]) => [
             key,
@@ -230,8 +229,17 @@ export function syncSchemas<
           ]),
         ),
         id,
-      }),
-    ]),
+      });
+      const localRow = z.object({ ...schema.shape, id });
+      return [
+        name,
+        z.codec(wireRow, localRow, {
+          decode: (value) => value,
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- localRow validated the dynamic shape; Object.entries erased the keys needed to prove it matches wireRow's input.
+          encode: (value) => value as z.output<typeof wireRow>,
+        }),
+      ];
+    }),
   );
   const localRows = Object.fromEntries(
     Object.entries(tables).map(([name, schema]) => [

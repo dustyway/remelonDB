@@ -123,7 +123,7 @@ The server knows a commit happened when a push returns without a conflict:
 ```ts
 const result = await handlers.push(wire.pushArgs.parse(body));
 if (!('conflict' in result)) notifyScope(scope);
-return respond(200, result);
+return respond(200, wire.pushResult.encode(result));
 ```
 
 Fan-out is in-process. With several server processes behind a load

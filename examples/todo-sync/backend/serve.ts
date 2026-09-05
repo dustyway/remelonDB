@@ -19,7 +19,9 @@ const port = Number(process.env['PORT'] ?? 8787);
 const engine = createSyncEngine({
   store: await createStore(),
   tables: {
-    todos: { validate: (row) => wire.rows['todos']!.safeParse(row).success },
+    todos: {
+      validate: (row) => wire.localRows['todos']!.safeParse(row).success,
+    },
   },
 });
 const handlers = engine.as('everyone');
@@ -42,10 +44,20 @@ const server = createServer(async (request, response) => {
     if (request.method === 'POST') {
       const body: unknown = JSON.parse(await text(request));
       if (request.url === '/sync/pull') {
-        return respond(200, await handlers.pull(wire.pullArgs.parse(body)));
+        return respond(
+          200,
+          wire.pullResult.encode(
+            await handlers.pull(wire.pullArgs.parse(body)),
+          ),
+        );
       }
       if (request.url === '/sync/push') {
-        return respond(200, await handlers.push(wire.pushArgs.parse(body)));
+        return respond(
+          200,
+          wire.pushResult.encode(
+            await handlers.push(wire.pushArgs.parse(body)),
+          ),
+        );
       }
       return respond(404, { error: 'POST /sync/pull or /sync/push' });
     }

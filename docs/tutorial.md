@@ -397,10 +397,10 @@ const wire = syncSchemas({
 const engine = createSyncEngine({
   store: createMemoryStore(), // or your database adapter
   tables: {
-    decks: { validate: (row) => wire.rows.decks.safeParse(row).success },
-    cards: { validate: (row) => wire.rows.cards.safeParse(row).success },
+    decks: { validate: (row) => wire.localRows.decks.safeParse(row).success },
+    cards: { validate: (row) => wire.localRows.cards.safeParse(row).success },
     reviews: {
-      validate: (row) => wire.rows.reviews.safeParse(row).success,
+      validate: (row) => wire.localRows.reviews.safeParse(row).success,
       appendOnly: true,
     },
   },
@@ -409,10 +409,11 @@ const handlers = engine.as('user-1'); // { pull(args), push(args) }
 ```
 
 `syncSchemas` turns the section-2 Zod objects into wire validators:
-strict row schemas (user columns plus `id`, nothing smuggled), and
-envelope schemas for every message. Here the server side uses the row
-schemas to vet incoming rows — a row failing them is rejected by id
-and stays dirty on the client, per the protocol. `appendOnly` turns
+strict row schemas (user columns plus `id`, nothing smuggled), decoded
+`localRows` for server validation, and envelope schemas for every message.
+Here the server uses `localRows` because wire parsing has already decoded blob
+fields to `Uint8Array`. A row failing validation is rejected by id and stays
+dirty on the client, per the protocol. `appendOnly` turns
 section 2's "reviews are append-only facts" into an enforced contract:
 a push that rewrites an existing review is rejected by id instead of
 accepted.
@@ -442,9 +443,9 @@ const result = await synchronize({
 const clean = !(await hasUnsyncedChanges(db)); // true: everything pushed
 ```
 
-In production the handlers sit behind two routes — every protocol
-outcome is a returned value, so a route handler is one line,
-`res.json(await handlers.push(req.body))` — and the client reaches
+In production the handlers sit behind two routes. Encode the returned value
+before sending JSON, for example
+`res.json(wire.pushResult.encode(await handlers.push(req.body)))`. The client reaches
 them through `@remelondb/core/transport`. You supply one `post`
 function (the URL and the authentication are yours; here the browser's
 cookie jar carries the session); the transport classifies failures and

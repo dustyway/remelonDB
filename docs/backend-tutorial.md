@@ -104,8 +104,8 @@ const store = createDrizzleStore({
 ## The engine
 
 The engine owns every protocol semantic; the store only knows rows and
-revisions. Per-record validation uses the wire schema derived from the
-same `Task` object:
+revisions. Per-record validation uses the decoded local schema derived from
+the same `Task` object:
 
 ```js
 import { createSyncEngine } from '@remelondb/server';
@@ -113,7 +113,7 @@ import { createSyncEngine } from '@remelondb/server';
 const engine = createSyncEngine({
   store,
   tables: {
-    tasks: { validate: (row) => wire.rows.tasks.safeParse(row).success },
+    tasks: { validate: (row) => wire.localRows.tasks.safeParse(row).success },
   },
 });
 const ada = engine.as('ada');

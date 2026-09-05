@@ -111,6 +111,21 @@ Blob columns use padded canonical base64 in JSON. The schemas decode them to
 after decoding, so `value.byteLength <= limit` enforces a byte limit rather
 than a base64-character limit.
 
+Server hooks receive decoded rows, so validate them with `localRows`. Encode
+handler results before serializing them as JSON:
+
+```ts
+const engine = createSyncEngine({
+  store,
+  tables: {
+    cards: { validate: (row) => sync.localRows.cards.safeParse(row).success },
+  },
+});
+const handlers = engine.as(scope);
+const result = sync.pullResult.encode(await handlers.pull(args));
+response.json(result);
+```
+
 Integration needs no core hook, because validation slots into functions
 the app already writes:
 

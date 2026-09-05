@@ -258,6 +258,13 @@ describe('syncSchemas', () => {
       preview: null,
       capped: 'AQI=',
     });
+    const serverRow = Object.assign({}, decoded, { server_only: 'ignored' });
+    expect(assetWire.encode(serverRow)).toEqual({
+      id: 'a1',
+      data: 'AH//',
+      preview: null,
+      capped: 'AQI=',
+    });
     expect(() =>
       assetWire.parse({
         id: 'a1',
