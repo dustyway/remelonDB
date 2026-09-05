@@ -34,5 +34,5 @@
     "zod": "~4.4.3"
   },
   "license": "MIT",
-  "version": "0.2.6"
+  "version": "0.3.0"
 }
