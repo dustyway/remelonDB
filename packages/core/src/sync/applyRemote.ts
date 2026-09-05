@@ -83,7 +83,19 @@ export async function applyRemoteChanges(
   const log = options.log ?? (() => {});
   const operations: BatchOperation[] = [];
 
-  for (const [table, tableChanges] of Object.entries(remoteChanges)) {
+  // A replacement is the whole truth: a table the snapshot omits holds
+  // nothing server-side, and its local synced rows must go with the rest.
+  // Sweeping only the payload's tables left them alive forever.
+  const effectiveChanges: SyncChanges = options.replacement
+    ? Object.fromEntries(
+        Object.keys(database.schema.tables).map((table) => [
+          table,
+          remoteChanges[table] ?? { created: [], updated: [], deleted: [] },
+        ]),
+      )
+    : remoteChanges;
+
+  for (const [table, tableChanges] of Object.entries(effectiveChanges)) {
     if (!database.schema.tables[table]) {
       log(
         `sync: ignoring changes for unknown table '${table}' (forward compat)`,
@@ -93,10 +105,34 @@ export async function applyRemoteChanges(
     const collection = database.get(table);
     const schema = collection.schema;
 
+    // Normalize before applying: the wire contract imposes last-wins on
+    // the backend for pushes, and a pull naming one id twice used to
+    // insert twice, wedge on the UNIQUE constraint, and repeat forever.
+    // Deleted supersedes updated supersedes created; within a bucket the
+    // last occurrence wins.
+    const lastById = (rows: readonly DirtyRaw[]): DirtyRaw[] => [
+      ...new Map(rows.map((row) => [remoteId(row), row])).values(),
+    ];
+    const deletedIds = new Set(tableChanges.deleted);
+    const updatedRows = lastById(tableChanges.updated).filter(
+      (row) => !deletedIds.has(remoteId(row)),
+    );
+    const updatedIds = new Set(updatedRows.map(remoteId));
+    const createdRows = lastById(tableChanges.created).filter((row) => {
+      const id = remoteId(row);
+      return !deletedIds.has(id) && !updatedIds.has(id);
+    });
+    if (
+      createdRows.length !== tableChanges.created.length ||
+      updatedRows.length !== tableChanges.updated.length
+    ) {
+      log(`sync: normalized duplicate ids in '${table}' changeset`);
+    }
+
     // One lookup for everything this table's changeset references.
     const referencedIds = [
-      ...tableChanges.created.map(remoteId),
-      ...tableChanges.updated.map(remoteId),
+      ...createdRows.map(remoteId),
+      ...updatedRows.map(remoteId),
       ...tableChanges.deleted,
     ];
     const localState = new Map<string, 'live' | 'tombstone'>();
@@ -142,18 +178,29 @@ export async function applyRemoteChanges(
     };
 
     const updateResolved = (local: RawRecord, dirty: DirtyRaw): void => {
-      let resolved = resolveConflict(local, dirty, schema);
+      // A locally-created record is wholly local knowledge and keeps its
+      // values (sync_model.qnt's pullRow rule): its _changed is empty, so
+      // the per-column merge would otherwise hand every column to the
+      // remote and the next push would send the server's own values back
+      // as this client's creation.
+      let resolved =
+        local._status === 'created'
+          ? local
+          : resolveConflict(local, dirty, schema);
       if (options.conflictResolver) {
         resolved = options.conflictResolver(table, local, dirty, resolved);
       }
       // echo/no-op absorption: skip writes that change nothing
-      if (local._status === 'synced' && areRecordsEqual(local, resolved)) {
+      if (
+        (local._status === 'synced' || local._status === 'created') &&
+        areRecordsEqual(local, resolved)
+      ) {
         return;
       }
       operations.push({ type: 'update', table, raw: resolved });
     };
 
-    for (const dirty of tableChanges.created) {
+    for (const dirty of createdRows) {
       requireFullRecord(dirty);
       const id = remoteId(dirty);
       const state = localState.get(id);
@@ -167,27 +214,20 @@ export async function applyRemoteChanges(
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- 'live' is recorded in the same loop that fills liveRecords, so the two maps agree on this id.
         updateResolved(liveRecords.get(id)!, dirty);
       } else if (state === 'tombstone') {
-        if (options.replacement) {
-          // resync: the offline delete wins locally and is pushed after
-          // the rebuild — destroying the tombstone here would silently
-          // resurrect the record and lose the user's delete
-        } else {
-          log(
-            `sync: server created '${table}/${id}' over local tombstone — replacing`,
-          );
-          operations.push({
-            type: 'destroyPermanently',
-            table,
-            raw: { id, _status: 'deleted', _changed: '' },
-          });
-          operations.push(createAsSynced(dirty));
-        }
+        // the offline delete wins locally and is pushed later, exactly as
+        // the updated bucket and the resync path always treated it —
+        // destroying the tombstone here silently resurrected the record
+        // and lost the user's delete (sync_model.qnt takes the remote
+        // only for local status none or synced)
+        log(
+          `sync: server created '${table}/${id}' over local tombstone — the local delete stands`,
+        );
       } else {
         operations.push(createAsSynced(dirty));
       }
     }
 
-    for (const dirty of tableChanges.updated) {
+    for (const dirty of updatedRows) {
       requireFullRecord(dirty);
       const id = remoteId(dirty);
       const state = localState.get(id);
@@ -217,8 +257,11 @@ export async function applyRemoteChanges(
 
     if (options.replacement) {
       const snapshotIds = new Set([
-        ...tableChanges.created.map(remoteId),
-        ...tableChanges.updated.map(remoteId),
+        ...createdRows.map(remoteId),
+        ...updatedRows.map(remoteId),
+        // already destroyed by the deleted loop; destroying twice
+        // double-notifies observers for one row
+        ...deletedIds,
       ]);
       for (const [id, record] of liveRecords) {
         if (!snapshotIds.has(id) && record._status === 'synced') {

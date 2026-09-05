@@ -368,7 +368,16 @@ async function runSynchronize(
           log('sync: cursor moved during push — skipping cursor adoption');
           return;
         }
-        await applyRemoteChanges(database, pushResult.changes, { log });
+        await applyRemoteChanges(database, pushResult.changes, {
+          log,
+          // the interleave can carry rows that are locally dirty but were
+          // not in this push; they deserve the same resolver and created
+          // handling the pull phase gives them
+          ...(options.conflictResolver && {
+            conflictResolver: options.conflictResolver,
+          }),
+          ...(options.sendCreatedAsUpdated && { sendCreatedAsUpdated: true }),
+        });
         pulledTotal += countRows(pushResult.changes);
         await database.localStorage.set(CURSOR_KEY, pushResult.cursor);
       }
