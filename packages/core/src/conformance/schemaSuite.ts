@@ -36,6 +36,7 @@ const migrations = schemaMigrations({
           columns: {
             priority: c.number().indexed(),
             note: c.string().optional(),
+            attachment: c.blob(),
           },
         }),
       ],
@@ -122,6 +123,7 @@ export function schemaSuite(options: ResolvedOptions): void {
           position: 1,
           priority: 0,
           note: null,
+          attachment: new Uint8Array(),
         },
       ]);
 

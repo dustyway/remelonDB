@@ -45,11 +45,20 @@ describe('comparisons', () => {
   it('rejects invalid values', () => {
     expect(() => Q.where('a', undefined as never)).toThrow('did you mean null');
     expect(() => Q.eq({} as never)).toThrow('primitive');
+    expect(() => Q.eq(new Uint8Array([1]) as never)).toThrow('primitive');
     expect(() => Q.gt(null as never)).toThrow('null');
     expect(() => Q.gt(NaN)).toThrow('NaN');
     expect(() => Q.oneOf(['a', null as never])).toThrow('null');
     expect(() => Q.between('1' as never, 2)).toThrow('two numbers');
     expect(() => Q.like(7 as never)).toThrow('string');
+  });
+
+  it('excludes blobs from the query value type', () => {
+    const use = (): void => {
+      // @ts-expect-error -- blob columns cannot participate in queries
+      Q.eq(new Uint8Array([1]));
+    };
+    expect(use).toBeTypeOf('function');
   });
 
   it('rejects unsafe identifiers', () => {

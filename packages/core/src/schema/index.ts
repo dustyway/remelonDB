@@ -1,7 +1,8 @@
 /**
- * Schema definitions (docs/schema-inferred-types.md). Columns are typeless
- * in SQL (SQLite dynamic typing, matching upstream); the declared
- * ColumnType drives JS-side sanitization and migration backfill defaults.
+ * Schema definitions (docs/schema-inferred-types.md). Scalar columns are
+ * typeless in SQL (SQLite dynamic typing, matching upstream); blobs declare
+ * BLOB affinity so SQLite preserves their storage class. ColumnType drives
+ * JS-side sanitization and migration backfill defaults.
  * Every table implicitly gets the standard columns `id` (primary key),
  * `_status` and `_changed` (sync dirty tracking) — user schemas cannot
  * redeclare them.
@@ -14,7 +15,7 @@
 import { ensureName } from '../utils/checkName';
 import { deepFreeze } from '../utils/deepFreeze';
 
-export type ColumnType = 'string' | 'number' | 'boolean';
+export type ColumnType = 'string' | 'number' | 'boolean' | 'blob';
 
 export interface ColumnSchema {
   readonly name: string;
@@ -26,11 +27,11 @@ export interface ColumnSchema {
 /**
  * A column under construction: what `column.string()` etc. return, before
  * `table()` attaches the name. Carries its type and optionality in the
- * type system for inference; `optional()`/`indexed()` return new frozen
- * values (builders are immutable).
+ * type system for inference. Scalar definitions support `optional()` and
+ * `indexed()`; blobs support only `optional()`. Builders are immutable.
  */
 export interface ColumnDef<
-  T extends ColumnType = ColumnType,
+  T extends Exclude<ColumnType, 'blob'> = Exclude<ColumnType, 'blob'>,
   Optional extends boolean = boolean,
 > {
   readonly type: T;
@@ -40,11 +41,17 @@ export interface ColumnDef<
   indexed(): ColumnDef<T, Optional>;
 }
 
-function columnDef<T extends ColumnType, Optional extends boolean>(
-  type: T,
-  isOptional: Optional,
-  isIndexed: boolean,
-): ColumnDef<T, Optional> {
+export interface BlobColumnDef<Optional extends boolean = boolean> {
+  readonly type: 'blob';
+  readonly isOptional: Optional;
+  readonly isIndexed: false;
+  optional(): BlobColumnDef<true>;
+}
+
+function columnDef<
+  T extends Exclude<ColumnType, 'blob'>,
+  Optional extends boolean,
+>(type: T, isOptional: Optional, isIndexed: boolean): ColumnDef<T, Optional> {
   return Object.freeze({
     type,
     isOptional,
@@ -58,9 +65,23 @@ function columnDef<T extends ColumnType, Optional extends boolean>(
   });
 }
 
+function blobColumnDef<Optional extends boolean>(
+  isOptional: Optional,
+): BlobColumnDef<Optional> {
+  return Object.freeze({
+    type: 'blob',
+    isOptional,
+    isIndexed: false,
+    optional(): BlobColumnDef<true> {
+      return blobColumnDef(true);
+    },
+  });
+}
+
 /**
- * The column builders: `column.string()`, `column.number()`,
- * `column.boolean()`, each with `.optional()` and `.indexed()` modifiers.
+ * The column builders: `column.string()`, `column.number()`, and
+ * `column.boolean()` support `.optional()` and `.indexed()`;
+ * `column.blob()` supports `.optional()` but cannot be queried or indexed.
  *
  * @example
  * ```ts
@@ -78,6 +99,7 @@ export const column = {
   number: (): ColumnDef<'number', false> => columnDef('number', false, false),
   boolean: (): ColumnDef<'boolean', false> =>
     columnDef('boolean', false, false),
+  blob: (): BlobColumnDef<false> => blobColumnDef(false),
 };
 
 /**
@@ -85,7 +107,7 @@ export const column = {
  * @category Schema
  */
 export type ColumnsSpec = {
-  readonly [name: string]: ColumnDef;
+  readonly [name: string]: ColumnDef | BlobColumnDef;
 };
 
 /**
@@ -114,7 +136,8 @@ export interface AppSchema {
 /**
  * The record type a table's rows have in app code, derived from the
  * `table()` definition: `string`/`number`/`boolean` map to themselves,
- * `.optional()` adds `| null`, and `id` is always present and readonly.
+ * `blob` maps to `Uint8Array`, `.optional()` adds `| null`, and `id` is
+ * always present and readonly.
  *
  * @example
  * ```ts
@@ -134,8 +157,10 @@ export type InferRecord<T extends TableSchema> =
                 : CT extends 'number'
                   ? number
                   : boolean
-              : never)
-          | (Cols[K] extends ColumnDef<ColumnType, true> ? null : never);
+              : Cols[K] extends BlobColumnDef
+                ? Uint8Array
+                : never)
+          | (Cols[K] extends { readonly isOptional: true } ? null : never);
       }
     : never;
 
@@ -144,7 +169,12 @@ export type InferRecord<T extends TableSchema> =
  * @category Schema
  */
 export type ColumnName<T extends TableSchema> =
-  T extends TableSchema<infer Cols> ? (keyof Cols & string) | 'id' : string;
+  T extends TableSchema<infer Cols>
+    ? | {
+          [K in keyof Cols & string]: Cols[K] extends BlobColumnDef ? never : K;
+        }[keyof Cols & string]
+      | 'id'
+    : string;
 
 const RESERVED_COLUMNS = new Set([
   'id',
@@ -161,13 +191,16 @@ export function validateColumnSchema(column: ColumnSchema): ColumnSchema {
   if (RESERVED_COLUMNS.has(column.name.toLowerCase())) {
     throw new Error(`Column name '${column.name}' is reserved`);
   }
-  if (!['string', 'number', 'boolean'].includes(column.type)) {
+  if (!['string', 'number', 'boolean', 'blob'].includes(column.type)) {
     throw new Error(
       // String() for the same reason as in ensureName: this validates
       // input from untyped callers, where the value need not be a string.
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-conversion
       `Column '${column.name}' has invalid type '${String(column.type)}'`,
     );
+  }
+  if (column.type === 'blob' && column.isIndexed) {
+    throw new Error(`Column '${column.name}' cannot index blob values`);
   }
   if (
     (column.name === 'created_at' || column.name === 'updated_at') &&

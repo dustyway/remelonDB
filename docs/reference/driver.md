@@ -102,11 +102,12 @@ implements both members or neither.
 
 ## Value conventions
 
-- `SqlValue = string | number | boolean | null` is the entire vocabulary
-  crossing the seam, both directions. No `undefined`, no objects, no
-  `Date`s — core guarantees this on the way in.
+- `SqlValue = string | number | boolean | Uint8Array | null` is the entire
+  vocabulary crossing the seam, both directions. No `undefined`, plain
+  objects, or `Date`s — core guarantees this on the way in.
 - **Booleans**: accepted as bind args, stored as `0`/`1` (SQLite has no
   boolean storage class). Drivers own the write-side conversion.
+- **Blobs**: accepted and returned as `Uint8Array`, stored as SQLite BLOB.
 - `SqlArgs` is `readonly` — drivers must never mutate argument arrays.
 - Errors: reject the Promise with a real `Error`. No error-as-return-value
   conventions (a lesson from upstream's Android JSI layer).
@@ -137,12 +138,12 @@ drivers run it verbatim.
 
 ## Existing drivers
 
-| Driver                 | Package                    | Notes                                                                                                                                                                           |
-| ---------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Node                   | `@remelondb/driver-node`   | better-sqlite3; synchronous underneath; WAL for file DBs; `:memory:` supported. Powers all tests.                                                                               |
-| React Native           | `@remelondb/driver-rn`     | Thin adapter over `expo-sqlite`; the default, and runs in Expo Go with no native build of its own.                                                                              |
-| React Native (no expo) | `@remelondb/driver-rn-cpp` | Pure C++ TurboModule, bundled sqlite3 amalgamation, prefab JSI linkage. Requires a development build; see its README for when to choose it.                                     |
-| Web                    | `@remelondb/driver-web`    | SQLite-WASM + OPFS SAH pool in a dedicated Worker. Full contract verified against real sqlite-wasm in-process, and OPFS suites run in CI on real Chromium, Firefox, and WebKit. |
+| Driver      | Package                    | Notes                                                                                                                                                                           |
+| ----------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Node        | `@remelondb/driver-node`   | better-sqlite3; synchronous underneath; WAL for file DBs; `:memory:` supported. Powers all tests.                                                                               |
+| Expo SQLite | `@remelondb/driver-rn`     | Default React Native driver; a thin adapter over `expo-sqlite`.                                                                                                                 |
+| Bundled C++ | `@remelondb/driver-rn-cpp` | Pure C++ TurboModule for React Native 0.86+, with a bundled sqlite3 amalgamation and no Expo dependency. Requires native compilation and autolinking.                           |
+| Web         | `@remelondb/driver-web`    | SQLite-WASM + OPFS SAH pool in a dedicated Worker. Full contract verified against real sqlite-wasm in-process, and OPFS suites run in CI on real Chromium, Firefox, and WebKit. |
 
 ## Runtime coverage
 

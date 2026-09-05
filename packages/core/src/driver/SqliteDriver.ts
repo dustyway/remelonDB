@@ -12,14 +12,15 @@
  */
 
 /** The entire value vocabulary that crosses the seam, in either direction. */
-export type SqlValue = string | number | boolean | null;
+export type SqlValue = string | number | boolean | Uint8Array | null;
 
 export type SqlArgs = readonly SqlValue[];
 
 /**
  * One result row, keyed by column name. SQLite has no boolean storage class,
  * so values read back are never `boolean` — columns written as booleans come
- * back as 0/1. Interpreting them is the core's job (it knows the schema).
+ * back as 0/1. BLOB values come back as Uint8Array. Interpreting scalar
+ * columns is the core's job because it knows the schema.
  */
 export type Row = Record<string, SqlValue>;
 

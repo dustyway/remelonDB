@@ -7,6 +7,9 @@ import {
   sanitizedRaw,
   type RawRecord,
 } from '../rawRecord/index';
+import { Collection } from './Collection';
+import type { Database } from './Database';
+import * as Q from '../query/Q';
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -135,5 +138,45 @@ describe('markAsChanged', () => {
     markAsChanged(raw, 'a');
     expect(raw._status).toBe('created');
     expect(raw._changed).toBe('');
+  });
+});
+
+describe('blob query restrictions', () => {
+  it('rejects blob predicates and sorting for untyped callers', () => {
+    const assets = table('assets', { data: c.blob() });
+    const projects = table('projects', { icon: c.blob() });
+    const database = {
+      schema: appSchema({ version: 1, tables: [assets, projects] }),
+    } as unknown as Database;
+    const collection = new Collection(database, assets);
+
+    expect(() => collection.query(Q.where('data', 'encoded'))).toThrow(
+      "Cannot query blob column 'assets.data'",
+    );
+    expect(() => collection.query(Q.sortBy('data'))).toThrow(
+      "Cannot query blob column 'assets.data'",
+    );
+    expect(() => collection.query(Q.on('projects', 'icon', 'encoded'))).toThrow(
+      "Cannot query blob column 'projects.icon'",
+    );
+  });
+
+  it('does not dirty a record when replacement bytes are equal', () => {
+    const assets = table('assets', { data: c.blob() });
+    const database = {
+      schema: appSchema({ version: 1, tables: [assets] }),
+    } as unknown as Database;
+    const collection = new Collection(database, assets);
+    const record = sanitizedRaw(
+      { id: 'a1', _status: 'synced', data: new Uint8Array([1, 2]) },
+      assets,
+    );
+    const operation = collection.prepareUpdate(record, {
+      data: new Uint8Array([1, 2]),
+    });
+
+    expect(operation.raw._status).toBe('synced');
+    expect(operation.raw._changed).toBe('');
+    expect(operation.raw.data).toBe(record.data);
   });
 });

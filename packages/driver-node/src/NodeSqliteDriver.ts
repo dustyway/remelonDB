@@ -56,7 +56,21 @@ export class NodeSqliteDriver implements SqliteDriver {
 
   async query(sql: string, args: SqlArgs): Promise<Row[]> {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- better-sqlite3 types `all()` as `unknown[]`; the driver contract is that callers ask for columns SQLite can return.
-    return this.openDb.prepare(sql).all(...bindArgs(args)) as Row[];
+    const rows = this.openDb.prepare(sql).all(...bindArgs(args)) as Row[];
+    for (const row of rows) {
+      for (const key in row) {
+        const value = row[key];
+        // Buffer is a Uint8Array with its own toJSON; hand out a plain view.
+        if (Buffer.isBuffer(value)) {
+          row[key] = new Uint8Array(
+            value.buffer,
+            value.byteOffset,
+            value.length,
+          );
+        }
+      }
+    }
+    return rows;
   }
 
   async execute(sql: string, args: SqlArgs): Promise<void> {
@@ -95,7 +109,7 @@ export class NodeSqliteDriver implements SqliteDriver {
 
 // SQLite has no boolean storage class and better-sqlite3 rejects boolean
 // bind values, so they become 0/1 at the seam.
-function bindArgs(args: SqlArgs): (string | number | null)[] {
+function bindArgs(args: SqlArgs): (string | number | Uint8Array | null)[] {
   return args.map((value) => {
     if (typeof value === 'boolean') {
       return value ? 1 : 0;

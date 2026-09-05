@@ -17,6 +17,8 @@ const tasksTable = table('tasks', {
   position: c.number(),
   is_done: c.boolean(),
   project_id: c.string().optional(),
+  payload: c.blob(),
+  preview: c.blob().optional(),
 });
 const schema = appSchema({ version: 1, tables: [tasksTable] });
 
@@ -69,6 +71,42 @@ export function recordsSuite(options: ResolvedOptions): void {
       expect(rows[0]?.['is_done']).toBe(1); // stored representation
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- the toHaveLength(1) above.
       expect(sanitizedRaw(rows[0]!, tasksTable)).toEqual(raw);
+    });
+
+    it('round-trips blob values as Uint8Array', async () => {
+      await driver.execute(
+        'insert into tasks ("id", "_changed", "_status", "name", "position", "is_done", "project_id", "payload", "preview") values (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        ['t1', '', 'synced', 'asset', 1, false, null, new Uint8Array(), null],
+      );
+      expect(
+        await driver.query(
+          'select "payload", "preview" from tasks where "id" = ?',
+          ['t1'],
+        ),
+      ).toEqual([{ payload: new Uint8Array(), preview: null }]);
+      await driver.execute(
+        'update tasks set "payload" = ?, "preview" = ? where "id" = ?',
+        [new Uint8Array([0, 127, 255]), new Uint8Array([3, 2, 1]), 't1'],
+      );
+
+      const rows = await driver.query(
+        'select "payload", "preview" from tasks where "id" = ?',
+        ['t1'],
+      );
+      expect(rows).toEqual([
+        {
+          payload: new Uint8Array([0, 127, 255]),
+          preview: new Uint8Array([3, 2, 1]),
+        },
+      ]);
+      expect(rows[0]?.['payload']).toBeInstanceOf(Uint8Array);
+
+      await driver.execute('delete from tasks where "id" = ?', ['t1']);
+      expect(
+        await driver.query('select "payload" from tasks where "id" = ?', [
+          't1',
+        ]),
+      ).toEqual([]);
     });
   });
 }

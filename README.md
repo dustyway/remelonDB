@@ -47,7 +47,7 @@ conformance suite on all four platforms: Node (better-sqlite3),
 [web](packages/driver-web/README.md) (Chromium, Firefox, WebKit, and
 real Safari over OPFS), and
 [Android and iOS](packages/driver-rn-cpp/README.md) (on-device, same
-50/50 suite as Node, plus a real reload-teardown cycle on iOS). A production
+29/29 suite as Node, plus a real reload-teardown cycle on iOS). A production
 `vite build` smoke test covers the packed-tarball consumer path
 end-to-end; every package README checklist is fully ticked.
 
@@ -143,10 +143,10 @@ packages/
   driver-node/   @remelondb/driver-node — better-sqlite3 driver
                  + conformance & integration suites on real SQLite
   driver-rn/     @remelondb/driver-rn — React Native driver: thin
-                 adapter over expo-sqlite (runs in Expo Go)
+                 adapter over expo-sqlite
   driver-rn-cpp/ @remelondb/driver-rn-cpp — optional RN driver:
                  pure C++ TurboModule + bundled, pinned SQLite
-                 (dev builds only; see its README)
+                 (native build required; see its README)
   driver-web/    @remelondb/driver-web — browser driver:
                  SQLite-WASM + OPFS in a Worker (see its README)
   server/        @remelondb/server — embeddable sync backend engine:

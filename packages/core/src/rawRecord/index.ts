@@ -25,6 +25,12 @@ export interface RawRecord {
 /** Untrusted input: an adapter row, a sync payload, user data. */
 export type DirtyRaw = { readonly [key: string]: unknown };
 
+export function areValuesEqual(a: SqlValue, b: SqlValue): boolean {
+  if (a === b) return true;
+  if (!(a instanceof Uint8Array) || !(b instanceof Uint8Array)) return false;
+  return a.length === b.length && a.every((value, index) => value === b[index]);
+}
+
 /** The value an absent/invalid field falls back to, per column schema. */
 export function nullValue(column: ColumnSchema): SqlValue {
   if (column.isOptional) {
@@ -37,6 +43,8 @@ export function nullValue(column: ColumnSchema): SqlValue {
       return 0;
     case 'boolean':
       return false;
+    case 'blob':
+      return new Uint8Array();
   }
 }
 
@@ -61,6 +69,11 @@ function sanitizeValue(value: unknown, column: ColumnSchema): SqlValue {
       }
       if (value === 0) {
         return false;
+      }
+      break;
+    case 'blob':
+      if (value instanceof Uint8Array) {
+        return new Uint8Array(value);
       }
       break;
   }

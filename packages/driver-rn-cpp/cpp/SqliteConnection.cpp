@@ -2,6 +2,7 @@
 
 #include <sqlite3.h>
 #include <cstdio>
+#include <cstring>
 
 namespace remelon {
 
@@ -75,6 +76,22 @@ void SqliteConnection::bindArgs(
       result = sqlite3_bind_text(
           stmt, index, text.c_str(), static_cast<int>(text.size()),
           SQLITE_TRANSIENT);
+    } else if (value.isObject()) {
+      jsi::Object object = value.asObject(rt);
+      if (!object.isUint8Array(rt)) {
+        throw jsi::JSError(rt, "invalid bind value — SqlValue only");
+      }
+      jsi::Uint8Array bytes = object.asUint8Array(rt);
+      jsi::ArrayBuffer buffer = bytes.buffer(rt);
+      size_t length = bytes.byteLength(rt);
+      static const unsigned char emptyBlob = 0;
+      const void* data = length == 0
+          ? static_cast<const void*>(&emptyBlob)
+          : static_cast<const void*>(
+                buffer.data(rt) + bytes.byteOffset(rt));
+      result = sqlite3_bind_blob64(
+          stmt, index, data, static_cast<sqlite3_uint64>(length),
+          SQLITE_TRANSIENT);
     } else {
       throw jsi::JSError(rt, "invalid bind value — SqlValue only");
     }
@@ -128,12 +145,29 @@ jsi::Array SqliteConnection::query(
         case SQLITE_FLOAT:
           row.setProperty(rt, columns[i], sqlite3_column_double(stmt, i));
           break;
-        default: { // TEXT (BLOB is not part of the seam's value vocabulary)
+        case SQLITE_TEXT: {
           const char* text =
               reinterpret_cast<const char*>(sqlite3_column_text(stmt, i));
           row.setProperty(
               rt, columns[i],
               jsi::String::createFromUtf8(rt, text ? text : ""));
+          break;
+        }
+        case SQLITE_BLOB: {
+          const void* data = sqlite3_column_blob(stmt, i);
+          int length = sqlite3_column_bytes(stmt, i);
+          jsi::Uint8Array bytes(rt, static_cast<size_t>(length));
+          if (length > 0) {
+            if (!data) {
+              throwError(rt, "read blob failed");
+            }
+            jsi::ArrayBuffer buffer = bytes.buffer(rt);
+            std::memcpy(
+                buffer.data(rt) + bytes.byteOffset(rt),
+                data, static_cast<size_t>(length));
+          }
+          row.setProperty(rt, columns[i], std::move(bytes));
+          break;
         }
       }
     }

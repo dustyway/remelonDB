@@ -19,18 +19,18 @@ const TaskRow = z.object({
   position: z.number(),
   is_done: z.boolean(),
   project_id: z.string().nullable(),
+  attachment: z.instanceof(Uint8Array).nullable(),
 });
 const tasks = zodTable('tasks', TaskRow, { indexed: ['position'] });
 
 const schema = appSchema({ version: 1, tables: [tasks] });
 ```
 
-- **Column vocabulary**: `z.string()`, `z.number()`, `z.boolean()`, each
-  optionally `.nullable()` (SQL NULL; `.optional()` is rejected — the
-  value vocabulary has `null`, not `undefined`). Anything else is a loud
-  error at `zodTable` time.
+- **Column vocabulary**: `z.string()`, `z.number()`, `z.boolean()`, and
+  `z.instanceof(Uint8Array)`. Each may be `.nullable()`. `zodTable` rejects
+  `.optional()` because stored values use `null`, not `undefined`.
 - **Indexes** ride in the options bag (`indexed: [...]`) — Zod has no
-  word for them. Each creates `create index "…" on "table" ("column")`.
+  word for them. Blob columns cannot be indexed or used in `Q` clauses.
 - **Refinements** (`.min`, `.email`, …) keep their column type; they
   validate on the sync wire, not on local writes
   ([zod-adapter.md](../zod-adapter.md)).
@@ -39,9 +39,9 @@ const schema = appSchema({ version: 1, tables: [tasks] });
   columns are `T | null`). Collections obtained via `db.get(tasks)` or
   `db.get(Task)` are typed by it, and misspelled column names in
   `Q.where`/`Q.sortBy` are compile errors.
-- Columns are stored untyped in SQLite (dynamic typing); the declared
-  type drives JS-side sanitization (see [records.md](records.md)) and
-  migration backfill defaults.
+- Scalar columns are stored untyped in SQLite (dynamic typing). Blob columns
+  use `BLOB` affinity. The declared type also drives JS-side sanitization
+  (see [records.md](records.md)) and migration backfill defaults.
 - **`created_at` / `updated_at`**, if declared, must be non-nullable
   `number` columns (epoch-millisecond timestamps, auto-stamped by the
   Model layer).
@@ -60,13 +60,14 @@ const tasks = table('tasks', {
   position: c.number().indexed(),
   is_done: c.boolean(),
   project_id: c.string().optional(),
+  attachment: c.blob().optional(),
 });
 ```
 
-`c.string()`/`c.number()`/`c.boolean()`, with `.optional()` (may be
-`null`) and `.indexed()`. The two forms are interchangeable —
-equivalence is pinned by a deep-equality test, and `InferRecord` works
-identically on both.
+`c.string()`, `c.number()`, and `c.boolean()` support `.optional()` and
+`.indexed()`. `c.blob()` infers `Uint8Array` and supports `.optional()`.
+Blob columns cannot be indexed or queried. Both schema forms produce the
+same `TableSchema`.
 
 Validation at construction (all throw with specific messages): identifiers
 must match `^[a-zA-Z_][a-zA-Z0-9_]*$`; duplicate tables are rejected;
@@ -92,7 +93,7 @@ SQLite rowid aliases `rowid`/`oid`/`_rowid_` (case-insensitive); table names
 
 ```sql
 create table "local_storage" ("key" primary key not null, "value")
-create table "tasks" ("id" primary key, "_changed", "_status", "name", "position", "project_id", …)
+create table "tasks" ("id" primary key, "_changed", "_status", "name", "position", "project_id", "attachment" BLOB, …)
 create index if not exists "tasks_position" on "tasks" ("position")
 create index if not exists "tasks__status" on "tasks" ("_status")
 ```

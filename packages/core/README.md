@@ -13,12 +13,12 @@ DSL and its SQL compiler, schema and migrations, the `Database`/`Collection`/
 through a ~7-method `SqliteDriver` interface; pick the driver for your
 platform:
 
-| Platform              | Driver package                                                                                                                             |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Node                  | [`@remelondb/driver-node`](https://www.npmjs.com/package/@remelondb/driver-node) (better-sqlite3)                                          |
-| Browser               | [`@remelondb/driver-web`](https://www.npmjs.com/package/@remelondb/driver-web) (SQLite-WASM + OPFS in a Worker)                            |
-| React Native          | [`@remelondb/driver-rn`](https://www.npmjs.com/package/@remelondb/driver-rn) (expo-sqlite; runs in Expo Go)                                |
-| React Native, no expo | [`@remelondb/driver-rn-cpp`](https://www.npmjs.com/package/@remelondb/driver-rn-cpp) (C++ TurboModule, bundled SQLite; dev build required) |
+| Platform                         | Driver package                                                                                                                |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Node                             | [`@remelondb/driver-node`](https://www.npmjs.com/package/@remelondb/driver-node) (better-sqlite3)                             |
+| Browser                          | [`@remelondb/driver-web`](https://www.npmjs.com/package/@remelondb/driver-web) (SQLite-WASM + OPFS in a Worker)               |
+| React Native with Expo SQLite    | [`@remelondb/driver-rn`](https://www.npmjs.com/package/@remelondb/driver-rn) (`expo-sqlite` adapter)                          |
+| React Native with bundled SQLite | [`@remelondb/driver-rn-cpp`](https://www.npmjs.com/package/@remelondb/driver-rn-cpp) (C++ TurboModule; native build required) |
 
 Because every driver is real SQLite and passes the same
 conformance suite (`@remelondb/core/conformance`),

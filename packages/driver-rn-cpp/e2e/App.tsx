@@ -71,15 +71,16 @@ async function runSeamTests(push: (r: Result) => void): Promise<void> {
   await step('create table + batch insert', async () => {
     await d.execute('DROP TABLE IF EXISTS t', []);
     await d.execute(
-      'CREATE TABLE t (id TEXT PRIMARY KEY, n REAL, s TEXT, b INT, z TEXT)',
+      'CREATE TABLE t (id TEXT PRIMARY KEY, n REAL, s TEXT, b INT, z TEXT, data BLOB)',
       [],
     );
+    const source = new Uint8Array([9, 0, 127, 255, 9]);
     await d.executeBatch([
       [
-        'INSERT INTO t (id, n, s, b, z) VALUES (?, ?, ?, ?, ?)',
+        'INSERT INTO t (id, n, s, b, z, data) VALUES (?, ?, ?, ?, ?, ?)',
         [
-          ['a', 1.5, 'héllo wörld 🍉', 1, null],
-          ['b', -42, '', 0, null],
+          ['a', 1.5, 'héllo wörld 🍉', 1, null, source.subarray(1, 4)],
+          ['b', -42, '', 0, null, new Uint8Array()],
         ],
       ],
     ]);
@@ -93,6 +94,14 @@ async function runSeamTests(push: (r: Result) => void): Promise<void> {
     assert(r.s === 'héllo wörld 🍉', `s: ${r.s}`);
     assert(r.b === 1, `b: ${r.b}`);
     assert(r.z === null, `z: ${String(r.z)}`);
+    assert(r.data instanceof Uint8Array, `data: ${String(r.data)}`);
+    assert(
+      r.data.length === 3 &&
+        r.data[0] === 0 &&
+        r.data[1] === 127 &&
+        r.data[2] === 255,
+      `data bytes: ${String(r.data)}`,
+    );
   });
 
   await step('failing batch rolls back atomically', async () => {

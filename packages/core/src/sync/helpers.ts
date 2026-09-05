@@ -4,10 +4,15 @@ import * as Q from '../query/Q';
 import type { Clause } from '../query/ast';
 import type { Row } from '../driver/SqliteDriver';
 import type { TableSchema } from '../schema/index';
-import type { DirtyRaw, RawRecord } from '../rawRecord/index';
+import {
+  areValuesEqual,
+  type DirtyRaw,
+  type RawRecord,
+} from '../rawRecord/index';
 import type { Database } from '../database/Database';
 import { runDirect } from '../database/directWork';
 import type { SyncChanges } from './types';
+import { decodeBase64, encodeBase64 } from '../utils/base64';
 
 export const changedColumns = (raw: RawRecord): string[] =>
   raw._changed === '' ? [] : raw._changed.split(',');
@@ -17,7 +22,8 @@ export function areRecordsEqual(a: RawRecord, b: RawRecord): boolean {
   const keysA = Object.keys(a);
   const keysB = Object.keys(b);
   return (
-    keysA.length === keysB.length && keysA.every((key) => a[key] === b[key])
+    keysA.length === keysB.length &&
+    keysA.every((key) => areValuesEqual(a[key] ?? null, b[key] ?? null))
   );
 }
 
@@ -34,9 +40,34 @@ export function isChangesEmpty(changes: SyncChanges): boolean {
 export function stripInternal(raw: RawRecord, table: TableSchema): DirtyRaw {
   const result: { [key: string]: unknown } = { id: raw.id };
   for (const column of table.columnArray) {
-    result[column.name] = raw[column.name] ?? null;
+    const value = raw[column.name] ?? null;
+    result[column.name] =
+      column.type === 'blob' && value instanceof Uint8Array
+        ? encodeBase64(value)
+        : value;
   }
   return result;
+}
+
+export function decodeWireRaw(dirty: DirtyRaw, table: TableSchema): DirtyRaw {
+  let decoded: { [key: string]: unknown } | undefined;
+  for (const column of table.columnArray) {
+    if (column.type !== 'blob') continue;
+    const value = dirty[column.name];
+    if (typeof value === 'string') {
+      decoded ??= { ...dirty };
+      decoded[column.name] = decodeBase64(value);
+    } else if (
+      value !== undefined &&
+      value !== null &&
+      !(value instanceof Uint8Array)
+    ) {
+      throw new Error(
+        `Invalid base64 blob value for '${table.name}.${column.name}'`,
+      );
+    }
+  }
+  return decoded ?? dirty;
 }
 
 /** Raw rows straight from the driver, bypassing cache and deleted filter. */

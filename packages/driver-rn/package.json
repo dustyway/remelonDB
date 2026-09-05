@@ -6,7 +6,8 @@
   },
   "files": [
     "src",
-    "dist"
+    "dist",
+    "!src/**/*.test.ts"
   ],
   "scripts": {
     "build": "tsdown",
@@ -24,7 +25,7 @@
     "@remelondb/core": "workspace:*"
   },
   "license": "MIT",
-  "description": "remelonDB SqliteDriver for React Native: expo-sqlite adapter, the default RN driver (runs in Expo Go). For a bundled, pinned SQLite without an expo dependency see @remelondb/driver-rn-cpp.",
+  "description": "remelonDB SqliteDriver for React Native: the default expo-sqlite adapter. For bundled SQLite without an Expo dependency, see @remelondb/driver-rn-cpp.",
   "keywords": [
     "remelondb",
     "watermelondb",

@@ -6,23 +6,25 @@
  * sync wire protocol (docs/sync-wire.md) from the same objects — pure
  * Zod, so a server can use them without depending on remelonDB.
  *
- * Supported column vocabulary: `z.string()`, `z.number()`,
- * `z.boolean()`, each optionally `.nullable()` (maps to `.optional()`
- * columns — SQL NULL). Zod's `.optional()` (undefined) is rejected:
- * the value vocabulary has null and no undefined, and conflating them
- * silently is exactly what this package exists to prevent. Refinements
+ * Supported column vocabulary: `z.string()`, `z.number()`, `z.boolean()`,
+ * and `z.instanceof(Uint8Array)`, each optionally `.nullable()` (maps to
+ * `.optional()` columns — SQL NULL). Zod's `.optional()` is rejected
+ * because stored values use null, not undefined. Refinements
  * (`.min`, `.max`, formats) keep their column type and still validate
  * on the wire. Everything else is a loud error at build time.
  */
 import {
   column,
   table,
+  type BlobColumnDef,
   type ColumnDef,
   type ColumnsSpec,
   type SyncChanges,
+  type SyncPullResult,
   type SyncPushResult,
   type TableSchema,
 } from '../index';
+import { decodeBase64, encodeBase64, isCanonicalBase64 } from '../utils/base64';
 import { z } from 'zod';
 
 // ---- zodTable ----
@@ -33,23 +35,49 @@ type ColumnForInner<T> = T extends z.ZodString
     ? 'number'
     : T extends z.ZodBoolean
       ? 'boolean'
-      : never;
+      : T extends z.ZodType<infer Output>
+        ? Output extends Uint8Array
+          ? 'blob'
+          : never
+        : never;
+
+type DefFor<
+  T extends 'string' | 'number' | 'boolean' | 'blob',
+  Optional extends boolean,
+> = T extends 'blob'
+  ? BlobColumnDef<Optional>
+  : T extends 'string' | 'number' | 'boolean'
+    ? ColumnDef<T, Optional>
+    : never;
 
 type ColumnFor<T> =
   T extends z.ZodNullable<infer Inner>
     ? ColumnForInner<Inner> extends never
       ? never
-      : ColumnDef<ColumnForInner<Inner>, true>
+      : DefFor<ColumnForInner<Inner>, true>
     : ColumnForInner<T> extends never
       ? never
-      : ColumnDef<ColumnForInner<T>, false>;
+      : DefFor<ColumnForInner<T>, false>;
 
 /** @category Adapter */
 export type ColumnsFor<Shape extends z.ZodRawShape> = {
   [K in keyof Shape & string]: ColumnFor<Shape[K]>;
 };
 
-const columnFor = (key: string, field: z.ZodType): ColumnDef => {
+const isBlobSchema = (schema: z.ZodType): boolean => {
+  let current: z.core.$ZodType | undefined = schema;
+  while (current) {
+    // Refinements clone schemas; instanceof metadata remains on a parent.
+    if (current._zod.bag['Class'] === Uint8Array) return true;
+    current = current._zod.parent;
+  }
+  return false;
+};
+
+const columnFor = (
+  key: string,
+  field: z.ZodType,
+): ColumnDef | BlobColumnDef => {
   let inner = field;
   let nullable = false;
   if (inner instanceof z.ZodNullable) {
@@ -69,10 +97,12 @@ const columnFor = (key: string, field: z.ZodType): ColumnDef => {
         ? column.number()
         : inner instanceof z.ZodBoolean
           ? column.boolean()
-          : null;
+          : isBlobSchema(inner)
+            ? column.blob()
+            : null;
   if (base === null) {
     throw new Error(
-      `zodTable: column '${key}' is ${inner.constructor.name} — supported: z.string(), z.number(), z.boolean(), optionally .nullable()`,
+      `zodTable: column '${key}' is ${inner.constructor.name} — supported: z.string(), z.number(), z.boolean(), z.instanceof(Uint8Array), optionally .nullable()`,
     );
   }
   return nullable ? base.optional() : base;
@@ -111,11 +141,18 @@ export function zodTable<Shape extends z.ZodRawShape>(
       );
     }
   }
-  const spec: Record<string, ColumnDef> = {};
+  const spec: Record<string, ColumnDef | BlobColumnDef> = {};
   for (const [key, field] of Object.entries(schema.shape)) {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- a ZodRawShape's values are ZodTypes; Object.entries loses that.
     const def = columnFor(key, field as z.ZodType);
-    spec[key] = indexed.has(key) ? def.indexed() : def;
+    if (!indexed.has(key)) {
+      spec[key] = def;
+      continue;
+    }
+    if (!('indexed' in def)) {
+      throw new Error(`zodTable: cannot index blob column '${key}'`);
+    }
+    spec[key] = def.indexed();
   }
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- ColumnsFor<Shape> re-states, at the type level, the mapping the loop above just performed.
   return table(name, spec as ColumnsSpec) as TableSchema<ColumnsFor<Shape>>;
@@ -157,7 +194,42 @@ export function syncSchemas<
   const id = options.id ?? z.string().min(1);
   const cursor = z.string().min(1);
 
+  const wireField = (field: z.ZodType): z.ZodType => {
+    if (field instanceof z.ZodNullable) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the instanceof check proves unwrap returns a ZodType.
+      return wireField(field.unwrap() as z.ZodType).nullable();
+    }
+    if (!isBlobSchema(field)) return field;
+    const base64 = z
+      .string()
+      .refine(isCanonicalBase64, 'Invalid base64 blob value');
+    return z.codec(base64, field, {
+      decode: decodeBase64,
+      encode: (value) => {
+        if (!(value instanceof Uint8Array)) {
+          throw new Error('Expected Uint8Array blob value');
+        }
+        return encodeBase64(value);
+      },
+    });
+  };
+
   const rows = Object.fromEntries(
+    Object.entries(tables).map(([name, schema]) => [
+      name,
+      z.strictObject({
+        ...Object.fromEntries(
+          Object.entries(schema.shape).map(([key, field]) => [
+            key,
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- ZodRawShape values are ZodTypes; Object.entries erases that.
+            wireField(field as z.ZodType),
+          ]),
+        ),
+        id,
+      }),
+    ]),
+  );
+  const localRows = Object.fromEntries(
     Object.entries(tables).map(([name, schema]) => [
       name,
       z.strictObject({ ...schema.shape, id }),
@@ -195,10 +267,13 @@ export function syncSchemas<
     schemaVersion: z.number().int().positive(),
     migration: migration.nullable(),
   });
+  // Codecs change row representation, but SyncPullResult models row values
+  // as unknown in both directions.
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
   const pullResult = z.union([
     z.strictObject({ changes, cursor }),
     z.strictObject({ resyncRequired: z.literal(true) }),
-  ]);
+  ]) as unknown as z.ZodType<SyncPullResult, SyncPullResult>;
   const pushArgs = z.strictObject({ changes, cursor });
   // Same story as `changes` for `rejected`: `.optional()` infers
   // `| undefined`, which JSON input can never produce, so the core
@@ -215,7 +290,15 @@ export function syncSchemas<
         message: 'cursor and changes are a package: both or neither',
       }),
     z.strictObject({ conflict: z.literal(true) }),
-  ]) as unknown as z.ZodType<SyncPushResult>;
+  ]) as unknown as z.ZodType<SyncPushResult, SyncPushResult>;
 
-  return { rows, changes, pullArgs, pullResult, pushArgs, pushResult };
+  return {
+    rows,
+    localRows,
+    changes,
+    pullArgs,
+    pullResult,
+    pushArgs,
+    pushResult,
+  };
 }

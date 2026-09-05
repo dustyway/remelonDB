@@ -15,6 +15,11 @@ const tasksTable = table('tasks', {
   project_id: c.string().optional(),
 });
 
+const assetsTable = table('assets', {
+  data: c.blob(),
+  thumbnail: c.blob().optional(),
+});
+
 describe('schema construction', () => {
   it('builds and indexes tables', () => {
     expect(tasksTable.columns['position']?.isIndexed).toBe(true);
@@ -39,6 +44,14 @@ describe('schema construction', () => {
     const t = table('t', { a: base, b: base });
     expect(t.columns['a']?.name).toBe('a');
     expect(t.columns['b']?.name).toBe('b');
+  });
+
+  it('builds blob columns without indexing', () => {
+    expect(assetsTable.columns).toMatchObject({
+      data: { type: 'blob', isOptional: false, isIndexed: false },
+      thumbnail: { type: 'blob', isOptional: true, isIndexed: false },
+    });
+    expect(c.blob()).not.toHaveProperty('indexed');
   });
 
   it('rejects invalid schemas', () => {
@@ -71,6 +84,19 @@ describe('schema construction', () => {
       `create index if not exists "tasks_position" on "tasks" ("position")`,
       `create index if not exists "tasks__status" on "tasks" ("_status")`,
     ]);
+  });
+
+  it('encodes blob storage and migration defaults', () => {
+    expect(
+      encodeSchema(appSchema({ version: 1, tables: [assetsTable] })),
+    ).toContain(
+      `create table "assets" ("id" primary key, "_changed", "_status", "data" BLOB, "thumbnail" BLOB)`,
+    );
+    expect(
+      encodeMigrationSteps([
+        addColumns({ table: 'tasks', columns: { attachment: c.blob() } }),
+      ]),
+    ).toEqual([`alter table "tasks" add "attachment" BLOB default X''`]);
   });
 });
 

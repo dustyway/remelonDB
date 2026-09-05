@@ -57,6 +57,17 @@ null scope answers 401 before any protocol work.
 `crossValidate` passes through to the engine for cross-record rules (a card
 must reference a deck pushed alongside it or already owned).
 
+Tables with blob columns (`z.instanceof(Uint8Array)`) travel as base64,
+which is 4/3 of the byte size, and a push carries every dirty row at once.
+NestJS's default JSON body limit is 100 KB; a push over it fails with 413
+before the module sees it, the client keeps the rows dirty and retries the
+same batch on every sync. Raise the limit to fit the app's largest expected
+batch (`NestFactory.create(AppModule, { bodyParser: false })` plus
+`app.use(json({ limit: '10mb' }))`, or `rawBody`/`bodyLimit` on Fastify),
+and cap byte size in the app before creating the record. The
+[wire protocol](https://github.com/dustyway/remelonDB/blob/main/docs/sync-wire.md)
+has the details.
+
 The module serves pull and push; it does not notify. Clients decide when to
 sync, and for most apps the arrival triggers are enough. If you need changes
 to land in an already-open session, add an `@Sse` route of your own that

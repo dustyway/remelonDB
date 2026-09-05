@@ -4,7 +4,7 @@ Closes the first open item in `../README.md`: prove the driver's iOS
 side — `modulesProvider` registration, the pod compiling the SQLite
 amalgamation and C++ TurboModule, and runtime behavior on a simulator.
 The Android twin of this run is described in `README.md` here; expected
-output is identical (every `WMSMOKE: ok`, `WMCONF: 50 passed, 0
+output is identical (every `WMSMOKE: ok`, `WMCONF: 29 passed, 0
 failed`, `WMSMOKE: ALL PASS`).
 
 ## Prerequisites (verify first)
@@ -20,31 +20,18 @@ failed`, `WMSMOKE: ALL PASS`).
 ```sh
 git clone https://github.com/dustyway/remelonDB
 cd remelonDB && pnpm install
-node packages/driver-rn/scripts/fetch-sqlite.mjs   # amalgamation into cpp/vendor
-# (packing below builds dist/ automatically via each package's prepack)
+pnpm --filter @remelondb/driver-rn-cpp fetch-sqlite
 
-# pack tarballs (workspace dep rewritten to the core tarball)
+# Pack the same tarballs used by CI.
 mkdir -p /tmp/packed
 pnpm --filter @remelondb/core pack --pack-destination /tmp/packed
-CORE_TGZ=$(ls /tmp/packed/*core*.tgz)
-node -e "
-  const fs = require('fs')
-  const p = 'packages/driver-rn/package.json'
-  const pkg = JSON.parse(fs.readFileSync(p, 'utf8'))
-  pkg.dependencies['@remelondb/core'] = 'file:' + process.argv[1]
-  fs.writeFileSync(p, JSON.stringify(pkg, null, 2))
-" "$CORE_TGZ"
-pnpm --filter @remelondb/driver-rn pack --pack-destination /tmp/packed
-git checkout packages/driver-rn/package.json
+pnpm --filter @remelondb/driver-rn-cpp pack --pack-destination /tmp/packed
 
-# scaffold the app
-cd /tmp
-npx @react-native-community/cli@latest init WmHarness --version 0.86.0 --pm npm --skip-install --install-pods false
-cd WmHarness && npm install
-npm install /tmp/packed/*core*.tgz /tmp/packed/*driver-rn*.tgz
-
-# drop in the test app (from the repo checkout)
-cp <repo>/packages/driver-rn/e2e/{App.tsx,vitest-shim.ts,metro.config.js} .
+# Scaffold the pinned app and install the harness files.
+packages/driver-rn-cpp/scripts/create-rn-harness.sh \
+  --react-native 0.86.0 --cli 20.2.0 \
+  --tarballs /tmp/packed --output /tmp/WmHarness
+cd /tmp/WmHarness
 ```
 
 The e2e `App.tsx` imports `@remelondb/*`. The packed tarballs ship

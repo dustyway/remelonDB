@@ -29,6 +29,7 @@ export * as Q from './query/Q';
 export { appSchema, column, table } from './schema/index';
 export type {
   AppSchema,
+  BlobColumnDef,
   ColumnDef,
   ColumnName,
   ColumnSchema,

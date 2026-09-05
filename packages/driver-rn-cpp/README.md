@@ -1,10 +1,10 @@
 # @remelondb/driver-rn-cpp
 
 > **Optional driver.** The default React Native driver is
-> [`@remelondb/driver-rn`](../driver-rn) (an expo-sqlite adapter that
-> runs in Expo Go). This package is the alternative for apps that want
-> a pinned, bundled SQLite and no expo dependency; it requires a
-> development build. Same class name, same conformance suite —
+> [`@remelondb/driver-rn`](../driver-rn), an `expo-sqlite` adapter. This
+> package is the alternative for apps that want a pinned, bundled SQLite
+> and no Expo dependency; it requires a native build. Same class name,
+> same conformance suite —
 > switching is one import change.
 
 The React Native `SqliteDriver`: a **pure C++ TurboModule** wrapping a
@@ -30,20 +30,16 @@ WatermelonDB on modern RN).
 
 ## Requirements
 
-- React Native **≥ 0.80**. The package ships its codegen output, and
-  that generated glue uses CMake helpers React Native introduced in
-  0.80 (`target_compile_reactnative_options`); CI compiles the packed
-  package against 0.80 to keep this floor honest. Older New
-  Architecture versions (0.76–0.79) can support pure C++ TurboModules
-  in principle, but not with this package's shipped glue.
+- React Native **≥ 0.86**. Blob binding uses the typed-array API exposed
+  by React Native 0.86's JSI runtime. CI builds and runs the packed
+  package against 0.86.
 - New Architecture enabled (bridgeless supported)
 
 ## Setup
 
 ```sh
-# once, before the first native build (downloads the pinned SQLite
-# amalgamation into cpp/vendor — not committed to git):
-pnpm --filter @remelondb/driver-rn fetch-sqlite
+# refresh the tracked, pinned SQLite amalgamation in cpp/vendor:
+pnpm --filter @remelondb/driver-rn-cpp fetch-sqlite
 
 # then the usual:
 cd ios && pod install
@@ -51,7 +47,7 @@ cd ios && pod install
 
 ```ts
 import { Database } from '@remelondb/core';
-import { RnSqliteDriver } from '@remelondb/driver-rn';
+import { RnSqliteDriver } from '@remelondb/driver-rn-cpp';
 
 const db = await Database.open({
   driver: new RnSqliteDriver(),
@@ -79,8 +75,8 @@ bootstrap as web, with the takeover callback simply unused on native.
 | `codegenConfig.ios.modulesProvider` + `ios/RemelonDriverProvider.mm`    | iOS module registration                                                                                                          |
 | `scripts/fetch-sqlite.mjs`                                              | pins one SQLite version for both platforms (FTS5 on, `SQLITE_DQS=0`, no load-extension)                                          |
 
-Booleans bind as 0/1 (the seam-wide convention), rows come back
-column-keyed with `null | number | string` values, batches run in one
+Booleans bind as 0/1 (the seam-wide convention), blobs bind and return as
+`Uint8Array`, rows come back column-keyed, batches run in one
 `BEGIN`/`COMMIT` with rollback on any failure — the same contract the
 Node driver passes conformance with.
 
@@ -98,16 +94,16 @@ Repeatable on any Linux/macOS machine with clang; catches spec/signature
 drift against the installed RN version:
 
 ```sh
-pnpm --filter @remelondb/driver-rn fetch-sqlite
+pnpm --filter @remelondb/driver-rn-cpp fetch-sqlite
 RN=$(dirname $(node -e "console.log(require.resolve('react-native/package.json'))"))
 
 # 1. codegen must accept the spec (generates RemelonDriverSpecJSI.h)
-node $RN/scripts/generate-codegen-artifacts.js -p packages/driver-rn -o /tmp/wmcg -t ios
+node $RN/scripts/generate-codegen-artifacts.js -p packages/driver-rn-cpp -o /tmp/wmcg -t ios
 CG=/tmp/wmcg/build/generated/ios/ReactCodegen
 
 # 2. C++ must satisfy the generated bridging asserts
 #    (stub folly/dynamic.h with an empty class — see git history)
-cd packages/driver-rn/cpp
+cd packages/driver-rn-cpp/cpp
 clang++ -fsyntax-only -std=c++20 -I. -Ivendor -I$CG -I<folly-stub> \
   -I$RN/ReactCommon/jsi -I$RN/ReactCommon/react/nativemodule/core \
   -I$RN/ReactCommon/callinvoker -I$RN/ReactCommon RemelonDriver.cpp
@@ -127,7 +123,7 @@ rollback, close/reopen persistence, destroy, and the core `Database` API.
       [e2e/ios-verification.md](e2e/ios-verification.md): pod install +
       xcodebuild compile the amalgamation and provider, codegen emits
       `RemelonDriverSpecJSI.h`, and the on-device run passes every
-      smoke check and the 50/50 conformance suite
+      smoke check and the 29/29 conformance suite
 - [x] Reload teardown — verified with a real reload cycle on an iOS 26.5
       simulator via [e2e/AppReload.tsx](e2e/AppReload.tsx): a dev reload
       with the connection deliberately left open, then reopen, data

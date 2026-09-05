@@ -11,7 +11,7 @@
  */
 import type { SqlValue } from '../driver/SqliteDriver';
 
-export type Value = SqlValue;
+export type Value = Exclude<SqlValue, Uint8Array>;
 export type NonNullValue = string | number | boolean;
 
 /** Runtime tags proving a value came from a Q builder, not user data. */

@@ -28,9 +28,10 @@ transport that delivers these values conforms.
   cursors. Servers encode whatever they need (a revision number, a
   watermark, a composite) — it is theirs alone to interpret.
 - **Record** — JSON object: the row's user columns plus `id`. Values
-  are `string | number | boolean | null`. `_status` and `_changed` MUST
-  NOT appear on the wire in either direction; unknown keys are dropped
-  by the client's sanitizer, not errors.
+  are `string | number | boolean | null`. For a `blob` column, the JSON
+  value is padded canonical base64. Validators decode it to `Uint8Array`.
+  `_status` and `_changed` MUST NOT appear on the wire in either direction;
+  unknown keys are dropped by the client's sanitizer, not errors.
 - **ChangeSet** — `{ created: Record[], updated: Record[], deleted:
 RecordId[] }`. `deleted` carries ids only.
 - **Changes** — `{ [tableName]: ChangeSet }`. Tables absent from the
@@ -200,6 +201,16 @@ adapter a translation table. Transport-level failures (401, 400
 malformed JSON, 5xx) are outside the protocol; adapters surface them as
 thrown errors, which `synchronize()` reports as a failed sync with
 local state untouched.
+
+Blob columns make request size a design concern. Base64 grows bytes by
+4/3, and one push carries every dirty row, so a batch of blobs can exceed
+the host's body-parser limit (Express and NestJS default to 100 KB) even
+when each value is small. The server then answers 413 or 400, the client
+reports a transport error, the rows stay dirty, and the next sync pushes
+the same batch again. No per-column cap can rule this out because the
+request is the sum of the batch. Raise the body limit to what the app's
+media needs, and validate byte size in the app before a record is
+created, so an oversized value never becomes a dirty row.
 
 ## 7. Conformance checklist
 

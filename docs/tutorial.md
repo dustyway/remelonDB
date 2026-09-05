@@ -90,14 +90,12 @@ const reviews = zodTable('reviews', ReviewRow, { indexed: ['card_id'] });
 const schema = appSchema({ version: 1, tables: [decks, cards, reviews] });
 ```
 
-The column vocabulary is `z.string()`, `z.number()`, `z.boolean()`,
-each optionally `.nullable()`. Refinements like `.min(0).max(3)` don't
-change the column type. Local writes are not validated; validation
-happens at the trust boundary, the sync wire, in section 10. Indexes are
-a database concept Zod has no word for, so they ride in the options bag:
-`deck_id` and `due_at` back the queries this app runs constantly.
-`created_at`/`updated_at` are auto-stamped on create and update because
-they are declared.
+Supported columns use `z.string()`, `z.number()`, `z.boolean()`, or
+`z.instanceof(Uint8Array)`. Each may be `.nullable()`. Refinements validate
+at the sync boundary; local writes use schema sanitization. A `byteLength`
+refinement limits blob payload size. Blob columns cannot be indexed or
+queried. List scalar indexes in the `indexed` option. Declared `created_at`
+and `updated_at` columns are stamped by the model layer.
 
 (No Zod in your stack? `zodTable` produces ordinary table definitions;
 writing them by hand with the `table()`/`column` builders is the same

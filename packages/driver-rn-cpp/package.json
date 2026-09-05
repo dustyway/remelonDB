@@ -21,7 +21,7 @@
     "prepack": "tsdown"
   },
   "peerDependencies": {
-    "react-native": ">=0.80",
+    "react-native": ">=0.86",
     "@remelondb/core": "workspace:*"
   },
   "devDependencies": {
@@ -44,7 +44,7 @@
     }
   },
   "license": "MIT",
-  "description": "Optional React Native driver for remelonDB: pure C++ TurboModule with bundled SQLite (pinned version, no expo dependency; requires a dev build). Default driver: @remelondb/driver-rn.",
+  "description": "Optional React Native driver for remelonDB: pure C++ TurboModule with bundled SQLite (pinned version, no Expo dependency; requires a native build). Default driver: @remelondb/driver-rn.",
   "keywords": [
     "remelondb",
     "watermelondb",
