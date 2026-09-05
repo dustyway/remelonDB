@@ -85,6 +85,12 @@ export interface ServerConformanceOptions {
    * A table with a storage-enforced unique column, for backends whose
    * storage can refuse a row on its own (case 14). `row` builds a wire
    * row whose unique column carries `value`. Requires `secondUser`.
+   *
+   * A table-global unique column is an existence oracle across scopes:
+   * the rejection answers "does some other tenant already hold this
+   * value?" for any value a client cares to push. Scope the constraint
+   * (unique on `(owner, column)`) unless that answer is meant to be
+   * public — a username directory, say.
    */
   readonly uniqueColumn?: {
     readonly table: string;
@@ -409,6 +415,20 @@ export function registerServerConformance(
       });
       expect(unknown).toEqual({ resyncRequired: true });
 
+      // a cursor is an opaque echo, not a number: a respelling of one
+      // the server issued is still a cursor it never issued, and a
+      // server that coerces it serves history from a revision nobody
+      // was given
+      for (const respelled of [` ${start.cursor}`, `0${start.cursor}`]) {
+        expect(
+          await handlers.pull({
+            cursor: respelled,
+            schemaVersion: 1,
+            migration: null,
+          }),
+        ).toEqual({ resyncRequired: true });
+      }
+
       const full = pulled(await pullNull(handlers));
       expect(liveIds(full.changes, table)).toContain(row.id);
     });
@@ -553,6 +573,10 @@ export function registerServerConformance(
     );
 
     const uniqueColumn = options.uniqueColumn;
+    // The case proves the refusal reaches the wire as a rejected id. It
+    // also demonstrates the leak that comes with a table-global unique
+    // column: the rejection tells this principal that another one holds
+    // the value. See `uniqueColumn` on the options.
     const case14 = uniqueColumn ? it : it.skip;
     case14(
       '14. a storage constraint refusal is a per-record rejection, and the rest of the batch applies (needs `uniqueColumn`)',

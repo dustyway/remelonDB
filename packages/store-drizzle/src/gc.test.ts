@@ -86,3 +86,27 @@ describe('gc and scrub', () => {
     );
   }, 20_000);
 });
+
+describe('gc floor validation', () => {
+  it('refuses a floor that is not a non-negative safe integer', async () => {
+    const { db } = await freshDb();
+    const store = createDrizzleStore<string>({
+      db,
+      tables: {
+        tasks: {
+          table: tasks,
+          id: tasks.id,
+          rev: tasks.rev,
+          deletedAt: tasks.deletedAt,
+          scope: tasks.owner,
+        },
+      },
+    });
+
+    // 1e21 stringifies as '1e+21': it cleared the finite/non-negative
+    // guard and reached raw SQL as a syntax error
+    for (const floor of [1e21, 1.5, -1, NaN, Infinity]) {
+      await expect(store.gc(floor)).rejects.toThrow(/invalid gc floor/);
+    }
+  }, 20_000);
+});
