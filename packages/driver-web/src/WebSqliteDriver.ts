@@ -222,6 +222,10 @@ export class WebSqliteDriver implements SqliteDriver {
                   // SharedWorkerGlobalScope on Chromium/WebKit) — this tab
                   // hosts the compute worker and bridges a channel to the
                   // broker. The worker lives and dies with this tab.
+                  // a false-positive epoch reset can ask this tab to
+                  // spawn twice; the first worker would otherwise live on
+                  // holding the SAH pool the replacement needs
+                  this.hostedComputeWorker?.terminate();
                   const compute = new Worker(
                     new URL('./worker.ts', import.meta.url),
                     { type: 'module' },
