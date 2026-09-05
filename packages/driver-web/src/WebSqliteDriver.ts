@@ -550,9 +550,11 @@ export class WebSqliteDriver implements SqliteDriver {
   }
 
   async close(): Promise<void> {
-    const name = this.openName;
-    await this.request({ op: 'close', name });
-    this.name = null;
+    const name = this.name;
+    if (name !== null) {
+      await this.request({ op: 'close', name });
+      this.name = null;
+    }
     // a self-created worker dies here, releasing the pool's file locks
     // for other tabs; injected endpoints without terminate are untouched
     this.endpoint?.terminate?.();
