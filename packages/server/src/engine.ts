@@ -207,16 +207,8 @@ export function createSyncEngine<Scope>(options: SyncEngineOptions<Scope>): {
         // the conflict scan must see all of them, or a row rejected here
         // escapes the stale check and its newer server rev is never
         // delivered (permanent divergence)
-        let allIds = [...byId.keys(), ...deletes];
-        const rows: WireRow[] = [];
-        for (const row of byId.values()) {
-          if (options.tables[table]?.validate?.(row) === false) {
-            (rejected[table] ??= []).push(row.id);
-          } else {
-            rows.push(row);
-          }
-        }
-        return { table, rows, deletes, allIds };
+        const allIds = [...byId.keys(), ...deletes];
+        return { table, rows: [...byId.values()], deletes, allIds };
       });
 
       return options.store.transaction(scope, 'push', async (tx) => {
@@ -256,6 +248,16 @@ export function createSyncEngine<Scope>(options: SyncEngineOptions<Scope>): {
           for (const rev of revs.values()) {
             if (rev > since) return { conflict: true };
           }
+        }
+
+        for (const entry of parsed) {
+          const validate = options.tables[entry.table]?.validate;
+          if (!validate) continue;
+          entry.rows = entry.rows.filter((row) => {
+            if (validate(row)) return true;
+            (rejected[entry.table] ??= []).push(row.id);
+            return false;
+          });
         }
 
         // A hook may only reject ids that are in the request, keyed by a

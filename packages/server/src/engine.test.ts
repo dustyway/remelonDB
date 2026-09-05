@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { registerServerConformance } from './conformance/index';
-import { createMemoryStore, createSyncEngine } from './index';
+import {
+  createMemoryStore,
+  createSyncEngine,
+  SyncProtocolError,
+  type SyncStore,
+} from './index';
 
 // The engine over the memory store must pass the full backend contract;
 // a real adapter proves itself the same way, engine included.
@@ -258,5 +263,79 @@ describe('cross-change validation', () => {
     ).rejected;
     expect(rejected?.cards).toEqual(['c1']);
     expect(rejected?.decks).toEqual(['d1']);
+  });
+});
+
+describe('push pipeline guards', () => {
+  const changes = {
+    tasks: {
+      created: [{ id: 't1', name: 'task' }],
+      updated: [],
+      deleted: [],
+    },
+  };
+
+  it('rejects a cursor beyond the scope horizon', async () => {
+    const handlers = createSyncEngine({
+      store: createMemoryStore(),
+      tables: { tasks: {} },
+    }).as('scope-a');
+
+    expect(await handlers.push({ changes, cursor: '999' })).toEqual({
+      conflict: true,
+    });
+  });
+
+  it.each([
+    {
+      name: 'unknown table',
+      rejected: { ghosts: ['t1'] },
+    },
+    {
+      name: 'id absent from the request',
+      rejected: { tasks: ['other'] },
+    },
+  ])('throws when a hook rejects an $name', async ({ rejected }) => {
+    const handlers = createSyncEngine({
+      store: createMemoryStore(),
+      tables: { tasks: {} },
+      crossValidate: async () => rejected,
+    }).as('scope-a');
+
+    await expect(handlers.push({ changes, cursor: '0' })).rejects.toMatchObject(
+      {
+        name: 'SyncProtocolError',
+        code: 'invalid-rejection',
+      } satisfies Partial<SyncProtocolError>,
+    );
+  });
+
+  it('degrades when gc advances while the interleave is collected', async () => {
+    let floor = 0;
+    const store: SyncStore<string> = {
+      transaction: async (_scope, _mode, work) =>
+        work({
+          changedSince: async () => {
+            floor = 1;
+            return [];
+          },
+          maxRev: async () => 1,
+          currentRevs: async () => new Map(),
+          foreignIds: async () => [],
+          tombstonedIds: async () => [],
+          upsert: async () => undefined,
+          tombstone: async () => undefined,
+          gcFloor: async () => floor,
+        }),
+    };
+    const handlers = createSyncEngine({
+      store,
+      tables: { tasks: {} },
+    }).as('scope-a');
+
+    expect(await handlers.push({ changes: {}, cursor: '0' })).toEqual({
+      cursor: null,
+      changes: null,
+    });
   });
 });

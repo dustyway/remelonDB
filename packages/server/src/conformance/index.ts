@@ -751,5 +751,73 @@ export function registerServerConformance(
         expect(stored).toEqual(keystone);
       },
     );
+
+    const case19 = fixture.invalidRow ? it : it.skip;
+    case19(
+      '19. conflict dominates validation rejection for the same id (needs `invalidRow`)',
+      async () => {
+        const { handlers } = await options.makeContext();
+        const row = fixture.validRow();
+        const staleCursor = pulled(await pullNull(handlers)).cursor;
+
+        accepted(
+          await handlers.push({
+            changes: changesWith([row]),
+            cursor: staleCursor,
+          }),
+        );
+
+        const invalid = {
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- the case registers as `it.skip` when `fixture.invalidRow` is absent, so the body only runs when it is present.
+          ...fixture.invalidRow!(),
+          id: row.id,
+        };
+        const result = await handlers.push({
+          changes: changesWith([invalid], [], true),
+          cursor: staleCursor,
+        });
+
+        expect(result).toEqual({ conflict: true });
+      },
+    );
+
+    const case20 = appendOnly ? it : it.skip;
+    case20(
+      '20. the push interleave keeps a matching id from another table (needs `appendOnly`)',
+      async () => {
+        const { table: otherTable, fixture: otherFixture } =
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- the case registers as `it.skip` when `options.appendOnly` is absent, so the body only runs when it is present.
+          appendOnly!;
+        const { handlers } = await options.makeContext();
+        const row = fixture.validRow();
+        const otherRow = { ...otherFixture.validRow(), id: row.id };
+        const staleCursor = pulled(await pullNull(handlers)).cursor;
+
+        accepted(
+          await handlers.push({
+            changes: {
+              [otherTable]: {
+                created: [otherRow],
+                updated: [],
+                deleted: [],
+              },
+            },
+            cursor: staleCursor,
+          }),
+        );
+
+        const result = accepted(
+          await handlers.push({
+            changes: changesWith([row]),
+            cursor: staleCursor,
+          }),
+        );
+        expect(result.changes).not.toBeNull();
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- the assertion above narrows the runtime contract; TypeScript does not narrow through Vitest's matcher.
+        expect(liveIds(result.changes!, otherTable)).toContain(row.id);
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- same assertion as above; this verifies the pushed row itself remains excluded.
+        expect(liveIds(result.changes!, table)).not.toContain(row.id);
+      },
+    );
   });
 }
