@@ -457,6 +457,36 @@ const forward = (
   send(port, request, transform, onFailure);
 };
 
+/**
+ * A peer's change set is untrusted input: it is relayed straight into
+ * every other tab's record cache, so a wrong shape corrupts rows there.
+ * Structural only — the receiver sanitizes the record contents.
+ */
+const isChangeSet = (value: unknown): boolean => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+  return Object.values(value).every(
+    (changes) =>
+      Array.isArray(changes) &&
+      changes.every((change: unknown) => {
+        if (typeof change !== 'object' || change === null) {
+          return false;
+        }
+        const { type, record } = change as {
+          type?: unknown;
+          record?: unknown;
+        };
+        return (
+          (type === 'created' || type === 'updated' || type === 'destroyed') &&
+          typeof record === 'object' &&
+          record !== null &&
+          typeof (record as { id?: unknown }).id === 'string'
+        );
+      }),
+  );
+};
+
 const answer = (port: PortLike, id: number, result: unknown): void => {
   port.postMessage({ id, ok: true, result } satisfies WorkerResponse);
 };
@@ -539,6 +569,16 @@ const handle = (port: PortLike, request: WorkerRequest): void => {
       return;
     }
     case 'publishChanges': {
+      if (!isChangeSet(request.changes)) {
+        port.postMessage({
+          id: request.id,
+          ok: false,
+          error:
+            'SharedWorker broker: publishChanges was given a change set ' +
+            'that is not tables of { type, record: { id } } changes',
+        } satisfies WorkerResponse);
+        return;
+      }
       // fan out to every OTHER tab holding this database; the sender's
       // own cache is already up to date (its commit did that)
       for (const holder of holders.get(request.name) ?? []) {

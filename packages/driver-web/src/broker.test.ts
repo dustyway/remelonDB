@@ -221,3 +221,53 @@ describe('destroy notification', () => {
     });
   });
 });
+
+describe('publishChanges shape', () => {
+  const holdTwo = async (): Promise<[FakePort, FakePort]> => {
+    const connect = await loadBroker();
+    const a = makePort();
+    const b = makePort();
+    connect(a);
+    connect(b);
+    a.send({ id: 1, op: 'open', name: 'db', storage: 'memory' });
+    b.send({ id: 1, op: 'open', name: 'db', storage: 'memory' });
+    return [a, b];
+  };
+
+  it('refuses a malformed change set instead of relaying it', async () => {
+    const [a, b] = await holdTwo();
+    a.send({ id: 2, op: 'publishChanges', name: 'db', changes: 'oops' });
+    a.send({
+      id: 3,
+      op: 'publishChanges',
+      name: 'db',
+      changes: { notes: [{ type: 'created', record: { id: 7 } }] },
+    });
+    a.send({
+      id: 4,
+      op: 'publishChanges',
+      name: 'db',
+      changes: { notes: [{ type: 'exploded', record: { id: 'n1' } }] },
+    });
+
+    expect(
+      a.out.filter((m) => (m as { ok?: boolean }).ok === false),
+    ).toHaveLength(3);
+    expect(
+      b.out.some(
+        (m) => (m as { control?: string }).control === 'externalChanges',
+      ),
+    ).toBe(false);
+  });
+
+  it('still relays a well-formed change set', async () => {
+    const [a, b] = await holdTwo();
+    const changes = { notes: [{ type: 'created', record: { id: 'n1' } }] };
+    a.send({ id: 2, op: 'publishChanges', name: 'db', changes });
+    expect(b.out).toContainEqual({
+      control: 'externalChanges',
+      name: 'db',
+      changes,
+    });
+  });
+});

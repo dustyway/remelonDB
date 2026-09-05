@@ -17,7 +17,9 @@ describe('shared mode destroy broadcast', () => {
     await driverA.destroy();
 
     await expect
-      .poll(() => driverB.query('select 1', []).catch((e: Error) => e.message))
+      .poll(() =>
+        driverB.query('select 1', []).catch((e: unknown) => String(e)),
+      )
       .toMatch(/destroyed by another tab/);
 
     driverA.hostedComputeWorker?.terminate();
