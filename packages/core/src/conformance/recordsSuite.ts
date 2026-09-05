@@ -99,7 +99,7 @@ export function recordsSuite(options: ResolvedOptions): void {
           preview: new Uint8Array([3, 2, 1]),
         },
       ]);
-      expect(rows[0]?.['payload']?.constructor).toBe(Uint8Array);
+      expect(rows[0]?.['payload']).toBeInstanceOf(Uint8Array);
 
       await driver.execute('delete from tasks where "id" = ?', ['t1']);
       expect(
