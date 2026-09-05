@@ -89,10 +89,16 @@ export async function applyRemoteChanges(
   // Sweeping only the payload's tables left them alive forever.
   const effectiveChanges: SyncChanges = options.replacement
     ? Object.fromEntries(
-        Object.keys(database.schema.tables).map((table) => [
-          table,
-          remoteChanges[table] ?? { created: [], updated: [], deleted: [] },
-        ]),
+        Object.values(database.schema.tables)
+          .filter((table) => !table.localOnly)
+          .map((table) => [
+            table.name,
+            remoteChanges[table.name] ?? {
+              created: [],
+              updated: [],
+              deleted: [],
+            },
+          ]),
       )
     : remoteChanges;
 
@@ -102,6 +108,11 @@ export async function applyRemoteChanges(
         `sync: ignoring changes for unknown table '${table}' (forward compat)`,
       );
       continue;
+    }
+    if (database.schema.tables[table].localOnly) {
+      throw new Error(
+        `sync: server response names local-only table '${table}'`,
+      );
     }
     const collection = database.get(table);
     const schema = collection.schema;

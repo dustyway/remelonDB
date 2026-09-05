@@ -87,6 +87,25 @@ Reserved and rejected: column names `id`, `_status`, `_changed`, and the
 SQLite rowid aliases `rowid`/`oid`/`_rowid_` (case-insensitive); table names
 `local_storage` and anything starting with `sqlite_`.
 
+### Local-only tables
+
+A table declared with `{ localOnly: true }` is an ordinary table for
+queries, observation, blob columns and migrations, but the sync layer
+never touches it:
+
+```ts
+const mediaCache = table(
+  'media_cache',
+  { file_id: c.string().indexed(), bytes: c.blob() },
+  { localOnly: true },
+);
+```
+
+Its rows never enter a push, they never make `hasUnsyncedChanges` true, a
+replacement (resync) pull leaves them alone, and a server response naming
+the table is rejected. Records still carry `_status` and `_changed`; sync
+just never reads them. `zodTable` takes the same option.
+
 ## What the DDL looks like
 
 `encodeSchema(schema)` returns an array of single statements:

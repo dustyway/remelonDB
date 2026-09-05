@@ -35,7 +35,8 @@ export async function fetchLocalChanges(
     const changes: { [table: string]: SyncTableChanges } = {};
     const dirtyRecords: { [table: string]: DirtyRecordSnapshot[] } = {};
 
-    for (const table of Object.keys(database.schema.tables)) {
+    for (const [table, tableSchema] of Object.entries(database.schema.tables)) {
+      if (tableSchema.localOnly) continue;
       const collection = database.get(table);
       const created = await collection
         .query(Q.where('_status', 'created'))

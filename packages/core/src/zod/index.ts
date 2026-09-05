@@ -112,6 +112,8 @@ const columnFor = (
 export interface ZodTableOptions<Shape extends z.ZodRawShape> {
   /** Columns to index (Zod has no such concept). */
   readonly indexed?: readonly (keyof Shape & string)[];
+  /** Keep the table out of sync entirely — see `table()`. */
+  readonly localOnly?: boolean;
 }
 
 /**
@@ -155,7 +157,9 @@ export function zodTable<Shape extends z.ZodRawShape>(
     spec[key] = def.indexed();
   }
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- ColumnsFor<Shape> re-states, at the type level, the mapping the loop above just performed.
-  return table(name, spec as ColumnsSpec) as TableSchema<ColumnsFor<Shape>>;
+  return table(name, spec as ColumnsSpec, {
+    localOnly: options.localOnly ?? false,
+  }) as TableSchema<ColumnsFor<Shape>>;
 }
 
 // ---- syncSchemas ----
