@@ -57,6 +57,11 @@ function sanitizeValue(value: unknown, column: ColumnSchema): SqlValue {
       break;
     case 'number':
       if (typeof value === 'number' && Number.isFinite(value)) {
+        if (Number.isInteger(value) && !Number.isSafeInteger(value)) {
+          throw new Error(
+            `Value for '${column.name}' is outside JavaScript's safe integer range; store it as a string`,
+          );
+        }
         return value;
       }
       break;

@@ -70,6 +70,12 @@ describe('sanitizedRaw', () => {
     expect(raw.rating).toBeNull();
   });
 
+  it('rejects integers that SQLite cannot return losslessly', () => {
+    expect(() => sanitizedRaw({ position: 2 ** 60 }, tasksTable)).toThrow(
+      "'position' is outside JavaScript's safe integer range",
+    );
+  });
+
   it('converts stored 0/1 back to booleans (driver round-trip)', () => {
     expect(sanitizedRaw({ is_done: 1 }, tasksTable).is_done).toBe(true);
     expect(sanitizedRaw({ is_done: 0 }, tasksTable).is_done).toBe(false);
@@ -111,6 +117,13 @@ describe('setRawSanitized', () => {
     expect(raw.name).toBe('');
     setRawSanitized(raw, 1, tasksTable.columns['is_done']!);
     expect(raw.is_done).toBe(true);
+  });
+
+  it('rejects an unsafe integer on update', () => {
+    const raw = sanitizedRaw({}, tasksTable);
+    expect(() => {
+      setRawSanitized(raw, 2 ** 60, tasksTable.columns['position']!);
+    }).toThrow("'position' is outside JavaScript's safe integer range");
   });
 });
 
