@@ -405,6 +405,30 @@ describe('Database core', () => {
       }
     });
 
+    it('a live fetch failure without onError stays an unhandled rejection', async () => {
+      const failure = new Error('read failed');
+      driver.query = async () => {
+        throw failure;
+      };
+      const unhandled: unknown[] = [];
+      const prior = process.listeners('unhandledRejection');
+      process.removeAllListeners('unhandledRejection');
+      process.on('unhandledRejection', (reason) => unhandled.push(reason));
+      const unsubscribe = db
+        .get('tasks')
+        .query()
+        .observe(() => {});
+      try {
+        await flush();
+        expect(unhandled).toEqual([failure]);
+      } finally {
+        unsubscribe();
+        process.removeAllListeners('unhandledRejection');
+        for (const listener of prior)
+          process.on('unhandledRejection', listener);
+      }
+    });
+
     it('a throwing subscriber is an app bug: loud, never delivered to onError', async () => {
       const boom = new Error('subscriber bug');
       const errors: Error[] = [];

@@ -164,13 +164,9 @@ export class Query<M = RawRecord> {
             onError(error);
             return;
           }
-          // Nowhere to deliver it: rethrow out of band so the runtime's
-          // global handler reports a real failure. The handler is now
-          // attached either way, so a rejection belonging to an
-          // observation already discarded stays quiet.
-          setTimeout(() => {
-            throw error;
-          }, 0);
+          // Reject the ignored .then promise. This stays an unhandled
+          // rejection, while discarded observations returned above stay quiet.
+          throw error;
         },
       );
     };
@@ -252,13 +248,9 @@ export class Query<M = RawRecord> {
             onError(error);
             return;
           }
-          // Nowhere to deliver it: rethrow out of band so the runtime's
-          // global handler reports a real failure. The handler is now
-          // attached either way, so a rejection belonging to an
-          // observation already discarded stays quiet.
-          setTimeout(() => {
-            throw error;
-          }, 0);
+          // Same contract as observe(): live failures stay unhandled
+          // rejections, while discarded observations stay quiet.
+          throw error;
         },
       );
     };
