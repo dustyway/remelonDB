@@ -373,6 +373,38 @@ describe('Database core', () => {
       unsubscribe();
     });
 
+    it('a discarded fetch rejection is not an unhandled rejection', async () => {
+      // No onError and no onObservation: the rejection has nowhere to go,
+      // and the observation is gone before it settles.
+      const bare = new NodeSqliteDriver();
+      const plain = await Database.open({
+        driver: bare,
+        schema,
+        associations,
+        name: ':memory:',
+      });
+      bare.query = async () => {
+        throw new Error('read failed');
+      };
+      const unhandled: unknown[] = [];
+      const prior = process.listeners('unhandledRejection');
+      process.removeAllListeners('unhandledRejection');
+      process.on('unhandledRejection', (reason) => unhandled.push(reason));
+      try {
+        plain
+          .get('tasks')
+          .query()
+          .observe(() => {})();
+        await flush();
+        expect(unhandled).toEqual([]);
+      } finally {
+        process.removeAllListeners('unhandledRejection');
+        for (const listener of prior)
+          process.on('unhandledRejection', listener);
+        await bare.destroy().catch(() => {});
+      }
+    });
+
     it('a throwing subscriber is an app bug: loud, never delivered to onError', async () => {
       const boom = new Error('subscriber bug');
       const errors: Error[] = [];
