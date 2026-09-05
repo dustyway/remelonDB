@@ -35,8 +35,13 @@ export const LAST_SCHEMA_VERSION_KEY = '__sync_last_schema_version';
  * @category Sync
  */
 export interface SynchronizeResult {
-  /** 'unavailable' when another context held the sync lease; nothing ran. */
-  readonly lease: 'acquired' | 'unavailable';
+  /**
+   * 'unavailable' when another context held the sync lease and nothing
+   * ran; 'lost' when the lease expired mid-run and another context took
+   * it — the push (if any) landed server-side, local changes stay dirty,
+   * and the next run reconciles idempotently.
+   */
+  readonly lease: 'acquired' | 'unavailable' | 'lost';
   /** The server demanded a full resync and a replacement pull happened. */
   readonly resynced: boolean;
   /** Remote rows applied locally: pull phases plus interleaved push changes. */
@@ -327,6 +332,29 @@ async function runSynchronize(
       throw new Error(
         'synchronize: push returned a cursor without interleaved changes — a backend must return both or neither (see docs/sync-design.md)',
       );
+    }
+
+    // The turn was taken once at the start, and a slow push can outlive
+    // the driver's lease. Re-confirm before the one write that destroys
+    // local state: still ours (or expired, unclaimed) extends the lease;
+    // taken by another context means that context has been syncing over
+    // this database, and marking now would trust a stale snapshot.
+    if (requestSyncTurn) {
+      const stillOurs = await runDirect(database, () =>
+        requestSyncTurn.call(database.driver),
+      );
+      if (!stillOurs) {
+        log('sync turn lost during push — local changes stay dirty');
+        return {
+          lease: 'lost',
+          resynced,
+          pulled: pulledTotal,
+          pushed: 0,
+          rejected: 0,
+          rejectedRecords: {},
+          retryCount: attempt - 1,
+        };
+      }
     }
 
     await database.write(async () => {
