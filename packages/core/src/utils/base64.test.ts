@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { decodeBase64, encodeBase64 } from './base64';
 
 describe('base64', () => {
-  it('round-trips canonical vectors without platform globals', () => {
+  it('round-trips canonical vectors through platform globals', () => {
     const vectors = [
       [[], ''],
       [[102], 'Zg=='],
