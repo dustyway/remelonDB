@@ -36,6 +36,8 @@ import type {
 } from './protocol';
 
 const PING_DEADLINE_MS = 1000;
+// the ceiling for a tab's sync lease; renewal is cheap, immortality is not
+const MAX_SYNC_LEASE_MS = 300_000;
 
 interface PortLike {
   postMessage(message: unknown, transfer?: readonly unknown[]): void;
@@ -152,6 +154,10 @@ const spawnComputeHere = (): boolean => {
 let nextRouteId = 1;
 const routes = new Map<number, Route>();
 const holders = new Map<string, Set<PortLike>>();
+// the storage each held name was opened with: restores must not turn a
+// memory database into an opfs one, and a joiner asking for the other
+// kind must be refused, not silently attached
+const holderStorage = new Map<string, 'opfs' | 'memory'>();
 const syncLeases = new Map<string, { port: PortLike; expiresAt: number }>();
 const backlog: Array<{
   port: PortLike;
@@ -303,7 +309,11 @@ const resetEpoch = (): void => {
     (name) => !replayedOpens.has(name),
   );
   if (pending.length > 0) {
-    for (const route of pending) {
+    // stranded routes were accepted BEFORE anything now sitting in the
+    // backlog, so they replay from the front, keeping their own order —
+    // pushing them to the back replayed a query before the open it
+    // depended on
+    const stranded = pending.map((route) => {
       const entry = route.transform
         ? {
             port: route.port,
@@ -311,10 +321,9 @@ const resetEpoch = (): void => {
             transform: route.transform,
           }
         : { port: route.port, request: route.request };
-      backlog.push(
-        route.onFailure ? { ...entry, onFailure: route.onFailure } : entry,
-      );
-    }
+      return route.onFailure ? { ...entry, onFailure: route.onFailure } : entry;
+    });
+    backlog.unshift(...stranded);
     // Candidates are tried newest-connected first and retried on
     // silence: after a page load the oldest pending route belongs to
     // the page that just died, and asking it wedges the broker
@@ -375,7 +384,14 @@ const adoptComputePort = (port: PortLike): void => {
   let reopensPending = heldNames.length;
   for (const name of heldNames) {
     const routeId = nextRouteId++;
-    const request = { id: -1, op: 'open', name, storage: 'opfs' } as const;
+    const request = {
+      id: -1,
+      op: 'open',
+      name,
+      // restore what was held, not what is convenient: a memory database
+      // restored as opfs persists data the caller asked not to persist
+      storage: holderStorage.get(name) ?? 'opfs',
+    } as const;
     routes.set(routeId, {
       request,
       originalId: -1,
@@ -398,8 +414,10 @@ const flushBacklog = (): void => {
   const queued = backlog.splice(0);
   for (const item of queued) {
     // replay the SEND, not the routing decision — holder bookkeeping
-    // already happened when the request was first handled
-    send(item.port, item.request, item.transform);
+    // already happened when the request was first handled. onFailure
+    // travels too: dropping it here let a failed cold open keep its
+    // holder entry and poison the name for the broker's life.
+    send(item.port, item.request, item.transform, item.onFailure);
   }
 };
 
@@ -456,7 +474,7 @@ interface SlotWaiter {
 }
 
 let nextSlot = 1;
-const heldSlots = new Map<number, { exclusive: boolean }>();
+const heldSlots = new Map<number, { exclusive: boolean; owner: PortLike }>();
 const slotQueue: SlotWaiter[] = [];
 
 const heldExclusive = (): boolean =>
@@ -472,7 +490,7 @@ const grantSlots = (): void => {
     }
     slotQueue.shift();
     const slot = nextSlot++;
-    heldSlots.set(slot, { exclusive: head.exclusive });
+    heldSlots.set(slot, { exclusive: head.exclusive, owner: head.port });
     answer(head.port, head.requestId, { slot });
     if (head.exclusive) {
       return; // exclusive holder: nothing else runs until release
@@ -492,19 +510,29 @@ const handle = (port: PortLike, request: WorkerRequest): void => {
       return;
     }
     case 'releaseSlot': {
-      heldSlots.delete(request.slot);
+      // only the owner releases: slot ids are guessable, and a foreign
+      // release puts two tabs inside exclusive write blocks at once —
+      // the mutualExclusion violation docs/multi-tab.qnt rules out
+      if (heldSlots.get(request.slot)?.owner === port) {
+        heldSlots.delete(request.slot);
+      }
       answer(port, request.id, null);
       grantSlots();
       return;
     }
     case 'syncTurn': {
       const now = Date.now();
+      // an unbounded (or Infinity) lease from one tab would wedge sync
+      // ownership for the broker's life; clamp to a sane ceiling
+      const leaseMs = Number.isFinite(request.leaseMs)
+        ? Math.min(Math.max(request.leaseMs, 1), MAX_SYNC_LEASE_MS)
+        : MAX_SYNC_LEASE_MS;
       const lease = syncLeases.get(request.name);
       const granted = !lease || lease.port === port || lease.expiresAt <= now;
       if (granted) {
         syncLeases.set(request.name, {
           port,
-          expiresAt: now + request.leaseMs,
+          expiresAt: now + leaseMs,
         });
       }
       answer(port, request.id, { granted });
@@ -528,11 +556,23 @@ const handle = (port: PortLike, request: WorkerRequest): void => {
     case 'open': {
       const existing = holders.get(request.name);
       const alreadyHeld = existing?.has(port) ?? false;
+      const heldStorage = holderStorage.get(request.name);
+      if (existing && existing.size > 0 && heldStorage !== request.storage) {
+        // a silent join across storage kinds either persists what the
+        // caller declined or loses what it expected to keep
+        answer(port, request.id, {
+          error:
+            `database '${request.name}' is open with storage ` +
+            `'${heldStorage ?? 'opfs'}', not '${request.storage}'`,
+        });
+        return;
+      }
       const undoHolder = () => {
         const holding = holders.get(request.name);
         holding?.delete(port);
         if (holding?.size === 0) {
           holders.delete(request.name);
+          holderStorage.delete(request.name);
         }
       };
       if (existing && existing.size > 0) {
@@ -566,6 +606,7 @@ const handle = (port: PortLike, request: WorkerRequest): void => {
       const set = holders.get(request.name) ?? new Set<PortLike>();
       set.add(port);
       holders.set(request.name, set);
+      holderStorage.set(request.name, request.storage);
       forward(port, request, undefined, undoHolder);
       return;
     }
@@ -577,11 +618,13 @@ const handle = (port: PortLike, request: WorkerRequest): void => {
         return;
       }
       holders.delete(request.name);
+      holderStorage.delete(request.name);
       forward(port, request);
       return;
     }
     case 'destroy': {
       holders.delete(request.name);
+      holderStorage.delete(request.name);
       forward(port, request);
       return;
     }
