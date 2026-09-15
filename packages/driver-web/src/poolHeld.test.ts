@@ -1,14 +1,23 @@
 import type { Sqlite3Static } from '@sqlite.org/sqlite-wasm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { OpfsPoolHeldError } from './errors';
-import { SqliteWorkerServer } from './server';
-import { WebSqliteDriver } from './WebSqliteDriver';
+import { POOL_RETRY_DELAYS_MS, SqliteWorkerServer } from './server';
+import { DEFAULT_OPEN_TIMEOUT_MS, WebSqliteDriver } from './WebSqliteDriver';
 
 afterEach(() => {
   vi.useRealTimers();
 });
 
 describe('held OPFS pool', () => {
+  it('finishes pool retries before the default open timeout', () => {
+    const retryTotal = POOL_RETRY_DELAYS_MS.reduce(
+      (total, delay) => total + delay,
+      0,
+    );
+    // The original 15.9s retry schedule could never beat the 15s timeout.
+    expect(retryTotal + 1_000).toBeLessThan(DEFAULT_OPEN_TIMEOUT_MS);
+  });
+
   it('stops retrying and retains the browser diagnostic', async () => {
     vi.useFakeTimers();
     const install = vi.fn(() => {

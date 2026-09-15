@@ -15,6 +15,8 @@ import type {
 } from './protocol';
 import { OpfsPoolHeldError } from './errors';
 
+export const DEFAULT_OPEN_TIMEOUT_MS = 15_000;
+
 // structural declarations — no DOM lib needed for typechecking
 declare const Worker: new (
   url: URL,
@@ -454,7 +456,8 @@ export class WebSqliteDriver implements SqliteDriver {
         });
         // A dead broker answers nothing; the deadline turns a hang into
         // an actionable error.
-        const deadlineMs = this.options.openTimeoutMs ?? 15_000;
+        const deadlineMs =
+          this.options.openTimeoutMs ?? DEFAULT_OPEN_TIMEOUT_MS;
         const result = this.sharedMode
           ? await Promise.race([
               openRequest,

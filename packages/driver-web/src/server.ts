@@ -18,7 +18,7 @@ import type { SqlValue } from '@remelondb/core';
 import type { Endpoint, WorkerRequest, WorkerResponse } from './protocol';
 import { OpfsPoolHeldError } from './errors';
 
-const POOL_RETRY_DELAYS_MS = [50, 100, 250, 500, 1000, 2000] as const;
+export const POOL_RETRY_DELAYS_MS = [50, 100, 250, 500, 1000, 2000] as const;
 
 interface Connection {
   db: Database;
