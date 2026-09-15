@@ -113,9 +113,20 @@ declare const Worker:
       options?: { type: string },
     ) => PortLike & {
       terminate(): void;
-      addEventListener(type: 'error', listener: () => void): void;
+      addEventListener(type: 'error', listener: (error: unknown) => void): void;
     })
   | undefined;
+
+const reportBrokerHostingFailure = (error: unknown): void => {
+  const message =
+    typeof error === 'object' && error !== null && 'message' in error
+      ? String(error.message)
+      : String(error);
+  console.warn(
+    `[remelonDB] shared worker could not host compute (${message}); ` +
+      'falling back to compute host: browser tab',
+  );
+};
 
 const spawnComputeHere = (): boolean => {
   if (typeof Worker !== 'function' || brokerHostingFailed) {
@@ -129,11 +140,12 @@ const spawnComputeHere = (): boolean => {
     const worker = new Worker(new URL('./worker.ts', import.meta.url), {
       type: 'module',
     });
-    worker.addEventListener('error', () => {
+    worker.addEventListener('error', (error) => {
       // the hosted worker failed to load or crashed on startup: fall
       // back to tab-hosted compute instead of hanging every request
       if (hostedWorker === worker) {
         brokerHostingFailed = true;
+        reportBrokerHostingFailure(error);
         hostedWorker = null;
         computePort = null;
         worker.terminate();
@@ -146,8 +158,9 @@ const spawnComputeHere = (): boolean => {
     adoptComputePort(worker);
     console.debug('[remelonDB] compute host: shared worker broker');
     return true;
-  } catch {
+  } catch (error) {
     brokerHostingFailed = true;
+    reportBrokerHostingFailure(error);
     hostedWorker = null;
     return false;
   }

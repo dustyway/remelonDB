@@ -52,6 +52,29 @@ const op = (m: unknown): unknown => (m as { op?: unknown }).op;
 
 beforeEach(() => {
   vi.useFakeTimers();
+  vi.restoreAllMocks();
+  delete (globalThis as { Worker?: unknown }).Worker;
+});
+
+describe('compute hosting', () => {
+  it('logs why broker hosting fell back to a browser tab', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    (globalThis as { Worker?: unknown }).Worker = function FailingWorker() {
+      throw new Error('worker blocked');
+    };
+    const connect = await loadBroker();
+    const tab = makePort();
+    connect(tab);
+
+    tab.send({ id: 1, op: 'open', name: 'db', storage: 'opfs' });
+
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledWith(
+      '[remelonDB] shared worker could not host compute (worker blocked); ' +
+        'falling back to compute host: browser tab',
+    );
+    expect(tab.out).toContainEqual({ control: 'spawnWorker' });
+  });
 });
 
 describe('slot ownership', () => {
