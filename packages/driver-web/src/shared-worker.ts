@@ -144,6 +144,7 @@ const spawnComputeHere = (): boolean => {
     });
     hostedWorker = worker;
     adoptComputePort(worker);
+    console.debug('[remelonDB] compute host: shared worker broker');
     return true;
   } catch {
     brokerHostingFailed = true;

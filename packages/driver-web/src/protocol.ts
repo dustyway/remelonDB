@@ -77,7 +77,13 @@ export type WorkerRequest = { readonly id: number } & (
 
 export type WorkerResponse =
   | { readonly id: number; readonly ok: true; readonly result: unknown }
-  | { readonly id: number; readonly ok: false; readonly error: string };
+  | {
+      readonly id: number;
+      readonly ok: false;
+      readonly error: string;
+      readonly code?: 'OPFS_POOL_HELD';
+      readonly diagnostic?: string;
+    };
 
 /** Unsolicited broker messages sent to a connected page. */
 export type BrokerControlMessage =

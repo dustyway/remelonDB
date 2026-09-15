@@ -13,6 +13,7 @@ import type {
   WorkerRequest,
   WorkerResponse,
 } from './protocol';
+import { OpfsPoolHeldError } from './errors';
 
 // structural declarations — no DOM lib needed for typechecking
 declare const Worker: new (
@@ -241,6 +242,7 @@ export class WebSqliteDriver implements SqliteDriver {
                     new URL('./worker.ts', import.meta.url),
                     { type: 'module' },
                   );
+                  console.debug('[remelonDB] compute host: browser tab');
                   this.hostedComputeWorker = compute;
                   const channel = new MessageChannel();
                   compute.postMessage({ __remelondbAdoptPort: true }, [
@@ -398,7 +400,11 @@ export class WebSqliteDriver implements SqliteDriver {
     if (response.ok) {
       pending.resolve(response.result);
     } else {
-      pending.reject(new Error(response.error));
+      pending.reject(
+        response.code === 'OPFS_POOL_HELD'
+          ? new OpfsPoolHeldError(response.diagnostic ?? response.error)
+          : new Error(response.error),
+      );
     }
   }
 

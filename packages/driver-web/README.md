@@ -61,6 +61,11 @@ todo-sync example's `frontend/src/db.ts` is the working reference.
   https. Catch it to degrade gracefully (show a message, or reopen with
   `storage: 'memory'`). Pass `storage: 'memory'` directly when
   non-persistence is intended (previews, tests).
+- A transient OPFS pool lock is retried with bounded backoff. If the browser
+  still has not released it, `open()` rejects with a typed
+  **`OpfsPoolHeldError`** (`code: 'OPFS_POOL_HELD'`) whose `diagnostic`
+  preserves the browser's final `NoModificationAllowedError`. Firefox may
+  require a full browser restart after a page worker dies holding the pool.
 - The OPFS SAH-pool VFS needs **no COOP/COEP headers** (unlike the
   SharedArrayBuffer-based VFS).
 - The worker is spawned via
@@ -97,9 +102,9 @@ const driver = new WebSqliteDriver({
   terminates its worker — which is what releases the pool's handles;
   in-flight statements there are abandoned, committed data is safe on
   disk — fires its `onTakenOver` callback, and every later call on it
-  rejects with a clear error. The winning `open()` retries until the
-  handles come free (tab death also releases them via worker teardown,
-  so the retry always converges).
+  rejects with a clear error. The winning `open()` retries the handle
+  acquisition for a bounded period, then reports `OpfsPoolHeldError` if
+  the browser has not released it.
 - Environments without the Web Locks API (Node tests, non-secure
   contexts) skip coordination entirely and behave as before.
 - With shared mode active, `takeover` and `onTakenOver` are unused:
