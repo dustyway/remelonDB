@@ -9,6 +9,30 @@ afterEach(() => {
 });
 
 describe('held OPFS pool', () => {
+  it('closes databases before pausing the pool', async () => {
+    const close = vi.fn();
+    const pauseVfs = vi.fn();
+    class FakeDb {
+      selectValue(): number {
+        return 0;
+      }
+      close = close;
+    }
+    const sqlite3 = {
+      installOpfsSAHPoolVfs: async () => ({
+        OpfsSAHPoolDb: FakeDb,
+        pauseVfs,
+      }),
+    } as unknown as Sqlite3Static;
+    const server = new SqliteWorkerServer(sqlite3);
+
+    await server.open('held.db', 'opfs');
+    server.releasePool();
+
+    expect(close).toHaveBeenCalledOnce();
+    expect(pauseVfs).toHaveBeenCalledOnce();
+  });
+
   it('finishes pool retries before the default open timeout', () => {
     const retryTotal = POOL_RETRY_DELAYS_MS.reduce(
       (total, delay) => total + delay,

@@ -152,6 +152,15 @@ export class SqliteWorkerServer {
     return { userVersion };
   }
 
+  /** Close every database before handing this worker's OPFS pool back. */
+  releasePool(): void {
+    for (const connection of this.connections.values()) {
+      this.closeConnection(connection);
+    }
+    this.connections.clear();
+    this.poolUtil?.pauseVfs();
+  }
+
   handle(request: WorkerRequest): unknown {
     switch (request.op) {
       case 'close': {
@@ -237,6 +246,9 @@ export class SqliteWorkerServer {
         return null;
       }
       case 'ping':
+        return null;
+      case 'releasePool':
+        this.releasePool();
         return null;
       case 'acquireSlot':
       case 'releaseSlot':

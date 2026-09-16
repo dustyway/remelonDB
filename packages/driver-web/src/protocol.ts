@@ -52,6 +52,8 @@ export type WorkerRequest = { readonly id: number } & (
   | { readonly op: 'destroy'; readonly name: string }
   /** Liveness probe (the broker checks its compute channel with it). */
   | { readonly op: 'ping' }
+  /** Broker-only graceful retirement: close databases and release OPFS. */
+  | { readonly op: 'releasePool' }
   /**
    * Write-block arbitration (docs/multi-tab.md), answered by the broker
    * itself — these never reach SQLite. An exclusive slot excludes every
