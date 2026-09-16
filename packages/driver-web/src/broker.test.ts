@@ -115,6 +115,45 @@ describe('compute hosting', () => {
     expect(first.terminate).toHaveBeenCalledOnce();
     expect(workers).toHaveLength(2);
   });
+
+  it('serves an open that arrives while an idle compute releases its pool', async () => {
+    const workers: Array<FakePort & { terminate: ReturnType<typeof vi.fn> }> =
+      [];
+    (globalThis as { Worker?: unknown }).Worker = function FakeWorker() {
+      const port = makePort() as FakePort & {
+        terminate: ReturnType<typeof vi.fn>;
+      };
+      port.terminate = vi.fn();
+      workers.push(port);
+      return port;
+    };
+    const connect = await loadBroker();
+    const tab = makePort();
+    connect(tab);
+    tab.send({ id: 1, op: 'open', name: 'db', storage: 'opfs' });
+
+    const first = workers[0]!;
+    const open = first.out.find((message) => op(message) === 'open') as {
+      id: number;
+    };
+    first.send({ id: open.id, ok: true, result: { userVersion: 0 } });
+    tab.send({ id: 2, op: 'close', name: 'db' });
+    const close = first.out.find((message) => op(message) === 'close') as {
+      id: number;
+    };
+    first.send({ id: close.id, ok: true, result: null });
+    const release = first.out.find(
+      (message) => op(message) === 'releasePool',
+    ) as { id: number };
+
+    tab.send({ id: 3, op: 'open', name: 'db', storage: 'opfs' });
+    first.send({ id: release.id, ok: true, result: null });
+
+    expect(workers).toHaveLength(2);
+    expect(workers[1]!.out.some((message) => op(message) === 'open')).toBe(
+      true,
+    );
+  });
 });
 
 describe('slot ownership', () => {

@@ -350,6 +350,8 @@ const finishEpochReset = (target: PortLike): void => {
       return route.onFailure ? { ...entry, onFailure: route.onFailure } : entry;
     });
     backlog.unshift(...stranded);
+  }
+  if (pending.length > 0 || backlog.length > 0) {
     // Candidates are tried newest-connected first and retried on
     // silence: after a page load the oldest pending route belongs to
     // the page that just died, and asking it wedges the broker
