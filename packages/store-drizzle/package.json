@@ -1,6 +1,6 @@
 {
   "name": "@remelondb/store-drizzle",
-  "version": "0.3.1-dev.0",
+  "version": "0.3.1-dev.2",
   "type": "module",
   "dualFormat": true,
   "exports": {
