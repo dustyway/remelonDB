@@ -140,6 +140,11 @@ Android), the option gracefully falls back to the single-owner
 behavior above — same API, same errors, the takeover UI simply becomes
 reachable again.
 
+The broker releases its own OPFS pool before replacing a silent compute
+worker. If `OpfsPoolHeldError` still reaches the app, offer Retry; the holder
+may be another live context, and Firefox may require a full browser restart
+after an orphaned worker handle. Retry cannot safely steal from a live holder.
+
 Sync also coordinates itself: `synchronize` runs only in the tab
 holding the broker's sync lease (renewed on each tick, inherited when
 the holder closes), so a naive per-tab sync interval is correct. The
@@ -189,6 +194,7 @@ truth). Who answers depends on the op:
 | `setUserVersion`              | worker      | `PRAGMA user_version` after setup/migration                      |
 | `destroy`                     | worker      | delete the database and sidecar files                            |
 | `ping`                        | worker      | liveness probe (the broker checks its compute channel)           |
+| `releasePool`                 | worker      | broker retirement: close databases and pause the OPFS VFS        |
 | `acquireSlot` / `releaseSlot` | broker      | cross-tab write-block arbitration (never reach SQLite)           |
 | `publishChanges`              | broker      | relay a commit's change set to the other tabs                    |
 | `syncTurn`                    | broker      | sync-lease request: grant/renew for the holder, deny others      |
