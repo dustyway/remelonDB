@@ -36,6 +36,7 @@ import type {
 } from './protocol';
 
 const PING_DEADLINE_MS = 1000;
+const RELEASE_DEADLINE_MS = 4000;
 // the ceiling for a tab's sync lease; renewal is cheap, immortality is not
 const MAX_SYNC_LEASE_MS = 300_000;
 
@@ -98,6 +99,8 @@ const scheduleWatchdog = (): void => {
 };
 let hostedWorker: { terminate(): void } | null = null;
 let brokerHostingFailed = false;
+let retiringCompute: PortLike | null = null;
+let releaseTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
  * Firefox exposes the Worker constructor in SharedWorkerGlobalScope
@@ -295,7 +298,15 @@ const restartRecruitment = (preferred?: PortLike): void => {
  * self-hosted where possible, else via the first pending tab. Only when
  * no respawn path exists does the failure surface.
  */
-const resetEpoch = (): void => {
+const finishEpochReset = (target: PortLike): void => {
+  if (computePort !== target) {
+    return;
+  }
+  if (releaseTimer) {
+    clearTimeout(releaseTimer);
+    releaseTimer = null;
+  }
+  retiringCompute = null;
   hostedWorker?.terminate();
   hostedWorker = null;
   computePort = null;
@@ -306,7 +317,8 @@ const resetEpoch = (): void => {
   // asker — their fake port swallows the spawnWorker control and the
   // whole respawn dies silently
   const pending = [...routes.values()].filter(
-    (route) => route.request.op !== 'ping',
+    (route) =>
+      route.request.op !== 'ping' && route.request.op !== 'releasePool',
   );
   routes.clear();
   // holders are NOT cleared: they are exactly the state a fresh compute
@@ -346,6 +358,40 @@ const resetEpoch = (): void => {
   }
 };
 
+/**
+ * Retire a broker-hosted compute gracefully. Firefox can leave a worker's
+ * sync access handles locked for the rest of the browser session when it is
+ * terminated after resume, so let sqlite-wasm pause its VFS first. A truly
+ * dead worker still falls through to the bounded hard reset.
+ */
+const resetEpoch = (): void => {
+  const target = computePort;
+  if (!target || retiringCompute === target) {
+    return;
+  }
+  if (!hostedWorker) {
+    finishEpochReset(target);
+    return;
+  }
+  computeReady = false;
+  retiringCompute = target;
+  const routeId = nextRouteId++;
+  const request = { id: routeId, op: 'releasePool' } satisfies WorkerRequest;
+  routes.set(routeId, {
+    request,
+    originalId: -1,
+    port: {
+      postMessage: () => finishEpochReset(target),
+      addEventListener: () => {},
+    },
+  });
+  target.postMessage(request);
+  releaseTimer = setTimeout(
+    () => finishEpochReset(target),
+    RELEASE_DEADLINE_MS,
+  );
+};
+
 const adoptComputePort = (port: PortLike): void => {
   computePort = port;
   stopRecruitment();
@@ -379,10 +425,7 @@ const adoptComputePort = (port: PortLike): void => {
       routes.size === 0 &&
       backlog.length === 0
     ) {
-      hostedWorker.terminate();
-      hostedWorker = null;
-      computePort = null;
-      stopRecruitment();
+      resetEpoch();
     }
   });
   port.start?.();
@@ -702,7 +745,7 @@ const handle = (port: PortLike, request: WorkerRequest): void => {
 /** Probe the compute channel; reset the epoch when it stopped answering. */
 const probeCompute = (): void => {
   const target = computePort;
-  if (!target) {
+  if (!target || retiringCompute === target) {
     return;
   }
   const routeId = nextRouteId++;

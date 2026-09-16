@@ -21,7 +21,9 @@ const makePort = (): FakePort => {
     postMessage: (m) => {
       out.push(m);
     },
-    addEventListener: (_t, l) => listeners.push(l),
+    addEventListener: (type, l) => {
+      if (type === 'message') listeners.push(l);
+    },
     start: () => {},
     out,
     send: (data, ports) => {
@@ -74,6 +76,44 @@ describe('compute hosting', () => {
         'falling back to compute host: browser tab',
     );
     expect(tab.out).toContainEqual({ control: 'spawnWorker' });
+  });
+
+  it('releases a broker-hosted pool before replacing a silent compute', async () => {
+    const workers: Array<FakePort & { terminate: ReturnType<typeof vi.fn> }> =
+      [];
+    (globalThis as { Worker?: unknown }).Worker = function FakeWorker() {
+      const port = makePort() as FakePort & {
+        terminate: ReturnType<typeof vi.fn>;
+      };
+      port.terminate = vi.fn();
+      workers.push(port);
+      return port;
+    };
+    const connect = await loadBroker();
+    const tab = makePort();
+    connect(tab);
+    tab.send({ id: 1, op: 'open', name: 'db', storage: 'opfs' });
+
+    const first = workers[0]!;
+    const open = first.out.find((message) => op(message) === 'open') as {
+      id: number;
+    };
+    first.send({ id: open.id, ok: true, result: { userVersion: 0 } });
+    tab.send({ id: 2, op: 'query', name: 'db', sql: 'select 1', args: [] });
+
+    await vi.advanceTimersByTimeAsync(2_500);
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    const release = first.out.find(
+      (message) => op(message) === 'releasePool',
+    ) as { id: number };
+    expect(release).toBeDefined();
+    expect(first.terminate).not.toHaveBeenCalled();
+
+    first.send({ id: release.id, ok: true, result: null });
+
+    expect(first.terminate).toHaveBeenCalledOnce();
+    expect(workers).toHaveLength(2);
   });
 });
 
