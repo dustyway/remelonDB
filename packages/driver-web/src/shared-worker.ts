@@ -383,15 +383,16 @@ const resetEpoch = (): void => {
     request,
     originalId: -1,
     port: {
-      postMessage: () => finishEpochReset(target),
+      postMessage: () => {
+        finishEpochReset(target);
+      },
       addEventListener: () => {},
     },
   });
   target.postMessage(request);
-  releaseTimer = setTimeout(
-    () => finishEpochReset(target),
-    RELEASE_DEADLINE_MS,
-  );
+  releaseTimer = setTimeout(() => {
+    finishEpochReset(target);
+  }, RELEASE_DEADLINE_MS);
 };
 
 const adoptComputePort = (port: PortLike): void => {

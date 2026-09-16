@@ -8,7 +8,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 interface FakePort {
   postMessage: (m: unknown, t?: readonly unknown[]) => void;
-  addEventListener: (t: 'message', l: (e: MessageEvent) => void) => void;
+  addEventListener: (
+    t: 'message' | 'error',
+    l: (e: MessageEvent) => void,
+  ) => void;
   start?: () => void;
   out: unknown[];
   send: (data: unknown, ports?: readonly FakePort[]) => void;
