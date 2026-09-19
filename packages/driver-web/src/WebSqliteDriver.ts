@@ -13,6 +13,9 @@ import type {
   WorkerRequest,
   WorkerResponse,
 } from './protocol';
+import { OpfsPoolHeldError } from './errors';
+
+export const DEFAULT_OPEN_TIMEOUT_MS = 15_000;
 
 // structural declarations — no DOM lib needed for typechecking
 declare const Worker: new (
@@ -241,6 +244,7 @@ export class WebSqliteDriver implements SqliteDriver {
                     new URL('./worker.ts', import.meta.url),
                     { type: 'module' },
                   );
+                  console.debug('[remelonDB] compute host: browser tab');
                   this.hostedComputeWorker = compute;
                   const channel = new MessageChannel();
                   compute.postMessage({ __remelondbAdoptPort: true }, [
@@ -398,7 +402,11 @@ export class WebSqliteDriver implements SqliteDriver {
     if (response.ok) {
       pending.resolve(response.result);
     } else {
-      pending.reject(new Error(response.error));
+      pending.reject(
+        response.code === 'OPFS_POOL_HELD'
+          ? new OpfsPoolHeldError(response.diagnostic ?? response.error)
+          : new Error(response.error),
+      );
     }
   }
 
@@ -448,7 +456,8 @@ export class WebSqliteDriver implements SqliteDriver {
         });
         // A dead broker answers nothing; the deadline turns a hang into
         // an actionable error.
-        const deadlineMs = this.options.openTimeoutMs ?? 15_000;
+        const deadlineMs =
+          this.options.openTimeoutMs ?? DEFAULT_OPEN_TIMEOUT_MS;
         const result = this.sharedMode
           ? await Promise.race([
               openRequest,

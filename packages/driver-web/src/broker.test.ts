@@ -8,7 +8,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 interface FakePort {
   postMessage: (m: unknown, t?: readonly unknown[]) => void;
-  addEventListener: (t: 'message', l: (e: MessageEvent) => void) => void;
+  addEventListener: (
+    t: 'message' | 'error',
+    l: (e: MessageEvent) => void,
+  ) => void;
   start?: () => void;
   out: unknown[];
   send: (data: unknown, ports?: readonly FakePort[]) => void;
@@ -21,7 +24,9 @@ const makePort = (): FakePort => {
     postMessage: (m) => {
       out.push(m);
     },
-    addEventListener: (_t, l) => listeners.push(l),
+    addEventListener: (type, l) => {
+      if (type === 'message') listeners.push(l);
+    },
     start: () => {},
     out,
     send: (data, ports) => {
@@ -52,6 +57,106 @@ const op = (m: unknown): unknown => (m as { op?: unknown }).op;
 
 beforeEach(() => {
   vi.useFakeTimers();
+  vi.restoreAllMocks();
+  delete (globalThis as { Worker?: unknown }).Worker;
+});
+
+describe('compute hosting', () => {
+  it('logs why broker hosting fell back to a browser tab', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    (globalThis as { Worker?: unknown }).Worker = function FailingWorker() {
+      throw new Error('worker blocked');
+    };
+    const connect = await loadBroker();
+    const tab = makePort();
+    connect(tab);
+
+    tab.send({ id: 1, op: 'open', name: 'db', storage: 'opfs' });
+
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledWith(
+      '[remelonDB] shared worker could not host compute (worker blocked); ' +
+        'falling back to compute host: browser tab',
+    );
+    expect(tab.out).toContainEqual({ control: 'spawnWorker' });
+  });
+
+  it('releases a broker-hosted pool before replacing a silent compute', async () => {
+    const workers: Array<FakePort & { terminate: ReturnType<typeof vi.fn> }> =
+      [];
+    (globalThis as { Worker?: unknown }).Worker = function FakeWorker() {
+      const port = makePort() as FakePort & {
+        terminate: ReturnType<typeof vi.fn>;
+      };
+      port.terminate = vi.fn();
+      workers.push(port);
+      return port;
+    };
+    const connect = await loadBroker();
+    const tab = makePort();
+    connect(tab);
+    tab.send({ id: 1, op: 'open', name: 'db', storage: 'opfs' });
+
+    const first = workers[0]!;
+    const open = first.out.find((message) => op(message) === 'open') as {
+      id: number;
+    };
+    first.send({ id: open.id, ok: true, result: { userVersion: 0 } });
+    tab.send({ id: 2, op: 'query', name: 'db', sql: 'select 1', args: [] });
+
+    await vi.advanceTimersByTimeAsync(2_500);
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    const release = first.out.find(
+      (message) => op(message) === 'releasePool',
+    ) as { id: number };
+    expect(release).toBeDefined();
+    expect(first.terminate).not.toHaveBeenCalled();
+
+    first.send({ id: release.id, ok: true, result: null });
+
+    expect(first.terminate).toHaveBeenCalledOnce();
+    expect(workers).toHaveLength(2);
+  });
+
+  it('serves an open that arrives while an idle compute releases its pool', async () => {
+    const workers: Array<FakePort & { terminate: ReturnType<typeof vi.fn> }> =
+      [];
+    (globalThis as { Worker?: unknown }).Worker = function FakeWorker() {
+      const port = makePort() as FakePort & {
+        terminate: ReturnType<typeof vi.fn>;
+      };
+      port.terminate = vi.fn();
+      workers.push(port);
+      return port;
+    };
+    const connect = await loadBroker();
+    const tab = makePort();
+    connect(tab);
+    tab.send({ id: 1, op: 'open', name: 'db', storage: 'opfs' });
+
+    const first = workers[0]!;
+    const open = first.out.find((message) => op(message) === 'open') as {
+      id: number;
+    };
+    first.send({ id: open.id, ok: true, result: { userVersion: 0 } });
+    tab.send({ id: 2, op: 'close', name: 'db' });
+    const close = first.out.find((message) => op(message) === 'close') as {
+      id: number;
+    };
+    first.send({ id: close.id, ok: true, result: null });
+    const release = first.out.find(
+      (message) => op(message) === 'releasePool',
+    ) as { id: number };
+
+    tab.send({ id: 3, op: 'open', name: 'db', storage: 'opfs' });
+    first.send({ id: release.id, ok: true, result: null });
+
+    expect(workers).toHaveLength(2);
+    expect(workers[1]!.out.some((message) => op(message) === 'open')).toBe(
+      true,
+    );
+  });
 });
 
 describe('slot ownership', () => {

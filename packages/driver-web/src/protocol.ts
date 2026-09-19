@@ -52,6 +52,8 @@ export type WorkerRequest = { readonly id: number } & (
   | { readonly op: 'destroy'; readonly name: string }
   /** Liveness probe (the broker checks its compute channel with it). */
   | { readonly op: 'ping' }
+  /** Broker-only graceful retirement: close databases and release OPFS. */
+  | { readonly op: 'releasePool' }
   /**
    * Write-block arbitration (docs/multi-tab.md), answered by the broker
    * itself — these never reach SQLite. An exclusive slot excludes every
@@ -77,7 +79,13 @@ export type WorkerRequest = { readonly id: number } & (
 
 export type WorkerResponse =
   | { readonly id: number; readonly ok: true; readonly result: unknown }
-  | { readonly id: number; readonly ok: false; readonly error: string };
+  | {
+      readonly id: number;
+      readonly ok: false;
+      readonly error: string;
+      readonly code?: 'OPFS_POOL_HELD';
+      readonly diagnostic?: string;
+    };
 
 /** Unsolicited broker messages sent to a connected page. */
 export type BrokerControlMessage =

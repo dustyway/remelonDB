@@ -36,6 +36,7 @@ import type {
 } from './protocol';
 
 const PING_DEADLINE_MS = 1000;
+const RELEASE_DEADLINE_MS = 4000;
 // the ceiling for a tab's sync lease; renewal is cheap, immortality is not
 const MAX_SYNC_LEASE_MS = 300_000;
 
@@ -98,6 +99,8 @@ const scheduleWatchdog = (): void => {
 };
 let hostedWorker: { terminate(): void } | null = null;
 let brokerHostingFailed = false;
+let retiringCompute: PortLike | null = null;
+let releaseTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
  * Firefox exposes the Worker constructor in SharedWorkerGlobalScope
@@ -113,9 +116,20 @@ declare const Worker:
       options?: { type: string },
     ) => PortLike & {
       terminate(): void;
-      addEventListener(type: 'error', listener: () => void): void;
+      addEventListener(type: 'error', listener: (error: unknown) => void): void;
     })
   | undefined;
+
+const reportBrokerHostingFailure = (error: unknown): void => {
+  const message =
+    typeof error === 'object' && error !== null && 'message' in error
+      ? String(error.message)
+      : String(error);
+  console.warn(
+    `[remelonDB] shared worker could not host compute (${message}); ` +
+      'falling back to compute host: browser tab',
+  );
+};
 
 const spawnComputeHere = (): boolean => {
   if (typeof Worker !== 'function' || brokerHostingFailed) {
@@ -129,11 +143,12 @@ const spawnComputeHere = (): boolean => {
     const worker = new Worker(new URL('./worker.ts', import.meta.url), {
       type: 'module',
     });
-    worker.addEventListener('error', () => {
+    worker.addEventListener('error', (error) => {
       // the hosted worker failed to load or crashed on startup: fall
       // back to tab-hosted compute instead of hanging every request
       if (hostedWorker === worker) {
         brokerHostingFailed = true;
+        reportBrokerHostingFailure(error);
         hostedWorker = null;
         computePort = null;
         worker.terminate();
@@ -144,9 +159,11 @@ const spawnComputeHere = (): boolean => {
     });
     hostedWorker = worker;
     adoptComputePort(worker);
+    console.debug('[remelonDB] compute host: shared worker broker');
     return true;
-  } catch {
+  } catch (error) {
     brokerHostingFailed = true;
+    reportBrokerHostingFailure(error);
     hostedWorker = null;
     return false;
   }
@@ -281,7 +298,15 @@ const restartRecruitment = (preferred?: PortLike): void => {
  * self-hosted where possible, else via the first pending tab. Only when
  * no respawn path exists does the failure surface.
  */
-const resetEpoch = (): void => {
+const finishEpochReset = (target: PortLike): void => {
+  if (computePort !== target) {
+    return;
+  }
+  if (releaseTimer) {
+    clearTimeout(releaseTimer);
+    releaseTimer = null;
+  }
+  retiringCompute = null;
   hostedWorker?.terminate();
   hostedWorker = null;
   computePort = null;
@@ -292,7 +317,8 @@ const resetEpoch = (): void => {
   // asker — their fake port swallows the spawnWorker control and the
   // whole respawn dies silently
   const pending = [...routes.values()].filter(
-    (route) => route.request.op !== 'ping',
+    (route) =>
+      route.request.op !== 'ping' && route.request.op !== 'releasePool',
   );
   routes.clear();
   // holders are NOT cleared: they are exactly the state a fresh compute
@@ -324,12 +350,49 @@ const resetEpoch = (): void => {
       return route.onFailure ? { ...entry, onFailure: route.onFailure } : entry;
     });
     backlog.unshift(...stranded);
+  }
+  if (pending.length > 0 || backlog.length > 0) {
     // Candidates are tried newest-connected first and retried on
     // silence: after a page load the oldest pending route belongs to
     // the page that just died, and asking it wedges the broker
     // (remelonDB#38).
     restartRecruitment();
   }
+};
+
+/**
+ * Retire a broker-hosted compute gracefully. Firefox can leave a worker's
+ * sync access handles locked for the rest of the browser session when it is
+ * terminated after resume, so let sqlite-wasm pause its VFS first. A truly
+ * dead worker still falls through to the bounded hard reset.
+ */
+const resetEpoch = (): void => {
+  const target = computePort;
+  if (!target || retiringCompute === target) {
+    return;
+  }
+  if (!hostedWorker) {
+    finishEpochReset(target);
+    return;
+  }
+  computeReady = false;
+  retiringCompute = target;
+  const routeId = nextRouteId++;
+  const request = { id: routeId, op: 'releasePool' } satisfies WorkerRequest;
+  routes.set(routeId, {
+    request,
+    originalId: -1,
+    port: {
+      postMessage: () => {
+        finishEpochReset(target);
+      },
+      addEventListener: () => {},
+    },
+  });
+  target.postMessage(request);
+  releaseTimer = setTimeout(() => {
+    finishEpochReset(target);
+  }, RELEASE_DEADLINE_MS);
 };
 
 const adoptComputePort = (port: PortLike): void => {
@@ -365,10 +428,7 @@ const adoptComputePort = (port: PortLike): void => {
       routes.size === 0 &&
       backlog.length === 0
     ) {
-      hostedWorker.terminate();
-      hostedWorker = null;
-      computePort = null;
-      stopRecruitment();
+      resetEpoch();
     }
   });
   port.start?.();
@@ -688,7 +748,7 @@ const handle = (port: PortLike, request: WorkerRequest): void => {
 /** Probe the compute channel; reset the epoch when it stopped answering. */
 const probeCompute = (): void => {
   const target = computePort;
-  if (!target) {
+  if (!target || retiringCompute === target) {
     return;
   }
   const routeId = nextRouteId++;

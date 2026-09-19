@@ -16,6 +16,9 @@ import type {
 } from '@sqlite.org/sqlite-wasm';
 import type { SqlValue } from '@remelondb/core';
 import type { Endpoint, WorkerRequest, WorkerResponse } from './protocol';
+import { OpfsPoolHeldError } from './errors';
+
+export const POOL_RETRY_DELAYS_MS = [50, 100, 250, 500, 1000, 2000] as const;
 
 interface Connection {
   db: Database;
@@ -75,7 +78,6 @@ export class SqliteWorkerServer {
   private async installPool(): Promise<
     Awaited<ReturnType<Sqlite3Static['installOpfsSAHPoolVfs']>>
   > {
-    const delaysMs = [50, 100, 250, 500, 1000, 2000, 4000, 8000];
     for (let attempt = 0; ; attempt++) {
       try {
         return await this.sqlite3.installOpfsSAHPoolVfs({
@@ -83,14 +85,17 @@ export class SqliteWorkerServer {
         });
       } catch (error) {
         const transient = String(error).includes('NoModificationAllowedError');
-        const delay = delaysMs[attempt];
-        if (!transient || delay === undefined) {
+        const delay = POOL_RETRY_DELAYS_MS[attempt];
+        if (!transient) {
           throw new Error(
             `OPFS storage is unavailable here (${String(error)}) — ` +
               `if this app is open in another tab, that tab holds the ` +
               `storage (open with { takeover: true } to take it over); ` +
               `pass storage: 'memory' if non-persistent storage is intended`,
           );
+        }
+        if (delay === undefined) {
+          throw new OpfsPoolHeldError(String(error));
         }
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
@@ -145,6 +150,15 @@ export class SqliteWorkerServer {
     this.connections.set(name, connection);
     const userVersion = Number(db.selectValue('pragma user_version') ?? 0);
     return { userVersion };
+  }
+
+  /** Close every database before handing this worker's OPFS pool back. */
+  releasePool(): void {
+    for (const connection of this.connections.values()) {
+      this.closeConnection(connection);
+    }
+    this.connections.clear();
+    this.poolUtil?.pauseVfs();
   }
 
   handle(request: WorkerRequest): unknown {
@@ -233,6 +247,9 @@ export class SqliteWorkerServer {
       }
       case 'ping':
         return null;
+      case 'releasePool':
+        this.releasePool();
+        return null;
       case 'acquireSlot':
       case 'releaseSlot':
       case 'publishChanges':
@@ -292,10 +309,15 @@ export function createSqliteWorkerServing(
           const response: WorkerResponse = { id: request.id, ok: true, result };
           endpoint.postMessage(response);
         } catch (error: unknown) {
+          const poolHeld =
+            error instanceof OpfsPoolHeldError
+              ? { code: error.code, diagnostic: error.diagnostic }
+              : {};
           const response: WorkerResponse = {
             id: request.id,
             ok: false,
             error: error instanceof Error ? error.message : String(error),
+            ...poolHeld,
           };
           endpoint.postMessage(response);
         }

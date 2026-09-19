@@ -8,6 +8,8 @@
  * chromium: the three-tab dance — open two, close the (host) first,
  *           open a third; no tab may show a database error banner.
  * firefox:  full-page navigations plus a second tab; no banner.
+ * manual:   load Firefox, let the machine sleep, wake it, then load the app;
+ *           no OPFS pool-held banner should appear.
  *
  * BANNER matches the app's database error surface; override via env
  * for apps with different copy.
