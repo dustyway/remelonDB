@@ -71,9 +71,10 @@ export class SqliteWorkerServer {
    * Acquire the SAH pool, absorbing the holder-death race (remelonDB#3):
    * when a worker dies holding the pool, the browser releases its
    * handles asynchronously — seconds later under a real tab close. A
-   * NoModificationAllowedError during that window is transient, so
-   * retry with backoff before declaring storage unavailable. Other
-   * failures (no OPFS, private mode) fail fast.
+   * held pool is transient, so retry with backoff before declaring
+   * storage unavailable. Chromium and Firefox report it as
+   * NoModificationAllowedError; WebKit reports InvalidStateError
+   * (remelonDB#67). Other failures (no OPFS, private mode) fail fast.
    */
   private async installPool(): Promise<
     Awaited<ReturnType<Sqlite3Static['installOpfsSAHPoolVfs']>>
@@ -84,7 +85,10 @@ export class SqliteWorkerServer {
           initialCapacity: 32, // db + journal per open database
         });
       } catch (error) {
-        const transient = String(error).includes('NoModificationAllowedError');
+        const text = String(error);
+        const transient =
+          text.includes('NoModificationAllowedError') ||
+          text.includes('InvalidStateError');
         const delay = POOL_RETRY_DELAYS_MS[attempt];
         if (!transient) {
           throw new Error(
