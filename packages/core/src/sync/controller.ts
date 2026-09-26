@@ -66,7 +66,10 @@ export interface SyncController {
   notifyLocalWrite(): void;
   /** Manual trigger; also re-arms after an auth error. Resolves with this
    * run's outcome (never rejects); during a run, waits for the coalesced
-   * follow-up instead. Disposal resolves waiters with the current state. */
+   * follow-up instead. Disposal resolves waiters with the current state,
+   * which is still `syncing` when a run was in flight. `idle` means the run
+   * finished, not that every row was accepted: rejections are in
+   * `lastResult`. */
   syncNow(): Promise<SyncControllerState>;
   /** Stop everything, forever. The logout/account-change path. */
   dispose(): void;
