@@ -31,6 +31,113 @@ describe('sync controller', () => {
     await Promise.resolve();
   };
 
+  it('syncNow waits for success and returns the completed result', async () => {
+    let release!: (result: RunSyncResult) => void;
+    const { controller } = make(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    const settled = vi.fn();
+    const result = { ...ok, rejected: 1, rejectedRecords: { tasks: ['t1'] } };
+    const promise = controller.syncNow();
+    void promise.then(settled);
+    await flush();
+    expect(settled).not.toHaveBeenCalled();
+    release(result);
+    await expect(promise).resolves.toMatchObject({
+      status: 'idle',
+      lastResult: result,
+    });
+    expect((await promise).lastSyncAt).not.toBeNull();
+  });
+
+  it.each([
+    [new Error('failed'), 'error'],
+    [new SyncTransportError('offline'), 'offline'],
+  ])(
+    'syncNow resolves after %s instead of rejecting',
+    async (error, status) => {
+      const { controller } = make(async () => {
+        throw error;
+      });
+      await expect(controller.syncNow()).resolves.toMatchObject({
+        status,
+        cause: error,
+      });
+    },
+  );
+
+  it('calls during a run share its follow-up and each run returns its own outcome', async () => {
+    const releases: ((result: RunSyncResult) => void)[] = [];
+    const { controller, run } = make(
+      () =>
+        new Promise((resolve) => {
+          releases.push(resolve);
+        }),
+    );
+    const first = controller.syncNow();
+    const second = controller.syncNow();
+    const third = controller.syncNow();
+    expect(second).toBe(third);
+    const settled = vi.fn();
+    void second.then(settled);
+    expect(run).toHaveBeenCalledTimes(1);
+    releases[0]!(ok);
+    await expect(first).resolves.toMatchObject({
+      status: 'idle',
+      lastResult: ok,
+    });
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(controller.state.status).toBe('syncing');
+    expect(settled).not.toHaveBeenCalled();
+    const recovered = { ...ok, resynced: true };
+    releases[1]!(recovered);
+    await expect(second).resolves.toMatchObject({
+      status: 'resync-required',
+      lastResult: recovered,
+    });
+    expect(await third).toBe(await second);
+    expect((await first).status).toBe('idle');
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
+  it('a synchronous runSync failure also resolves with an error outcome', async () => {
+    const error = new Error('failed before returning a promise');
+    const { controller } = make(() => {
+      throw error;
+    });
+    await expect(controller.syncNow()).resolves.toMatchObject({
+      status: 'error',
+      cause: error,
+    });
+  });
+
+  it('disposal resolves active and queued waiters even when the run ignores abort', async () => {
+    const { controller, run } = make(() => new Promise(() => {}));
+    const first = controller.syncNow();
+    const second = controller.syncNow();
+    controller.dispose();
+    await expect(first).resolves.toBe(controller.state);
+    await expect(second).resolves.toBe(controller.state);
+    await expect(controller.syncNow()).resolves.toBe(controller.state);
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it('a disposed idle controller resolves immediately without syncing', async () => {
+    const { controller, run } = make(async () => ok);
+    controller.dispose();
+    await expect(controller.syncNow()).resolves.toBe(controller.state);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('notifyLocalWrite still returns undefined', () => {
+    const { controller } = make(async () => ok);
+    expect(controller.notifyLocalWrite()).toBeUndefined();
+    controller.dispose();
+  });
+
   it('start syncs immediately: idle -> syncing -> idle with lastSyncAt', async () => {
     const { controller } = make(async () => ok);
     const seen: string[] = [];

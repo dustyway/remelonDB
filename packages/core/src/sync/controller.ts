@@ -42,7 +42,7 @@ export interface SyncControllerOptions {
    * gone (logout). Wrap `synchronize` yourself or use `createRunSync`. */
   readonly runSync: (signal?: AbortSignal) => Promise<RunSyncResult>;
   /** Background re-sync period; `null` disables the clock. For a fully
-   * manual controller, skip start() and call syncNow() from your UI. */
+   * manual controller, skip start() and await syncNow() from your UI. */
   readonly intervalMs?: number | null;
   readonly debounceMs?: number;
   /** Subscribe platform wake-ups (online, foreground) to `fire`; return
@@ -64,8 +64,10 @@ export interface SyncController {
   start(): void;
   /** A local write happened; sync soon (debounced). */
   notifyLocalWrite(): void;
-  /** Manual trigger; also re-arms after an auth error. */
-  syncNow(): void;
+  /** Manual trigger; also re-arms after an auth error. Resolves with this
+   * run's outcome (never rejects); during a run, waits for the coalesced
+   * follow-up instead. Disposal resolves waiters with the current state. */
+  syncNow(): Promise<SyncControllerState>;
   /** Stop everything, forever. The logout/account-change path. */
   dispose(): void;
 }
@@ -74,6 +76,14 @@ const defaultIsAuthError = (error: unknown): boolean =>
   error instanceof SyncTransportError && error.status === 401;
 const defaultIsOfflineError = (error: unknown): boolean =>
   error instanceof SyncTransportError && error.status === undefined;
+
+function pendingRun() {
+  let resolve!: (state: SyncControllerState) => void;
+  const promise = new Promise<SyncControllerState>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}
 
 export function createSyncController(
   options: SyncControllerOptions,
@@ -94,7 +104,8 @@ export function createSyncController(
   const listeners = new Set<(state: SyncControllerState) => void>();
   let disposed = false;
   let running = false;
-  let rerunQueued = false;
+  let currentRun: ReturnType<typeof pendingRun> | null = null;
+  let queuedRun: ReturnType<typeof pendingRun> | null = null;
   let authBlocked = false;
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let intervalTimer: ReturnType<typeof setInterval> | null = null;
@@ -108,16 +119,23 @@ export function createSyncController(
     }
   };
 
-  const run = (): void => {
-    if (disposed || running) {
-      rerunQueued = running ? true : rerunQueued;
-      return;
+  const run = (settled = pendingRun()): Promise<SyncControllerState> => {
+    if (disposed) return Promise.resolve(state);
+    if (running) {
+      queuedRun ??= settled;
+      return queuedRun.promise;
     }
     running = true;
+    currentRun = settled;
     setState({ status: 'syncing' });
     inFlight = new AbortController();
-    options
-      .runSync(inFlight.signal)
+    let execution: Promise<RunSyncResult>;
+    try {
+      execution = options.runSync(inFlight.signal);
+    } catch (error) {
+      execution = Promise.reject(error);
+    }
+    execution
       .then(
         (result) => {
           if (disposed) return;
@@ -150,11 +168,15 @@ export function createSyncController(
       .finally(() => {
         running = false;
         inFlight = null;
-        if (rerunQueued && !disposed) {
-          rerunQueued = false;
-          run();
+        currentRun = null;
+        settled.resolve(state);
+        const next = queuedRun;
+        queuedRun = null;
+        if (next && !disposed) {
+          run(next);
         }
       });
+    return settled.promise;
   };
 
   const autoTrigger = (): void => {
@@ -188,12 +210,15 @@ export function createSyncController(
       }, debounceMs);
     },
     syncNow() {
-      if (disposed) return;
+      if (disposed) return Promise.resolve(state);
       authBlocked = false; // the human (or a fresh login) re-arms it
-      run();
+      return run();
     },
     dispose() {
       disposed = true;
+      currentRun?.resolve(state);
+      queuedRun?.resolve(state);
+      queuedRun = null;
       inFlight?.abort(); // the database is about to close under us
       if (debounceTimer) clearTimeout(debounceTimer);
       if (intervalTimer) clearInterval(intervalTimer);
