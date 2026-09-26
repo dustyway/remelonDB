@@ -133,7 +133,9 @@ export function createSyncController(
     try {
       execution = options.runSync(inFlight.signal);
     } catch (error) {
-      execution = Promise.reject(error);
+      execution = (async () => {
+        throw error;
+      })();
     }
     execution
       .then(
@@ -173,7 +175,7 @@ export function createSyncController(
         const next = queuedRun;
         queuedRun = null;
         if (next && !disposed) {
-          run(next);
+          void run(next);
         }
       });
     return settled.promise;
@@ -181,7 +183,7 @@ export function createSyncController(
 
   const autoTrigger = (): void => {
     if (disposed || authBlocked) return;
-    run();
+    void run();
   };
 
   return {
@@ -199,7 +201,7 @@ export function createSyncController(
       if (intervalMs !== null) {
         intervalTimer = setInterval(autoTrigger, intervalMs);
       }
-      run();
+      void run();
     },
     notifyLocalWrite() {
       if (disposed || authBlocked) return;

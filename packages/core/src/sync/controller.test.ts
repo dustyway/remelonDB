@@ -134,7 +134,9 @@ describe('sync controller', () => {
 
   it('notifyLocalWrite still returns undefined', () => {
     const { controller } = make(async () => ok);
-    expect(controller.notifyLocalWrite()).toBeUndefined();
+    const notify = vi.spyOn(controller, 'notifyLocalWrite');
+    controller.notifyLocalWrite();
+    expect(notify).toHaveReturnedWith(undefined);
     controller.dispose();
   });
 
@@ -159,9 +161,9 @@ describe('sync controller', () => {
       return ok;
     });
     controller.start();
-    controller.syncNow();
-    controller.syncNow();
-    controller.syncNow();
+    void controller.syncNow();
+    void controller.syncNow();
+    void controller.syncNow();
     release();
     await flush();
     expect(run).toHaveBeenCalledTimes(2); // the run + one coalesced follow-up
@@ -201,7 +203,7 @@ describe('sync controller', () => {
     expect(controller.state.status).toBe('offline');
     expect(controller.state.cause).toBe(error);
     fail = false;
-    controller.syncNow();
+    void controller.syncNow();
     await flush();
     expect(controller.state.status).toBe('idle');
     expect(controller.state.cause).toBeNull();
@@ -233,7 +235,7 @@ describe('sync controller', () => {
     await vi.advanceTimersByTimeAsync(62_000);
     expect(run).toHaveBeenCalledTimes(1); // everything automatic ignored
     status = undefined;
-    controller.syncNow();
+    void controller.syncNow();
     await flush();
     expect(controller.state.status).toBe('idle');
   });
@@ -262,7 +264,7 @@ describe('sync controller', () => {
     await flush();
     expect(controller.state.status).toBe('resync-required');
     resynced = false;
-    controller.syncNow();
+    void controller.syncNow();
     await flush();
     expect(controller.state.status).toBe('idle');
   });
@@ -306,7 +308,7 @@ describe('sync controller', () => {
     controller.dispose();
     expect(triggerFire.current).toBeNull();
     controller.notifyLocalWrite();
-    controller.syncNow();
+    void controller.syncNow();
     await vi.advanceTimersByTimeAsync(120_000);
     expect(run).toHaveBeenCalledTimes(1);
   });
@@ -340,7 +342,7 @@ describe('manual control', () => {
   it('a never-started controller still syncs via syncNow', async () => {
     const run = vi.fn(async () => ok);
     const controller = createSyncController({ runSync: run });
-    controller.syncNow();
+    void controller.syncNow();
     await Promise.resolve();
     await Promise.resolve();
     expect(run).toHaveBeenCalledTimes(1);
