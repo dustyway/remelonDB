@@ -824,6 +824,38 @@ describe('sync controller end to end', () => {
     expect(server.docs.has('l1')).toBe(false);
   });
 
+  it('a run that held the lease throughout says so, and a run that lost it', async () => {
+    // The lease is asked for twice: before the run and again after the
+    // push, before local rows are marked synced. Refused the second time,
+    // the server has the change but the row stays dirty for the next run.
+    const cases = [
+      { answers: [true, true], lease: 'acquired', status: 'synced' },
+      { answers: [true, false], lease: 'lost', status: 'created' },
+    ] as const;
+    for (const { answers, lease, status } of cases) {
+      const id = `lease-${lease}`;
+      await db.write(() => db.get('tasks').create({ id, name: 'local' }));
+      const turns = [...answers];
+      (driver as { requestSyncTurn?: () => Promise<boolean> }).requestSyncTurn =
+        async () => turns.shift() ?? false;
+
+      const controller = createSyncController({
+        runSync: createRunSync({
+          database: db,
+          pullChanges: server.pull,
+          pushChanges: server.push,
+        }),
+        intervalMs: null,
+      });
+      const state = await controller.syncNow();
+
+      expect(state.status).toBe('idle');
+      expect(state.lastResult).toMatchObject({ lease, rejected: 0 });
+      expect(server.docs.has(id)).toBe(true);
+      expect((await db.get('tasks').find(id))._status).toBe(status);
+    }
+  });
+
   it('a controller drives real syncs and reports rejections as data', async () => {
     await db.write(async () => {
       await db.get('tasks').create({ id: 'ok', name: 'fine', position: 1 });
