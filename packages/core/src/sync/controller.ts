@@ -2,6 +2,14 @@ import { SyncTransportError } from '../transport/index';
 
 /** What one synchronization run reports back to the controller and UI. */
 export interface RunSyncResult {
+  /**
+   * Whether this run held the sync lease: 'unavailable' means another
+   * context (a second tab) held it and nothing ran, so the result's zero
+   * rejections say nothing about the local changes; 'lost' means the lease
+   * expired mid-run. An app that acts on freshly synced data checks for
+   * 'acquired'. Absent from results a custom `runSync` builds without it.
+   */
+  readonly lease?: 'acquired' | 'unavailable' | 'lost';
   readonly resynced: boolean;
   readonly rejected: number;
   readonly rejectedRecords: Readonly<Record<string, readonly string[]>>;
@@ -249,6 +257,7 @@ export function createRunSync(
       ...(signal ? { signal } : {}),
     });
     return {
+      lease: result.lease,
       resynced: result.resynced,
       rejected: result.rejected,
       rejectedRecords: result.rejectedRecords,

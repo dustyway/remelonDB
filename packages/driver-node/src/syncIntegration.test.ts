@@ -796,6 +796,34 @@ describe('sync controller end to end', () => {
     await driver.destroy().catch(() => {});
   });
 
+  it('a run that another context locked out says so through the controller', async () => {
+    // A second tab holds the sync lease: nothing runs, and the zero
+    // rejections say nothing about local changes. An app that acts on
+    // freshly synced data needs to see that.
+    await db.write(() => db.get('tasks').create({ id: 'l1', name: 'local' }));
+    (driver as { requestSyncTurn?: () => Promise<boolean> }).requestSyncTurn =
+      async () => false;
+
+    const controller = createSyncController({
+      runSync: createRunSync({
+        database: db,
+        pullChanges: server.pull,
+        pushChanges: server.push,
+      }),
+      intervalMs: null,
+    });
+    const state = await controller.syncNow();
+
+    expect(state.status).toBe('idle');
+    expect(state.lastResult).toEqual({
+      lease: 'unavailable',
+      resynced: false,
+      rejected: 0,
+      rejectedRecords: {},
+    });
+    expect(server.docs.has('l1')).toBe(false);
+  });
+
   it('a controller drives real syncs and reports rejections as data', async () => {
     await db.write(async () => {
       await db.get('tasks').create({ id: 'ok', name: 'fine', position: 1 });
