@@ -140,6 +140,20 @@ describe('sync controller', () => {
     controller.dispose();
   });
 
+  it('a run another context locked out leaves lastSyncAt alone', async () => {
+    const results = [ok, { ...ok, lease: 'unavailable' as const }];
+    const { controller } = make(async () => results.shift() ?? ok);
+    await controller.syncNow();
+    const synced = controller.state.lastSyncAt;
+    expect(synced).not.toBeNull();
+
+    vi.advanceTimersByTime(5_000);
+    const state = await controller.syncNow();
+    expect(state.status).toBe('idle');
+    expect(state.lastResult?.lease).toBe('unavailable');
+    expect(state.lastSyncAt).toBe(synced);
+  });
+
   it('start syncs immediately: idle -> syncing -> idle with lastSyncAt', async () => {
     const { controller } = make(async () => ok);
     const seen: string[] = [];

@@ -6,8 +6,11 @@ export interface RunSyncResult {
    * Whether this run held the sync lease: 'unavailable' means another
    * context (a second tab) held it and nothing ran, so the result's zero
    * rejections say nothing about the local changes; 'lost' means the lease
-   * expired mid-run. An app that acts on freshly synced data checks for
-   * 'acquired'. Absent from results a custom `runSync` builds without it.
+   * was refused when asked for again after the push, so the server may
+   * have the changes while the local rows stay dirty for the next run. An
+   * app that acts on freshly synced data checks for 'acquired', along with
+   * the status and its own rejections. Absent from results a custom
+   * `runSync` builds without it.
    */
   readonly lease?: 'acquired' | 'unavailable' | 'lost';
   readonly resynced: boolean;
@@ -152,9 +155,12 @@ export function createSyncController(
       .then(
         (result) => {
           if (disposed) return;
+          // A run another context locked out synced nothing, so the last
+          // sync stays what it was.
           setState({
             status: result.resynced ? 'resync-required' : 'idle',
-            lastSyncAt: Date.now(),
+            lastSyncAt:
+              result.lease === 'unavailable' ? state.lastSyncAt : Date.now(),
             error: null,
             cause: null,
             lastResult: result,
