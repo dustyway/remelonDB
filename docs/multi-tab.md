@@ -130,6 +130,18 @@ protocol resolves that like any device-vs-device race, so the cost is
 a conflict retry, not corruption. Keep `syncLeaseMs` comfortably above
 the worst-case sync duration.
 
+What a locked-out tab sees: its `synchronize` resolves at once with
+`lease: 'unavailable'` and zero counts, and the controller puts that on
+`state.lastResult` while `lastSyncAt` keeps the time of the run that
+did sync. An app that needs a confirmed sync before it acts (publish,
+"imported") checks `lastResult.lease === 'acquired'` along with the
+status and its own rejections. There is no short wait after which a
+retry is sure to get the lease: the holder renews it on every tick for
+as long as it stays open, so tell the user rather than loop. The run
+asks for the lease a second time after the push, before marking local
+rows synced; refused then, it reports `lease: 'lost'`, the server may
+have taken the changes, and the rows stay dirty for the next run.
+
 **Fallback without `SharedWorker`.** Feature-detect. Where it is
 missing (Chrome for Android), the driver behaves as it ships today:
 single owner per origin, fail fast or takeover. Degraded, not broken —
