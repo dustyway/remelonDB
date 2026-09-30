@@ -119,6 +119,51 @@ describe('compute hosting', () => {
     expect(workers).toHaveLength(2);
   });
 
+  it('gives a fresh compute time to load before a ping can retire it', async () => {
+    // sqlite-wasm takes seconds to fetch and compile on a slow machine.
+    // A second tab connecting meanwhile pings the compute; the 1 s
+    // liveness deadline must not apply to a worker that has not answered
+    // anything yet, or every fresh worker is retired before it can.
+    const workers: Array<FakePort & { terminate: ReturnType<typeof vi.fn> }> =
+      [];
+    (globalThis as { Worker?: unknown }).Worker = function FakeWorker() {
+      const port = makePort() as FakePort & {
+        terminate: ReturnType<typeof vi.fn>;
+      };
+      port.terminate = vi.fn();
+      workers.push(port);
+      return port;
+    };
+    const connect = await loadBroker();
+    const tabA = makePort();
+    connect(tabA);
+    tabA.send({ id: 1, op: 'open', name: 'db', storage: 'opfs' });
+    const first = workers[0]!;
+    const tabB = makePort();
+    connect(tabB); // pings the still-loading compute
+
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(first.out.find((m) => op(m) === 'releasePool')).toBeUndefined();
+    expect(first.terminate).not.toHaveBeenCalled();
+    expect(workers).toHaveLength(1);
+
+    // loaded at last: the open is answered by the worker that got it
+    const open = first.out.find((m) => op(m) === 'open') as { id: number };
+    first.send({ id: open.id, ok: true, result: { userVersion: 0 } });
+    expect(tabA.out).toContainEqual({
+      id: 1,
+      ok: true,
+      result: { userVersion: 0 },
+    });
+
+    // answered once, silence is measured with the short deadline again:
+    // the watchdog pings at 7.5 s and the 1 s deadline retires the
+    // compute at 8.5 s, before the first ping's own 10 s would
+    tabA.send({ id: 2, op: 'query', name: 'db', sql: 'select 1', args: [] });
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(first.out.find((m) => op(m) === 'releasePool')).toBeDefined();
+  });
+
   it('serves an open that arrives while an idle compute releases its pool', async () => {
     const workers: Array<FakePort & { terminate: ReturnType<typeof vi.fn> }> =
       [];

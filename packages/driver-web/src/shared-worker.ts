@@ -36,6 +36,13 @@ import type {
 } from './protocol';
 
 const PING_DEADLINE_MS = 1000;
+/** How long a compute that has not answered anything yet gets: it may
+ * still be fetching and compiling sqlite-wasm. On a slow machine that
+ * takes seconds, and the 1 s liveness deadline retired every fresh
+ * worker before it could answer, again and again, until the tabs' own
+ * open deadline (remelonDB#6 on Firefox, where the broker respawns the
+ * compute after every last close). */
+const STARTUP_DEADLINE_MS = 10_000;
 const RELEASE_DEADLINE_MS = 4000;
 // the ceiling for a tab's sync lease; renewal is cheap, immortality is not
 const MAX_SYNC_LEASE_MS = 300_000;
@@ -71,6 +78,9 @@ const scope = globalThis as unknown as {
 let computePort: PortLike | null = null;
 /** False while a fresh compute is re-opening held databases. */
 let computeReady = false;
+/** The compute has answered at least once since adoption: alive and
+ * loaded, so silence now means something. */
+let computeAnswered = false;
 /** Held databases to restore on the next adopt (set by resetEpoch). */
 let namesToRestore: string[] = [];
 let lastResponseAt = 0;
@@ -397,10 +407,14 @@ const resetEpoch = (): void => {
 
 const adoptComputePort = (port: PortLike): void => {
   computePort = port;
+  computeAnswered = false;
   stopRecruitment();
   port.addEventListener('message', (event) => {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- MessageEvent.data is `any` across the port boundary; the protocol module is the contract, and an unrouted id falls out below.
     const response = event.data as WorkerResponse;
+    if (computePort === port) {
+      computeAnswered = true;
+    }
     const route = routes.get(response.id);
     if (!route) {
       return;
@@ -767,12 +781,16 @@ const probeCompute = (): void => {
     originalId: -1,
   });
   target.postMessage(ping);
+  // ponytail: a worker that never loads is noticed after 10 s instead of
+  // 1 s; the hosted worker's error event still catches a failed load at
+  // once. Make it a ready signal from the worker if that ever matters.
+  const deadline = computeAnswered ? PING_DEADLINE_MS : STARTUP_DEADLINE_MS;
   setTimeout(() => {
     routes.delete(routeId);
     if (!answered && computePort === target) {
       resetEpoch();
     }
-  }, PING_DEADLINE_MS);
+  }, deadline);
 };
 
 scope.addEventListener('connect', (event) => {
