@@ -7,15 +7,15 @@
 title: 'remelonDB: A Guide to the Codebase'
 subtitle: 'How the layers fit together, and why each one exists'
 lang: 'en-US'
-date: '2026-09-26'
-version: '0.3.2 · 2026-09-26'
+date: '2026-09-30'
+version: '0.3.3 · 2026-09-30'
 ---
 
 # Preface {.unnumbered}
 
 You can read this guide without keeping the repository open beside it. When the code depends on an idea such as a database transaction, advisory lock, SharedWorker, or CRDT-style merge, a **Background** aside explains it first. Skip those asides when the concept is already familiar.
 
-This edition describes the codebase at version **0.3.2** or newer. Its content otherwise tracks `main`, and the stamped date records the last review. CI checks API summaries, repository paths, and structural assertions. Review covers claims that cannot be checked mechanically. Roadmap work in open issues is out of scope.
+This edition describes the codebase at version **0.3.3** or newer. Its content otherwise tracks `main`, and the stamped date records the last review. CI checks API summaries, repository paths, and structural assertions. Review covers claims that cannot be checked mechanically. Roadmap work in open issues is out of scope.
 
 ## What you are holding
 
@@ -1435,13 +1435,21 @@ The gate closes a real race: the user edits a row _while its previous value is i
 The final piece ties back to Chapter 9. Before a run begins, the engine asks the driver's optional lease:
 
 ```ts
-if ((await database.driver.requestSyncTurn?.()) === false) {
+if (turn === false) {
   log('sync turn denied — another context holds the sync lease');
-  return;
+  return {
+    lease: 'unavailable',
+    resynced: false,
+    pulled: 0,
+    pushed: 0,
+    rejected: 0,
+    rejectedRecords: {},
+    retryCount: 0,
+  };
 }
 ```
 
-On an exclusive-storage driver this hook is absent and the answer is always "yes, you own sync." On the web's shared mode it is the lease from Chapter 9, so several tabs do not sync at once. And concurrent `synchronize()` calls _within_ one context coalesce through a `WeakMap`: a second caller joins the run already in flight rather than starting a competing one. Between the lease across contexts and the coalescing within one, there is at most one sync cycle running against a database at a time — which is exactly the assumption the cursor's atomic advance relies on.
+On an exclusive-storage driver this hook is absent and the answer is always "yes, you own sync." On the web's shared mode it is the lease from Chapter 9, so several tabs do not sync at once. The denied run still resolves, with `lease: 'unavailable'` and zero counts, so a caller can tell it from a run that synced nothing because nothing had changed. The lease is asked for once more after the push, before local rows are marked synced; refused then, the result says `lease: 'lost'` and the rows stay dirty for the next run. And concurrent `synchronize()` calls _within_ one context coalesce through a `WeakMap`: a second caller joins the run already in flight rather than starting a competing one. Between the lease across contexts and the coalescing within one, there is at most one sync cycle running against a database at a time — which is exactly the assumption the cursor's atomic advance relies on.
 
 ## Above the engine: transport and controller
 
@@ -1482,7 +1490,11 @@ database it was writing into.
 One thing the controller does not do is decide what a rejection means. A
 run that completes with `rejected > 0` leaves the status at `idle` and
 puts the result on `state.lastResult`; whether that becomes a badge, a
-banner, or nothing is the application's call. `useSyncState(controller)`
+banner, or nothing is the application's call. The same goes for the
+lease: a run another context locked out (`lastResult.lease ===
+'unavailable'`) also ends `idle`, and only `lastSyncAt` tells it apart,
+since that keeps the time of the run that did sync. An application that
+acts on freshly synced data checks for `lease === 'acquired'` itself. `useSyncState(controller)`
 (Chapter 13) hands that state to React.
 
 ## Checkpoint
